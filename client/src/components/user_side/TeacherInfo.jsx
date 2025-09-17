@@ -25,9 +25,9 @@ const TeacherInfo = () => {
         // >
         <div className="flex flex-col w-full h-[100dvh]">
             <Navbar />
-            <div className="relative h-[100%] w-full mt-20 px-[22px] py-[28px] inset-0 flex flex-col text-center justify-between">
+            <div className="relative h-[100%] w-full mt-20 py-[28px] inset-0 flex flex-col text-center justify-around">
                 <div className="flex justify-center items-center">
-                    <div className="avatar w-[450px] flex flex-col justify-center items-center">
+                    <div className="avatar w-[250px] flex flex-col justify-center items-center">
                         <img src="/Avatar.png" alt="avatar" className="h-[182px] w-[182px]" />
                         <span className="font-medium text-[24px]">{user?.name}</span>
                         <span className="text-gray-600 text-[16px]">Teacher, EXTC dept.</span>

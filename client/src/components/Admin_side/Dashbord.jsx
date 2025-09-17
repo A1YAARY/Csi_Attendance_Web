@@ -1,4 +1,4 @@
-import React from "react";
+import React, { use, useEffect, useState  } from "react";
 import {
   Users,
   FileText,
@@ -9,7 +9,23 @@ import {
   Clock,
   UserCheck,
 } from "lucide-react";
+import { useAuth } from "../../context/AuthContext";
 const Dashbord = () => {
+  const [records, setRecords] = useState([]);
+  useAuth();
+  const { setAdminView, getAdminRecords  } = useAuth();
+  console.log("Admin view set to home");
+  const { apiHelpers, routes } = useAuth();
+
+  useEffect(() => {
+  const fetchAdminRecords = async () => {
+    const data = await getAdminRecords();
+    setRecords(data);
+    console.log("Fetched admin records:", data);
+  };
+  fetchAdminRecords();
+}, [getAdminRecords]);
+
   return (
     <div className="h-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
       <div className="p-6 w-[100vw]">
@@ -56,11 +72,7 @@ const Dashbord = () => {
                       </p>
                     </div>
                     <div className="flex gap-[8px]">
-                      <img
-                        className="h-[24px]"
-                        src="/add_green.svg"
-                        alt=""
-                      />
+                      <img className="h-[24px]" src="/add_green.svg" alt="" />
                       <p className="text-[14px] text-[#01AB06] font-medium">
                         12 Added Today
                       </p>
@@ -84,11 +96,7 @@ const Dashbord = () => {
                       </p>
                     </div>
                     <div className="flex gap-[8px]">
-                      <img
-                        className="h-[24px]"
-                        src="/grow_green.svg"
-                        alt=""
-                      />
+                      <img className="h-[24px]" src="/grow_green.svg" alt="" />
                       <p className="text-[14px] text-[#01AB06] font-medium">
                         15 more than yesterday
                       </p>
@@ -112,21 +120,13 @@ const Dashbord = () => {
                       </p>
                     </div>
                     <div className="flex gap-[8px]">
-                      <img
-                        className="h-[24px]"
-                        src="/fall_red.svg"
-                        alt=""
-                      />
+                      <img className="h-[24px]" src="/fall_red.svg" alt="" />
                       <p className="text-[14px] text-[#AB0101] font-medium">
                         2 more than yesterday
                       </p>
                     </div>
                   </div>
-                  <img
-                    className="h-[40px]"
-                    src="/Absent Icon.svg"
-                    alt=""
-                  />
+                  <img className="h-[40px]" src="/Absent Icon.svg" alt="" />
                 </div>
               </div>
             </div>
@@ -141,11 +141,7 @@ const Dashbord = () => {
                       </p>
                     </div>
                     <div className="flex gap-[8px]">
-                      <img
-                        className="h-[24px]"
-                        src="/grow_green.svg"
-                        alt=""
-                      />
+                      <img className="h-[24px]" src="/grow_green.svg" alt="" />
                       <p className="text-[14px] text-[#01AB06] font-medium">
                         4 less than yesterday
                       </p>
@@ -169,11 +165,7 @@ const Dashbord = () => {
                       </p>
                     </div>
                     <div className="flex gap-[8px]">
-                      <img
-                        className="h-[24px]"
-                        src="/grow_green.svg"
-                        alt=""
-                      />
+                      <img className="h-[24px]" src="/grow_green.svg" alt="" />
                       <p className="text-[14px] text-[#01AB06] font-medium">
                         2 less than yesterday
                       </p>
@@ -197,21 +189,13 @@ const Dashbord = () => {
                       </p>
                     </div>
                     <div className="flex gap-[8px]">
-                      <img
-                        className="h-[24px]"
-                        src="/grow_blue.svg"
-                        alt=""
-                      />
+                      <img className="h-[24px]" src="/grow_blue.svg" alt="" />
                       <p className="text-[14px] text-[#1D61E7] font-medium">
                         2 less than yesterday
                       </p>
                     </div>
                   </div>
-                  <img
-                    className="h-[40px]"
-                    src="/Time off icon.svg"
-                    alt=""
-                  />
+                  <img className="h-[40px]" src="/Time off icon.svg" alt="" />
                 </div>
               </div>
             </div>
@@ -223,8 +207,7 @@ const Dashbord = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <button
               onClick={() => setAdminView("qrcodes")}
-              className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 transition-colors"
-            >
+              className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 transition-colors">
               <QrCode className="h-8 w-8 mx-auto mb-2 text-gray-400" />
               <p className="text-sm">
                 Generate QR codes for attendance tracking and access control
@@ -232,8 +215,7 @@ const Dashbord = () => {
             </button>
             <button
               onClick={() => setAdminView("employees")}
-              className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 transition-colors"
-            >
+              className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 transition-colors">
               <Users className="h-8 w-8 mx-auto mb-2 text-gray-400" />
               <p className="text-sm">
                 Manage employee information and profiles
@@ -241,8 +223,7 @@ const Dashbord = () => {
             </button>
             <button
               onClick={() => setAdminView("reports")}
-              className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 transition-colors"
-            >
+              className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 transition-colors">
               <FileText className="h-8 w-8 mx-auto mb-2 text-gray-400" />
               <p className="text-sm">
                 View detailed attendance reports and analytics

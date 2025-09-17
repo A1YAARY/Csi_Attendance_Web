@@ -1,169 +1,284 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 
 const AuthContext = createContext();
+const BASE_URL = "https://csi-attendance-web.onrender.com";
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeAdminView, setActiveAdminView] = useState("home");
 
-  const baseurl = "https://csi-attendance-web.onrender.com";
+  // Get auth token from localStorage
+  const getToken = () => localStorage.getItem("accessToken");
 
-  // All API Routes organized by category
-  const routes = {
-    // Authentication Routes
-    auth: {
-      organizationRegister: `${baseurl}/auth2/organization-register`,
-      registerUser: `${baseurl}/auth2/register-user`,
-      login: `${baseurl}/auth2/login`,
-      viewProfile: `${baseurl}/auth2/viewProfile`,
-      updateProfile: `${baseurl}/auth2/updateProfile`,
-      logout: `${baseurl}/auth2/logout`,
-    },
+  // Get auth headers
+  const getAuthHeaders = () => ({
+    'Content-Type': 'application/json',
+    'Authorization': `Bearer ${getToken()}`
+  });
 
-    // QR Code Routes
-    qrcode: {
-      active: `${baseurl}/qrcode/active`,
-    },
+  // Get file upload headers
+  const getFileHeaders = () => ({
+    'Authorization': `Bearer ${getToken()}`
+  });
 
-    // Attendance Routes
-    attend: {
-      scan: `${baseurl}/attend/scan`,
-      past: `${baseurl}/attend/past`,
-      upload: `${baseurl}/attend/upload`,
-    },
+  // ===========================================
+  // AUTHENTICATION API CALLS
+  // ===========================================
 
-    // Admin Routes
-    admin: {
-      records: `${baseurl}/admin/records`,
-      singleUser: (id) => `${baseurl}/admin/singleUser/${id}`,
-      qrcodes: `${baseurl}/admin/qrcodes`,
-      todaysAttendance: `${baseurl}/admin/todays-attendance`,
-      deleteUser: (id) => `${baseurl}/admin/user/${id}`,
-      dailyReport: `${baseurl}/admin/daily-report`,
-      weeklyReport: `${baseurl}/admin/weekly-report`,
-    },
-
-    // Password Reset Routes
-    password: {
-      requestReset: `${baseurl}/password/request-reset`,
-      resetPassword: `${baseurl}/password/reset-password`,
-    },
-
-    // AI Analytics Routes
-    ai: {
-      health: `${baseurl}/ai/health`,
-      capabilities: `${baseurl}/ai/capabilities`,
-      query: `${baseurl}/ai/query`,
-    },
-
-    // System Routes
-    system: {
-      health: `${baseurl}/`,
-      logs: {
-        scans: `${baseurl}/logs/scans`,
-      }
-    }
+  const registerOrganization = async (data) => {
+    const response = await fetch(`${BASE_URL}/auth2/organization-register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    return await response.json();
   };
 
-  // Helper function to get auth headers
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem("accessToken");
-    return {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${token}`
-    };
+  const registerUser = async (data) => {
+    const response = await fetch(`${BASE_URL}/auth2/register-user`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    return await response.json();
   };
 
-  // Helper function for file upload headers
-  const getFileUploadHeaders = () => {
-    const token = localStorage.getItem("accessToken");
-    return {
-      'Authorization': `Bearer ${token}`
-      // Don't set Content-Type for file uploads, let browser set it
-    };
+  const loginUser = async (data) => {
+    const response = await fetch(`${BASE_URL}/auth2/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    return await response.json();
   };
 
-  // API Helper Functions
-  const apiHelpers = {
-    // GET request helper
-    get: async (url, useAuth = true) => {
-      const headers = useAuth ? getAuthHeaders() : { 'Content-Type': 'application/json' };
-      const response = await fetch(url, {
-        method: 'GET',
-        headers
-      });
-      return await response.json();
-    },
-
-    // POST request helper
-    post: async (url, data, useAuth = true) => {
-      const headers = useAuth ? getAuthHeaders() : { 'Content-Type': 'application/json' };
-      const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(data)
-      });
-      return await response.json();
-    },
-
-    // PUT request helper
-    put: async (url, data, useAuth = true) => {
-      const headers = useAuth ? getAuthHeaders() : { 'Content-Type': 'application/json' };
-      const response = await fetch(url, {
-        method: 'PUT',
-        headers,
-        body: JSON.stringify(data)
-      });
-      return await response.json();
-    },
-
-    // DELETE request helper
-    delete: async (url, useAuth = true) => {
-      const headers = useAuth ? getAuthHeaders() : { 'Content-Type': 'application/json' };
-      const response = await fetch(url, {
-        method: 'DELETE',
-        headers
-      });
-      return await response.json();
-    },
-
-    // File upload helper
-    uploadFile: async (url, formData) => {
-      const headers = getFileUploadHeaders();
-      const response = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: formData
-      });
-      return await response.json();
-    }
+  const viewProfile = async () => {
+    const response = await fetch(`${BASE_URL}/auth2/viewProfile`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+    return await response.json();
   };
 
-  // Check for existing session on app load
+  const updateProfile = async (data) => {
+    const response = await fetch(`${BASE_URL}/auth2/updateProfile`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    return await response.json();
+  };
+
+  const logoutUser = async () => {
+    const response = await fetch(`${BASE_URL}/auth2/logout`, {
+      method: 'POST',
+      headers: getAuthHeaders()
+    });
+    return await response.json();
+  };
+
+  // ===========================================
+  // QR CODE API CALLS
+  // ===========================================
+
+  const getActiveQRCode = async () => {
+    const response = await fetch(`${BASE_URL}/qrcode/active`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+    return await response.json();
+  };
+
+  // ===========================================
+  // ATTENDANCE API CALLS
+  // ===========================================
+
+  const scanAttendance = async (data) => {
+    const response = await fetch(`${BASE_URL}/attend/scan`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    return await response.json();
+  };
+
+  const getPastAttendance = async () => {
+    const response = await fetch(`${BASE_URL}/attend/past`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+    return await response.json();
+  };
+
+  const uploadAttendance = async (formData) => {
+    const response = await fetch(`${BASE_URL}/attend/upload`, {
+      method: 'POST',
+      headers: getFileHeaders(),
+      body: formData
+    });
+    return await response.json();
+  };
+
+  // ===========================================
+  // ADMIN API CALLS
+  // ===========================================
+
+  const getAdminRecords = async () => {
+    const response = await fetch(`${BASE_URL}/admin/records`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+    return await response.json();
+  };
+
+  const getSingleUser = async (userId) => {
+    const response = await fetch(`${BASE_URL}/admin/singleUser/${userId}`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+    return await response.json();
+  };
+
+  const getAdminQRCodes = async () => {
+    const response = await fetch(`${BASE_URL}/admin/qrcodes`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+    return await response.json();
+  };
+
+  const getTodaysAttendance = async () => {
+    const response = await fetch(`${BASE_URL}/admin/todays-attendance`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+    return await response.json();
+  };
+
+  const deleteUser = async (userId) => {
+    const response = await fetch(`${BASE_URL}/admin/user/${userId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    return await response.json();
+  };
+
+  const getDailyReport = async () => {
+    const response = await fetch(`${BASE_URL}/admin/daily-report`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+    return await response.json();
+  };
+
+  const getWeeklyReport = async () => {
+    const response = await fetch(`${BASE_URL}/admin/weekly-report`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+    return await response.json();
+  };
+
+  // ===========================================
+  // PASSWORD RESET API CALLS
+  // ===========================================
+
+  const requestPasswordReset = async (data) => {
+    const response = await fetch(`${BASE_URL}/password/request-reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    return await response.json();
+  };
+
+  const resetPassword = async (data) => {
+    const response = await fetch(`${BASE_URL}/password/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    return await response.json();
+  };
+
+  // ===========================================
+  // AI API CALLS
+  // ===========================================
+
+  const getAIHealth = async () => {
+    const response = await fetch(`${BASE_URL}/ai/health`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+    return await response.json();
+  };
+
+  const getAICapabilities = async () => {
+    const response = await fetch(`${BASE_URL}/ai/capabilities`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+    return await response.json();
+  };
+
+  const queryAI = async (data) => {
+    const response = await fetch(`${BASE_URL}/ai/query`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    return await response.json();
+  };
+
+  // ===========================================
+  // SYSTEM API CALLS
+  // ===========================================
+
+  const getSystemHealth = async () => {
+    const response = await fetch(`${BASE_URL}/`, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    return await response.json();
+  };
+
+  const getScanLogs = async () => {
+    const response = await fetch(`${BASE_URL}/logs/scans`, {
+      method: 'GET',
+      headers: getAuthHeaders()
+    });
+    return await response.json();
+  };
+
+  // ===========================================
+  // AUTH STATE MANAGEMENT
+  // ===========================================
+
+  // Initialize user session on app load
   useEffect(() => {
-    const token = localStorage.getItem("accessToken");
+    const token = getToken();
     const userData = localStorage.getItem("userData");
 
     if (token && userData) {
       try {
-        const parsedUser = JSON.parse(userData);
-        setUser(parsedUser);
+        setUser(JSON.parse(userData));
       } catch (error) {
         console.error("Error parsing user data:", error);
-        localStorage.removeItem("accessToken");
-        localStorage.removeItem("userData");
+        logout();
       }
     }
     setLoading(false);
   }, []);
 
+  // Login function
   const login = (userData, accessToken) => {
     setUser(userData);
     localStorage.setItem("accessToken", accessToken);
     localStorage.setItem("userData", JSON.stringify(userData));
   };
 
+  // Logout function
   const logout = () => {
     localStorage.removeItem("accessToken");
     localStorage.removeItem("userData");
@@ -172,22 +287,63 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  // Set admin view
   const setAdminView = (view) => {
     setActiveAdminView(view);
   };
 
   const value = {
+    // State
     user,
+    loading,
+    activeAdminView,
+
+    // Auth functions
     login,
     logout,
-    loading,
-    baseurl,
-    routes,
-    apiHelpers,
-    getAuthHeaders,
-    getFileUploadHeaders,
-    activeAdminView,
     setAdminView,
+
+    // API functions - Authentication
+    registerOrganization,
+    registerUser,
+    loginUser,
+    viewProfile,
+    updateProfile,
+    logoutUser,
+
+    // API functions - QR Code
+    getActiveQRCode,
+
+    // API functions - Attendance
+    scanAttendance,
+    getPastAttendance,
+    uploadAttendance,
+
+    // API functions - Admin
+    getAdminRecords,
+    getSingleUser,
+    getAdminQRCodes,
+    getTodaysAttendance,
+    deleteUser,
+    getDailyReport,
+    getWeeklyReport,
+
+    // API functions - Password Reset
+    requestPasswordReset,
+    resetPassword,
+
+    // API functions - AI
+    getAIHealth,
+    getAICapabilities,
+    queryAI,
+
+    // API functions - System
+    getSystemHealth,
+    getScanLogs,
+
+    // Utility functions
+    getAuthHeaders,
+    getFileHeaders,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -200,3 +356,27 @@ export function useAuth() {
   }
   return context;
 }
+
+// Usage Example:
+/*
+const { 
+  loginUser, 
+  viewProfile, 
+  scanAttendance, 
+  getAdminRecords,
+  user,
+  logout 
+} = useAuth();
+
+// Login
+const loginData = await loginUser({ email: 'user@example.com', password: 'password' });
+
+// Get profile
+const profile = await viewProfile();
+
+// Scan attendance
+const scanResult = await scanAttendance({ qrCode: 'some-qr-code' });
+
+// Get admin records
+const records = await getAdminRecords();
+*/

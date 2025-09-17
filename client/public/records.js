@@ -2,6 +2,7 @@ export const records = [
   {
     "id": 101,
     "name": "Kumar",
+    "email": "Kumar@gmail.com",
     "role": "Professor",
     "department": "EXTC",
     "date": "2025-07-05",
@@ -13,6 +14,7 @@ export const records = [
   {
     "id": 102,
     "name": "Priya",
+    "email": "Priya@gmail.com",
     "role": "Assistant Professor",
     "department": "CSE",
     "date": "2025-07-05",
@@ -24,6 +26,7 @@ export const records = [
   {
     "id": 103,
     "name": "Rajesh",
+    "email": "Rajesh@gmail.com",
     "role": "Lab Assistant",
     "department": "IT",
     "date": "2025-07-05",
@@ -35,6 +38,7 @@ export const records = [
   {
     "id": 104,
     "name": "Sneha",
+    "email": "Sneha@gmail.com",
     "role": "Professor",
     "department": "Mechanical",
     "date": "2025-07-05",
@@ -46,6 +50,7 @@ export const records = [
   {
     "id": 105,
     "name": "Ankit",
+    "email": "Sneha@gmail.com",
     "role": "Assistant Professor",
     "department": "Civil",
     "date": "2025-07-05",
@@ -57,6 +62,7 @@ export const records = [
   {
     "id": 106,
     "name": "Pooja",
+    "email": "Sneha@gmail.com",
     "role": "Professor",
     "department": "EXTC",
     "date": "2025-07-05",
@@ -68,6 +74,7 @@ export const records = [
   {
     "id": 107,
     "name": "Manish",
+    "email": "Sneha@gmail.com",
     "role": "Assistant Professor",
     "department": "CSE",
     "date": "2025-07-05",
@@ -79,6 +86,7 @@ export const records = [
   {
     "id": 108,
     "name": "Divya",
+    "email": "Sneha@gmail.com",
     "role": "Lab Assistant",
     "department": "IT",
     "date": "2025-07-05",
@@ -90,6 +98,7 @@ export const records = [
   {
     "id": 109,
     "name": "Ravi",
+    "email": "Sneha@gmail.com",
     "role": "Professor",
     "department": "EXTC",
     "date": "2025-07-05",
@@ -101,6 +110,7 @@ export const records = [
   {
     "id": 110,
     "name": "Neha",
+    "email": "Sneha@gmail.com",
     "role": "Assistant Professor",
     "department": "Mechanical",
     "date": "2025-07-05",
@@ -112,6 +122,7 @@ export const records = [
   {
     "id": 111,
     "name": "Vikram",
+    "email": "Sneha@gmail.com",
     "role": "Professor",
     "department": "Civil",
     "date": "2025-07-05",
@@ -123,6 +134,7 @@ export const records = [
   {
     "id": 112,
     "name": "Sonal",
+    "email": "Sneha@gmail.com",
     "role": "Assistant Professor",
     "department": "IT",
     "date": "2025-07-05",
@@ -134,6 +146,7 @@ export const records = [
   {
     "id": 113,
     "name": "Amit",
+    "email": "Sneha@gmail.com",
     "role": "Lab Assistant",
     "department": "EXTC",
     "date": "2025-07-05",
@@ -145,6 +158,7 @@ export const records = [
   {
     "id": 114,
     "name": "Megha",
+    "email": "Sneha@gmail.com",
     "role": "Professor",
     "department": "CSE",
     "date": "2025-07-05",
@@ -156,6 +170,7 @@ export const records = [
   {
     "id": 115,
     "name": "Sahil",
+    "email": "Sneha@gmail.com",
     "role": "Assistant Professor",
     "department": "Mechanical",
     "date": "2025-07-05",
