@@ -163,10 +163,10 @@ const NewQrcode = () => {
         </span>
       </div>
 
-      {/* Error */}
+      {/* Error
       {errorMessage && (
         <div className="text-red-500 text-sm">{errorMessage}</div>
-      )}
+      )} */}
 
       {/* Scanner */}
       <div

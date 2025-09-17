@@ -11,9 +11,9 @@ const Navbar = () => {
     <div>
       <div className="navbar w-screen h-[110px] flex justify-between items-end p-[16px] border-slate-200 border-b-[1px]">
         <img src="/logo.png" alt="atharva logo" />
-        <Link to={"/admin"}>
+        {/* <Link to={"/admin"}>
           <button className="p-[0.4rem] bg-red-600">ADMIN</button>
-        </Link>
+        </Link> */}
         <img
           onClick={showlogout}
           src="/Profile.png"

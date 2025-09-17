@@ -41,7 +41,7 @@ function App() {
             }
           />
 
-          {/* <Route
+          <Route
             path="/guard-login"
             element={
               <PublicRoute>
@@ -55,7 +55,7 @@ function App() {
                 </motion.div>
               </PublicRoute>
             }
-          /> */}
+          />
 
           {/* Protected Routes - Require authentication */}
           <Route

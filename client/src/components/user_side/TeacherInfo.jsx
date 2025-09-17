@@ -23,7 +23,7 @@ const TeacherInfo = () => {
         //     exit={{opacity:0 , x:-100}}
         //     transition = {{duration:0.2}}
         // >
-        <div className="flex flex-col w-full h-[100dvh]">
+        <div className="flex flex-col w-full h-[100vh]">
             <Navbar />
             <div className="relative h-[100%] w-full mt-20 py-[28px] inset-0 flex flex-col text-center justify-around">
                 <div className="flex justify-center items-center">

@@ -23,7 +23,8 @@ const updateDailyTimeSheet = async (userId, organizationId, attendance) => {
   const startOfDay = new Date(
     todayIST.getFullYear(),
     todayIST.getMonth(),
-    todayIST.getDate()
+    todayIST.getDate(),
+    todayIST.getDay()
   );
 
   let timeSheet = await DailyTimeSheet.findOne({
@@ -329,7 +330,8 @@ exports.getDailyReport = async (req, res) => {
     const startOfDay = new Date(
       reportDate.getFullYear(),
       reportDate.getMonth(),
-      reportDate.getDate()
+      reportDate.getDate(),
+      reportDate.getDay(),
     );
 
     const dailyReports = await DailyTimeSheet.find({
