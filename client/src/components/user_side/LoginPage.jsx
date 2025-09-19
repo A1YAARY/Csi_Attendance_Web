@@ -12,7 +12,7 @@ export const LoginPage = () => {
   const [password, setPassword] = useState("");
 
   const handleEmailLogin = async (e) => {
-    const baseurl = process.env.BACKENED_BASE_URL;
+    const baseurl = import.meta.env.VITE_BACKEND_BASE_URL;
     e.preventDefault();
     try {
       const res = await axios.post(
