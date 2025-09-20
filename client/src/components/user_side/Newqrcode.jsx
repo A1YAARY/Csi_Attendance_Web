@@ -207,7 +207,7 @@ const NewQrcode = () => {
   }, []); // Remove dependency on scannerRunning to prevent re-initialization
 
   return (
-    <div className="flex flex-col items-center justify-center w-screen h-[100dvh] px-2 gap-4 pt-[70px] pb-[30px]">
+    <div className="flex flex-col items-center justify-center w-screen h-[100dvh]  gap-4 pt-[70px] pb-[30px]">
       {/* Close Button */}
       <img
         onClick={cancel}
@@ -234,7 +234,7 @@ const NewQrcode = () => {
       {/* Scanner */}
       <div
         id="qr-reader"
-        className=" w-auto max-w-[350px]  rounded-[22px] m-auto flex overflow-hidden px- border border-gray-300"
+        className=" w-[350px]  rounded-[22px] m-auto flex overflow-hidden px-2 border border-gray-300"
       />
 
       {/* Status Indicator */}
