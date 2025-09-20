@@ -9,12 +9,18 @@ import {
 } from "lucide-react";
 
 const QRcodeView = () => {
-  const { baseurl } = useAuth();
-
+  const { BASE_URL } = useAuth();
+  
   const [qrCodes, setQrCodes] = useState(null);
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState(null);
+
+  useEffect(() => {
+    console.log(qrCodes);
+    console.log("BASE_URL", BASE_URL);
+
+  },[]);
 
   // Optional: keep dummy only for explicit fallback testing
   const dummyData = {
@@ -41,25 +47,39 @@ const QRcodeView = () => {
     return value.startsWith("data:") ? value : `data:image/png;base64,${value}`;
   };
 
-  // Fetch QR codes from backend
+  // Fetch QR codes from backend - MINIMAL CHANGE TO FIX ERROR
   const fetchQRCodes = async () => {
     try {
       setLoading(true);
       setError(null);
-
       const token = localStorage.getItem("accessToken");
-      const res = await fetch(`${baseurl}/admin/qrcodes`, {
+      const res = await fetch(`${BASE_URL}/admin/qrcodes`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
       });
 
+      // CHECK IF RESPONSE IS JSON BEFORE PARSING
+      const isJson = res.headers
+        .get("content-type")
+        ?.includes("application/json");
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status}`);
+        if (isJson) {
+          const err = await res.json();
+          throw new Error(err?.message || `HTTP ${res.status}`);
+        } else {
+          const text = await res.text();
+          throw new Error(`Non-JSON response: ${text.slice(0, 120)}`);
+        }
       }
 
+      if (!isJson) {
+        const text = await res.text();
+        throw new Error(`Expected JSON, got: ${text.slice(0, 120)}`);
+      }
       const data = await res.json();
+
       // Expecting shape like:
       // { lastUpdated, organizationId, organizationName,
       //   qrCodes: { checkIn: {..., qrImage: "data:image/png;base64,..."}, checkOut: {...} },
@@ -107,7 +127,6 @@ const QRcodeView = () => {
       if (!mapped) {
         throw new Error("Unexpected response shape: missing qrCodes");
       }
-
       setQrCodes(mapped);
     } catch (e) {
       console.error("❌ Failed to fetch QR codes:", e);
@@ -126,8 +145,7 @@ const QRcodeView = () => {
     try {
       setRegenerating(true);
       const token = localStorage.getItem("accessToken");
-
-      const res = await fetch(`${baseurl}/admin/qrcodes/regenerate`, {
+      const res = await fetch(`${BASE_URL}/admin/qrcodes/regenerate`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
@@ -135,11 +153,9 @@ const QRcodeView = () => {
         },
         body: JSON.stringify({ type }), // type: 'both' | 'check-in' | 'check-out'
       });
-
       if (!res.ok) {
         throw new Error(`HTTP ${res.status}`);
       }
-
       const data = await res.json();
       console.log("✅ QR Codes regenerated:", data);
       await fetchQRCodes();
@@ -168,127 +184,224 @@ const QRcodeView = () => {
 
   if (loading) {
     return (
-      <div className="p-6">
-        <h2 className="text-xl font-semibold mb-2">Loading QR Codes…</h2>
-        <p className="text-sm text-gray-600">
-          Fetching the latest organization QR codes from the server.
-        </p>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-white rounded-lg shadow-md p-8 text-center">
+            <div className="animate-pulse">
+              <QrCode className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+              <p className="text-gray-600">
+                Fetching the latest organization QR codes from the server...
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
 
-  const Card = ({ title, data }) => (
-    <div className="rounded-lg border p-4 flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <h3 className="font-semibold flex items-center gap-2">
-          <QrCode className="w-5 h-5" />
-          {title}
-        </h3>
-        {data?.active ? (
-          <span className="inline-flex items-center text-green-600 text-sm gap-1">
-            <CheckCircle2 className="w-4 h-4" /> Active
-          </span>
-        ) : (
-          <span className="inline-flex items-center text-red-600 text-sm gap-1">
-            <XCircle className="w-4 h-4" /> Inactive
-          </span>
-        )}
-      </div>
-
-      <div className="flex flex-col sm:flex-row gap-4 items-start">
-        <div className="w-[240px] h-[240px] border rounded-md flex items-center justify-center bg-white">
-          {data?.qrImageData ? (
-            <img
-              src={normalizeDataUrl(data.qrImageData)}
-              alt={`${title} QR`}
-              width={240}
-              height={240}
-              className="object-contain"
-            />
-          ) : (
-            <span className="text-gray-500 text-sm">No QR available</span>
-          )}
-        </div>
-
-        <div className="flex-1">
-          <div className="text-sm text-gray-700">
-            <div>
-              <span className="font-medium">Code:</span>{" "}
-              <span className="break-all">{data?.code || "—"}</span>
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+        <div className="max-w-4xl mx-auto">
+          <div className="bg-white rounded-lg shadow-md p-8">
+            <div className="text-center">
+              <XCircle className="w-16 h-16 mx-auto text-red-500 mb-4" />
+              <h2 className="text-2xl font-bold text-red-600 mb-2">
+                Failed to Load QR Codes
+              </h2>
+              <p className="text-gray-600 mb-4">{error}</p>
+              <button
+                onClick={fetchQRCodes}
+                className="bg-blue-500 hover:bg-blue-600 text-white px-6 py-2 rounded-lg transition-colors"
+              >
+                Try Again
+              </button>
             </div>
-            <div>
-              <span className="font-medium">Usage Count:</span>{" "}
-              {data?.usageCount ?? 0}
-            </div>
-            <div>
-              <span className="font-medium">Type:</span> {data?.type || "—"}
-            </div>
-            <div>
-              <span className="font-medium">ID:</span>{" "}
-              <span className="break-all">{data?.id || "—"}</span>
-            </div>
-          </div>
-
-          <div className="mt-3 flex gap-2">
-            <button
-              type="button"
-              onClick={() => downloadQRCode(data?.qrImageData, data?.type)}
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border hover:bg-gray-50"
-              disabled={!data?.qrImageData}
-              title="Download PNG"
-            >
-              <Download className="w-4 h-4" />
-              Download
-            </button>
-            {/* <button
-              type="button"
-              onClick={() =>
-                regenerateQRCodes(
-                  data?.type === "check-in" ? "check-in" : "check-out"
-                )
-              }
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border hover:bg-gray-50 disabled:opacity-60"
-              disabled={regenerating}
-              title="Regenerate this QR"
-            >
-              <RefreshCw
-                className={`w-4 h-4 ${regenerating ? "animate-spin" : ""}`}
-              />
-              Regenerate
-            </button> */}
           </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   return (
-    <div className="p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-semibold">Organization QR Codes</h2>
-        {/* <button
-          type="button"
-          onClick={() => regenerateQRCodes("both")}
-          className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md border hover:bg-gray-50 disabled:opacity-60"
-          disabled={regenerating}
-          title="Regenerate both QR codes"
-        >
-          <RefreshCw
-            className={`w-4 h-4 ${regenerating ? "animate-spin" : ""}`}
-          />
-          Regenerate Both
-        </button> */}
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+      <div className="max-w-4xl mx-auto">
+        <div className="bg-white rounded-lg shadow-md p-8">
+          <div className="flex justify-between items-center mb-8">
+            <h1 className="text-3xl font-bold text-gray-800">
+              Organization QR Codes
+            </h1>
+            <button
+              onClick={() => regenerateQRCodes()}
+              disabled={regenerating}
+              className="flex items-center space-x-2 bg-green-500 hover:bg-green-600 disabled:bg-gray-400 text-white px-4 py-2 rounded-lg transition-colors"
+            >
+              <RefreshCw
+                className={`w-5 h-5 ${regenerating ? "animate-spin" : ""}`}
+              />
+              <span>
+                {regenerating ? "Regenerating..." : "Regenerate Both"}
+              </span>
+            </button>
+          </div>
 
-      {error && (
-        <div className="rounded-md border border-red-300 bg-red-50 p-3 text-red-800 text-sm">
-          {error}
+          <div className="grid md:grid-cols-2 gap-8">
+            {/* Check-In QR Code */}
+            {qrCodes?.checkIn && (
+              <div className="bg-gray-50 rounded-lg p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold text-gray-800 flex items-center">
+                    <CheckCircle2 className="w-6 h-6 text-green-500 mr-2" />
+                    Check-In QR Code
+                  </h2>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => regenerateQRCodes("check-in")}
+                      disabled={regenerating}
+                      className="p-2 text-blue-500 hover:bg-blue-100 rounded-lg transition-colors"
+                      title="Regenerate Check-In QR"
+                    >
+                      <RefreshCw
+                        className={`w-4 h-4 ${
+                          regenerating ? "animate-spin" : ""
+                        }`}
+                      />
+                    </button>
+                    <button
+                      onClick={() =>
+                        downloadQRCode(qrCodes.checkIn.qrImageData, "check-in")
+                      }
+                      className="p-2 text-green-500 hover:bg-green-100 rounded-lg transition-colors"
+                      title="Download Check-In QR"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="text-center">
+                  <div className="bg-white p-4 rounded-lg inline-block shadow-sm">
+                    <img
+                      src={qrCodes.checkIn.qrImageData}
+                      alt="Check-In QR Code"
+                      className="w-48 h-48 mx-auto"
+                    />
+                  </div>
+                  <div className="mt-4 text-sm text-gray-600">
+                    <p>
+                      <strong>Code:</strong> {qrCodes.checkIn.code}
+                    </p>
+                    <p>
+                      <strong>Usage Count:</strong> {qrCodes.checkIn.usageCount}
+                    </p>
+                    <p>
+                      <strong>Status:</strong>{" "}
+                      <span
+                        className={
+                          qrCodes.checkIn.active
+                            ? "text-green-600"
+                            : "text-red-600"
+                        }
+                      >
+                        {qrCodes.checkIn.active ? "Active" : "Inactive"}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Check-Out QR Code */}
+            {qrCodes?.checkOut && (
+              <div className="bg-gray-50 rounded-lg p-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="text-xl font-semibold text-gray-800 flex items-center">
+                    <XCircle className="w-6 h-6 text-red-500 mr-2" />
+                    Check-Out QR Code
+                  </h2>
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => regenerateQRCodes("check-out")}
+                      disabled={regenerating}
+                      className="p-2 text-blue-500 hover:bg-blue-100 rounded-lg transition-colors"
+                      title="Regenerate Check-Out QR"
+                    >
+                      <RefreshCw
+                        className={`w-4 h-4 ${
+                          regenerating ? "animate-spin" : ""
+                        }`}
+                      />
+                    </button>
+                    <button
+                      onClick={() =>
+                        downloadQRCode(
+                          qrCodes.checkOut.qrImageData,
+                          "check-out"
+                        )
+                      }
+                      className="p-2 text-green-500 hover:bg-green-100 rounded-lg transition-colors"
+                      title="Download Check-Out QR"
+                    >
+                      <Download className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="text-center">
+                  <div className="bg-white p-4 rounded-lg inline-block shadow-sm">
+                    <img
+                      src={qrCodes.checkOut.qrImageData}
+                      alt="Check-Out QR Code"
+                      className="w-48 h-48 mx-auto"
+                    />
+                  </div>
+                  <div className="mt-4 text-sm text-gray-600">
+                    <p>
+                      <strong>Code:</strong> {qrCodes.checkOut.code}
+                    </p>
+                    <p>
+                      <strong>Usage Count:</strong>{" "}
+                      {qrCodes.checkOut.usageCount}
+                    </p>
+                    <p>
+                      <strong>Status:</strong>{" "}
+                      <span
+                        className={
+                          qrCodes.checkOut.active
+                            ? "text-green-600"
+                            : "text-red-600"
+                        }
+                      >
+                        {qrCodes.checkOut.active ? "Active" : "Inactive"}
+                      </span>
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* No QR Codes Available */}
+          {!qrCodes?.checkIn && !qrCodes?.checkOut && (
+            <div className="text-center py-12">
+              <QrCode className="w-16 h-16 mx-auto text-gray-400 mb-4" />
+              <h3 className="text-xl font-semibold text-gray-600 mb-2">
+                No QR Codes Available
+              </h3>
+              <p className="text-gray-500 mb-4">
+                Generate QR codes for your organization to enable attendance
+                tracking.
+              </p>
+              <button
+                onClick={() => regenerateQRCodes()}
+                disabled={regenerating}
+                className="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 text-white px-6 py-3 rounded-lg transition-colors"
+              >
+                Generate QR Codes
+              </button>
+            </div>
+          )}
         </div>
-      )}
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card title="Check-in" data={qrCodes?.checkIn} />
-        <Card title="Check-out" data={qrCodes?.checkOut} />
       </div>
     </div>
   );

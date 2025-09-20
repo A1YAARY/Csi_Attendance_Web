@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from "react";
 
 const AuthContext = createContext();
 // const BASE_URL = "https://csi-attendance-web.onrender.com";
-const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL;
+const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL || "https://csi-attendance-web.onrender.com";
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
@@ -310,6 +310,7 @@ export function AuthProvider({ children }) {
     loginUser,
     viewProfile,
     updateProfile,
+    BASE_URL,
     logoutUser,
 
     // API functions - QR Code
