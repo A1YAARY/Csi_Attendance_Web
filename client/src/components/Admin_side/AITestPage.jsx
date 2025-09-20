@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 
 const AITestPage = () => {
-  const { baseurl } = useAuth();
+  const { BASE_URL } = useAuth();
   const [question, setQuestion] = useState("");
   const [response, setResponse] = useState("");
   const [loading, setLoading] = useState(false);
@@ -36,7 +36,7 @@ const AITestPage = () => {
   const fetchAICapabilities = async () => {
     try {
       const token = localStorage.getItem("accessToken");
-      const res = await fetch(`${baseurl}/ai/capabilities`, {
+      const res = await fetch(`${BASE_URL}/ai/capabilities`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -51,7 +51,7 @@ const AITestPage = () => {
   const checkAIHealth = async () => {
     try {
       const token = localStorage.getItem("accessToken");
-      const res = await fetch(`${baseurl}/ai/health`, {
+      const res = await fetch(`${BASE_URL}/ai/health`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (res.ok) {
@@ -72,7 +72,7 @@ const AITestPage = () => {
 
     try {
       const token = localStorage.getItem("accessToken");
-      const res = await fetch(`${baseurl}/ai/query`, {
+      const res = await fetch(`${BASE_URL}/ai/query`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

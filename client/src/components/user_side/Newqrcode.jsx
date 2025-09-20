@@ -19,8 +19,8 @@ const NewQrcode = () => {
   const [errorMessage, setErrorMessage] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
 
-  // const baseurl = "https://csi-attendance-web-s1yf.onrender.com";
-  const baseurl = import.meta.env.VITE_BACKEND_BASE_URL;
+  // const BASE_URL = "https://csi-attendance-web-s1yf.onrender.com";
+  const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL;
   const token = localStorage.getItem("accessToken");
 
   const cancel = () => navigate("/");
@@ -73,7 +73,7 @@ const NewQrcode = () => {
 
     try {
       const res = await axios.post(
-        `${baseurl}/attend/scan`,
+        `${BASE_URL}/attend/scan`,
         requestBody, // ✅ Use structured request body
         {
           headers: { 
