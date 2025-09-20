@@ -98,7 +98,7 @@ const NewQrcode = () => {
       }
       
       // Navigate to success page
-      navigate("/scan-successful");
+      navigate("/animation");
       
     } catch (error) {
       console.error("❌ Scan failed:", error.response?.data || error.message);
