@@ -7,21 +7,49 @@ const Organization = require("../models/organization.models");
 
 const getusers = async (req, res) => {
   try {
-    const orgId = req.user.organizationId;
-    if (!orgId) {
-      return res
-        .status(400)
-        .json({ message: "User not associated with any organization" });
+    // Validate user authentication
+    if (!req.user) {
+      return res.status(401).json({
+        success: false,
+        message: "User not authenticated",
+      });
     }
-    const allusers = await User.find({ organizationId: orgId }).sort({
-      createdAt: -1,
+
+    const orgId = req.user.organizationId;
+
+    if (!orgId) {
+      return res.status(400).json({
+        success: false,
+        message: "User not associated with any organization",
+      });
+    }
+
+    console.log("Fetching users for organization:", orgId);
+
+    // Find all users in the organization
+    const allusers = await User.find({ organizationId: orgId })
+      .select("-password") // Exclude password field for security
+      .sort({ createdAt: -1 });
+
+    console.log(`Found ${allusers.length} users for organization ${orgId}`);
+
+    // Return consistent response format
+    res.status(200).json({
+      success: true,
+      message: "Users fetched successfully",
+      data: allusers,
+      count: allusers.length,
     });
-    res.json({ allusers });
   } catch (error) {
-    console.error("Error getting records:", error);
-    res.status(500).json({ message: "Failed to fetch all users" });
+    console.error("Error getting users:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch all users",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
   }
 };
+
 const records = async (req, res) => {
   try {
     const orgId = req.user.organizationId;
