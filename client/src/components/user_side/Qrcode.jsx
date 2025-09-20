@@ -30,17 +30,17 @@ const Qrcode = () => {
     }
   };
   const handleScanning = async (decodedText) => {
-    const baseurl = "https://csi-attendance-web-s1yf.onrender.com"; // or your real backend URL
+    const BASE_URL = "https://csi-attendance-web-s1yf.onrender.com"; // or your real backend URL
 
     try {
       const res = await axios.post(
-        `${baseurl}/attend/scan`,
+        `${BASE_URL}/attend/scan`,
         { code: decodedText, qrType: isCheckedIn ? "check-Out" : "check-in" },
         { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
       );
       const qrData = JSON.parse(decodedText);
       // const res = await axios.post(
-      //   `${baseurl}/attend/scan`,
+      //   `${BASE_URL}/attend/scan`,
       //   // { code : decodedText },
       //   qrData,
       //   {header:{Authorization : `Bearer ${token}`,},
@@ -59,7 +59,7 @@ const Qrcode = () => {
   // ✅ Send scanned data to backend
   // const handleScanning = async (e) => {
   //   try {
-  //     const res = await axios.post(`${baseurl}/attend/scan`,
+  //     const res = await axios.post(`${BASE_URL}/attend/scan`,
   //     {data: decodedText}, // or str: decodedText if backend expects "str"
   //     {withCredentials: true,}
   //   );
@@ -221,7 +221,7 @@ export default Qrcode;
 
 // const Qrcode = () => {
 //   const navigate = useNavigate();
-//   const { baseurl } = useAuth();
+//   const { BASE_URL } = useAuth();
 
 //   // DOM and scanner refs
 //   const readerRef = useRef(null);
@@ -469,7 +469,7 @@ export default Qrcode;
 //   const [errorMessage, setErrorMessage] = useState("");
 //   const [data, setData] = useState("No result");
 
-//   const baseurl = "https://csi-attendance-web-s1yf.onrender.com"; // your backend
+//   const BASE_URL = "https://csi-attendance-web-s1yf.onrender.com"; // your backend
 
 //   const cancel = () => {
 //     navigate("/");
@@ -504,7 +504,7 @@ export default Qrcode;
 
 //     try {
 //       const res = await axios.post(
-//         `${baseurl}/attend/scan`,
+//         `${BASE_URL}/attend/scan`,
 //         parsedData,
 //         {
 //           headers: {

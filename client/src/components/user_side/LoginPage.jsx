@@ -7,16 +7,16 @@ import "react-toastify/dist/ReactToastify.css";
 
 export const LoginPage = () => {
   const navigate = useNavigate();
-  const { login, baseurl } = useAuth();
+  const { login, BASE_URL } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
   const handleEmailLogin = async (e) => {
-    const baseurl = import.meta.env.VITE_BACKEND_BASE_URL;
+    const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL || "https://csi-attendance-web.onrender.com";
     e.preventDefault();
     try {
       const res = await axios.post(
-        `${baseurl}/auth2/login`,
+        `${BASE_URL}/auth2/login`,
         { email, password },
         {
           withCredentials: true,
