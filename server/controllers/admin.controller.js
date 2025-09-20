@@ -55,13 +55,93 @@ const records = async (req, res) => {
     const orgId = req.user.organizationId;
     if (!orgId) {
       return res
-        .status(400)
+        .status(4500)
         .json({ message: "User not associated with any organization" });
     }
+
     const attendanceRecords = await Attendance.find({ organizationId: orgId })
-      .populate("userId", "name email")
+      .populate("userId", "name email role department")
       .sort({ createdAt: -1 });
-    res.json({ attendanceRecords });
+
+    // Process the records to format them according to requirements
+    const processedRecords = attendanceRecords
+      .map((record) => {
+        const checkInRecord = record.type === "check-in" ? record : null;
+        const checkOutRecord = record.type === "check-out" ? record : null;
+
+        // Find corresponding check-out for this check-in
+        if (checkInRecord) {
+          const sameDay = attendanceRecords.filter(
+            (r) =>
+              r.userId._id.toString() === record.userId._id.toString() &&
+              new Date(r.createdAt).toDateString() ===
+                new Date(record.createdAt).toDateString()
+          );
+
+          const checkOut = sameDay.find((r) => r.type === "check-out");
+
+          // Calculate working hours
+          let workingHours = "-";
+          let status = "Incomplete";
+          let checkOutTime = "-";
+
+          if (checkOut) {
+            const checkInTime = new Date(record.createdAt);
+            const checkOutDateTime = new Date(checkOut.createdAt);
+            const diffInMillis = checkOutDateTime - checkInTime;
+            const hours = Math.floor(diffInMillis / (1000 * 60 * 60));
+            const minutes = Math.floor(
+              (diffInMillis % (1000 * 60 * 60)) / (1000 * 60)
+            );
+
+            workingHours = `${hours}h ${minutes}m`;
+            status = "Complete";
+            checkOutTime = checkOutDateTime.toLocaleTimeString("en-US", {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true,
+            });
+          }
+
+          return {
+            name: record.userId.name,
+            role: record.userId.role || "Employee",
+            department: record.userId.department || "General",
+            date: new Date(record.createdAt).toLocaleDateString("en-GB", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            }),
+            status: status,
+            checkInTime: new Date(record.createdAt).toLocaleTimeString(
+              "en-US",
+              {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true,
+              }
+            ),
+            checkOutTime: checkOutTime,
+            workingHours: workingHours,
+            location: record.location,
+            organizationId: record.organizationId,
+          };
+        }
+
+        return null;
+      })
+      .filter(Boolean); // Remove null entries
+
+    // Remove duplicates based on name and date
+    const uniqueRecords = processedRecords.reduce((acc, current) => {
+      const key = `${current.name}-${current.date}`;
+      if (!acc.find((item) => `${item.name}-${item.date}` === key)) {
+        acc.push(current);
+      }
+      return acc;
+    }, []);
+
+    res.json({ attendanceRecords: uniqueRecords });
   } catch (error) {
     console.error("Error getting records:", error);
     res.status(500).json({ message: "Failed to fetch records" });

@@ -1,4 +1,4 @@
-import React, { use, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Users,
   FileText,
@@ -10,11 +10,250 @@ import {
   UserCheck,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
-const Dashbord = () => {
+
+const Dashbord = ({ records, todaysdata, allusers }) => {
+  const { setAdminView } = useAuth();
+  const [currentTime, setCurrentTime] = useState(new Date());
+  const [stats, setStats] = useState({
+    totalEmployees: 0,
+    onTime: 0,
+    absent: 0,
+    lateArrival: 0,
+    earlyDepartures: 0,
+    activeSessions: 0, // Users who checked in but haven't checked out
+  });
+
+  // Update current time every second
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
+
+  // Calculate dynamic stats based on real data
+  useEffect(() => {
+    calculateStats();
+  }, [records, todaysdata, allusers]);
+
+  const calculateStats = () => {
+    console.log("Calculating stats with data:", { records, todaysdata, allusers });
+
+    // Get all users data
+    let allUsersData = [];
+    if (Array.isArray(allusers)) {
+      allUsersData = allusers;
+    } else if (allusers?.allusers && Array.isArray(allusers.allusers)) {
+      allUsersData = allusers.allusers;
+    } else if (allusers?.data && Array.isArray(allusers.data)) {
+      allUsersData = allusers.data;
+    }
+
+    // Get today's attendance data
+    let todaysAttendanceData = [];
+    if (Array.isArray(todaysdata)) {
+      todaysAttendanceData = todaysdata;
+    } else if (todaysdata?.attendanceRecords && Array.isArray(todaysdata.attendanceRecords)) {
+      todaysAttendanceData = todaysdata.attendanceRecords;
+    } else if (todaysdata?.data && Array.isArray(todaysdata.data)) {
+      todaysAttendanceData = todaysdata.data;
+    }
+
+    // Get records data
+    let recordsData = [];
+    if (Array.isArray(records)) {
+      recordsData = records;
+    } else if (records?.attendanceRecords && Array.isArray(records.attendanceRecords)) {
+      recordsData = records.attendanceRecords;
+    } else if (records?.data && Array.isArray(records.data)) {
+      recordsData = records.data;
+    }
+
+    console.log("Processed data:", { allUsersData, todaysAttendanceData, recordsData });
+
+    const totalEmployees = allUsersData.length;
+
+    // Get today's date in YYYY-MM-DD format
+    const today = new Date().toISOString().split('T')[0];
+    const currentTime = new Date();
+    const currentHour = currentTime.getHours();
+    const currentMinute = currentTime.getMinutes();
+    const currentTimeInMinutes = currentHour * 60 + currentMinute;
+
+    // Filter today's attendance records
+    const todaysRecords = [...todaysAttendanceData, ...recordsData].filter(record => {
+      if (!record.date) return false;
+      const recordDate = new Date(record.date).toISOString().split('T')[0];
+      return recordDate === today;
+    });
+
+    console.log("Today's records:", todaysRecords);
+
+    let onTimeCount = 0;
+    let lateArrivalCount = 0;
+    let activeSessionsCount = 0;
+    let earlyDeparturesCount = 0;
+    let absentCount = 0;
+
+    // Create a map of users with their attendance status
+    const userAttendanceMap = new Map();
+
+    // Process today's attendance records
+    todaysRecords.forEach(record => {
+      const userId = record.userId || record._id || record.organizationId;
+      if (!userId) return;
+
+      if (!userAttendanceMap.has(userId)) {
+        userAttendanceMap.set(userId, {
+          checkIn: null,
+          checkOut: null,
+          workingHours: null,
+          status: record.status
+        });
+      }
+
+      const userRecord = userAttendanceMap.get(userId);
+      
+      // Update check in/out times
+      if (record.checkInTime) {
+        userRecord.checkIn = record.checkInTime;
+      }
+      if (record.checkOutTime) {
+        userRecord.checkOut = record.checkOutTime;
+      }
+      if (record.workingHours) {
+        userRecord.workingHours = record.workingHours;
+      }
+    });
+
+    // Process each user to determine their status
+    allUsersData.forEach(user => {
+      const userId = user._id || user.id;
+      const userWorkingHours = user.workingHours || { start: "09:00", end: "17:00" };
+      
+      // Convert working hours to minutes for comparison
+      const startTime = userWorkingHours.start || "09:00";
+      const endTime = userWorkingHours.end || "17:00";
+      
+      const [startHour, startMin] = startTime.split(':').map(Number);
+      const [endHour, endMin] = endTime.split(':').map(Number);
+      
+      const workStartInMinutes = startHour * 60 + startMin;
+      const workEndInMinutes = endHour * 60 + endMin;
+
+      const userAttendance = userAttendanceMap.get(userId);
+
+      if (userAttendance) {
+        // User has attendance record for today
+        const checkInTime = userAttendance.checkIn;
+        const checkOutTime = userAttendance.checkOut;
+
+        if (checkInTime) {
+          // Parse check-in time
+          let checkInMinutes = 0;
+          try {
+            if (checkInTime.includes(':')) {
+              const [hour, min] = checkInTime.split(':').map(s => parseInt(s.replace(/[^0-9]/g, '')));
+              checkInMinutes = hour * 60 + (min || 0);
+              
+              // Handle AM/PM format
+              if (checkInTime.toLowerCase().includes('pm') && hour !== 12) {
+                checkInMinutes += 12 * 60;
+              } else if (checkInTime.toLowerCase().includes('am') && hour === 12) {
+                checkInMinutes -= 12 * 60;
+              }
+            }
+          } catch (error) {
+            console.error('Error parsing check-in time:', checkInTime);
+          }
+
+          // Determine if on time or late
+          if (checkInMinutes <= workStartInMinutes + 15) { // 15 minutes grace period
+            onTimeCount++;
+          } else {
+            lateArrivalCount++;
+          }
+
+          // Check if user is still active (checked in but not checked out)
+          if (!checkOutTime) {
+            activeSessionsCount++;
+          } else {
+            // Check for early departure
+            try {
+              let checkOutMinutes = 0;
+              if (checkOutTime.includes(':')) {
+                const [hour, min] = checkOutTime.split(':').map(s => parseInt(s.replace(/[^0-9]/g, '')));
+                checkOutMinutes = hour * 60 + (min || 0);
+                
+                // Handle AM/PM format
+                if (checkOutTime.toLowerCase().includes('pm') && hour !== 12) {
+                  checkOutMinutes += 12 * 60;
+                } else if (checkOutTime.toLowerCase().includes('am') && hour === 12) {
+                  checkOutMinutes -= 12 * 60;
+                }
+              }
+
+              if (checkOutMinutes < workEndInMinutes - 30) { // 30 minutes before end time
+                earlyDeparturesCount++;
+              }
+            } catch (error) {
+              console.error('Error parsing check-out time:', checkOutTime);
+            }
+          }
+        }
+      } else {
+        // User has no attendance record for today
+        // Check if work time has passed to mark as absent
+        if (currentTimeInMinutes > workStartInMinutes + 60) { // 1 hour after start time
+          absentCount++;
+        }
+      }
+    });
+
+    console.log("Calculated stats:", {
+      totalEmployees,
+      onTimeCount,
+      lateArrivalCount,
+      activeSessionsCount,
+      earlyDeparturesCount,
+      absentCount
+    });
+
+    setStats({
+      totalEmployees,
+      onTime: onTimeCount,
+      absent: absentCount,
+      lateArrival: lateArrivalCount,
+      earlyDepartures: earlyDeparturesCount,
+      activeSessions: activeSessionsCount,
+    });
+  };
+
+  // Format current time for display
+  const formatCurrentTime = (date) => {
+    return date.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true,
+      timeZone: 'Asia/Kolkata'
+    });
+  };
+
+  // Format current date for display
+  const formatCurrentDate = (date) => {
+    return date.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      timeZone: 'Asia/Kolkata'
+    });
+  };
+
   return (
     <div className="h-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
       <div className="p-6 w-[100vw]">
-        {/* <h1 className="text-2xl font-bold mb-6"></h1> */}
         <div className="flex gap-[20px] justify-center ">
           <div className="border-[1px] border-[#00000033] rounded-[10px] px-[24px] py-[40px] bg-white w-[431px] h-[367px]">
             <div className="flex flex-col justify-between h-full">
@@ -31,16 +270,16 @@ const Dashbord = () => {
               </div>
               <div className="flex gap-[px] flex-col">
                 <div className="stat-desc text-[32px] font-medium text-black">
-                  12:24:03 A.M.
+                  {formatCurrentTime(currentTime)}
                 </div>
                 <div className="stat-time text-[16px] font-medium text-[#6C7278]">
-                  01/01/2025
+                  {formatCurrentDate(currentTime)}
                 </div>
               </div>
               <div className="flex gap-[px] flex-col">
                 <div className="stat-desc text-[24px] font-medium">Users:</div>
                 <div className="stat-desc text-[16px] font-medium text-black">
-                  22 Sessions Active
+                  {stats.activeSessions} Sessions Active
                 </div>
               </div>
             </div>
@@ -51,7 +290,7 @@ const Dashbord = () => {
                 <div className="flex justify-between w-full">
                   <div className="flex flex-col">
                     <div className="justify-between h-full flex flex-col">
-                      <p className="text-[32px] font-bold">125</p>
+                      <p className="text-[32px] font-bold">{stats.totalEmployees}</p>
                       <p className="text-[16px] font-semibold text-[#1A1C1E]">
                         Total Employees
                       </p>
@@ -59,7 +298,7 @@ const Dashbord = () => {
                     <div className="flex gap-[8px]">
                       <img className="h-[24px]" src="/add_green.svg" alt="" />
                       <p className="text-[14px] text-[#01AB06] font-medium">
-                        12 Added Today
+                        {stats.totalEmployees > 0 ? 'Active' : 'No'} Employees
                       </p>
                     </div>
                   </div>
@@ -75,7 +314,7 @@ const Dashbord = () => {
                 <div className="flex justify-between w-full">
                   <div className="flex flex-col">
                     <div className="justify-between h-full flex flex-col">
-                      <p className="text-[32px] font-bold">110</p>
+                      <p className="text-[32px] font-bold">{stats.onTime}</p>
                       <p className="text-[16px] font-semibold text-[#1A1C1E]">
                         On Time
                       </p>
@@ -83,7 +322,7 @@ const Dashbord = () => {
                     <div className="flex gap-[8px]">
                       <img className="h-[24px]" src="/grow_green.svg" alt="" />
                       <p className="text-[14px] text-[#01AB06] font-medium">
-                        15 more than yesterday
+                        {stats.onTime > 0 ? `${Math.round((stats.onTime/stats.totalEmployees)*100)}%` : '0%'} on time today
                       </p>
                     </div>
                   </div>
@@ -99,15 +338,15 @@ const Dashbord = () => {
                 <div className="flex justify-between w-full">
                   <div className="flex flex-col">
                     <div className="justify-between h-full flex flex-col">
-                      <p className="text-[32px] font-bold">5</p>
+                      <p className="text-[32px] font-bold">{stats.absent}</p>
                       <p className="text-[16px] font-semibold text-[#1A1C1E]">
                         Absent
                       </p>
                     </div>
                     <div className="flex gap-[8px]">
-                      <img className="h-[24px]" src="/fall_red.svg" alt="" />
-                      <p className="text-[14px] text-[#AB0101] font-medium">
-                        2 more than yesterday
+                      <img className="h-[24px]" src={stats.absent > 0 ? "/fall_red.svg" : "/grow_green.svg"} alt="" />
+                      <p className={`text-[14px] font-medium ${stats.absent > 0 ? 'text-[#AB0101]' : 'text-[#01AB06]'}`}>
+                        {stats.absent > 0 ? `${stats.absent} absent today` : 'All present today'}
                       </p>
                     </div>
                   </div>
@@ -120,15 +359,15 @@ const Dashbord = () => {
                 <div className="flex justify-between w-full">
                   <div className="flex flex-col">
                     <div className="justify-between h-full flex flex-col">
-                      <p className="text-[32px] font-bold">8</p>
+                      <p className="text-[32px] font-bold">{stats.lateArrival}</p>
                       <p className="text-[16px] font-semibold text-[#1A1C1E]">
                         Late Arrival
                       </p>
                     </div>
                     <div className="flex gap-[8px]">
-                      <img className="h-[24px]" src="/grow_green.svg" alt="" />
-                      <p className="text-[14px] text-[#01AB06] font-medium">
-                        4 less than yesterday
+                      <img className="h-[24px]" src={stats.lateArrival === 0 ? "/grow_green.svg" : "/fall_red.svg"} alt="" />
+                      <p className={`text-[14px] font-medium ${stats.lateArrival === 0 ? 'text-[#01AB06]' : 'text-[#AB0101]'}`}>
+                        {stats.lateArrival === 0 ? 'No late arrivals' : `${stats.lateArrival} late today`}
                       </p>
                     </div>
                   </div>
@@ -144,15 +383,15 @@ const Dashbord = () => {
                 <div className="flex justify-between w-full">
                   <div className="flex flex-col">
                     <div className="justify-between h-full flex flex-col">
-                      <p className="text-[32px] font-bold">2</p>
+                      <p className="text-[32px] font-bold">{stats.earlyDepartures}</p>
                       <p className="text-[16px] font-semibold text-[#1A1C1E]">
                         Early Departures
                       </p>
                     </div>
                     <div className="flex gap-[8px]">
-                      <img className="h-[24px]" src="/grow_green.svg" alt="" />
-                      <p className="text-[14px] text-[#01AB06] font-medium">
-                        2 less than yesterday
+                      <img className="h-[24px]" src={stats.earlyDepartures === 0 ? "/grow_green.svg" : "/fall_red.svg"} alt="" />
+                      <p className={`text-[14px] font-medium ${stats.earlyDepartures === 0 ? 'text-[#01AB06]' : 'text-[#AB0101]'}`}>
+                        {stats.earlyDepartures === 0 ? 'No early departures' : `${stats.earlyDepartures} left early`}
                       </p>
                     </div>
                   </div>
@@ -187,7 +426,7 @@ const Dashbord = () => {
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow">
+        <div className="bg-white p-6 rounded-lg shadow mt-6">
           <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <button

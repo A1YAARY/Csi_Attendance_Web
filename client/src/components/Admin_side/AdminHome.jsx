@@ -52,21 +52,18 @@ const AdminHome = () => {
       console.log("AdminHome: Fetching all users...");
       const usersData = await getallusers();
       console.log("AdminHome: Raw users response:", usersData);
-
-      // Handle different response formats
+      
       let processedUsers = [];
       if (Array.isArray(usersData)) {
         processedUsers = usersData;
       } else if (usersData && usersData.data && Array.isArray(usersData.data)) {
         processedUsers = usersData.data;
-      } else if (
-        usersData &&
-        usersData.users &&
-        Array.isArray(usersData.users)
-      ) {
+      } else if (usersData && usersData.users && Array.isArray(usersData.users)) {
         processedUsers = usersData.users;
+      } else if (usersData && usersData.allusers && Array.isArray(usersData.allusers)) {
+        processedUsers = usersData.allusers;
       }
-
+      
       console.log("AdminHome: Processed users:", processedUsers);
       setallusers(processedUsers);
     } catch (err) {
@@ -79,7 +76,7 @@ const AdminHome = () => {
   const fetchAllData = useCallback(async () => {
     setLoading(true);
     setError(null);
-
+    
     try {
       await Promise.allSettled([
         fetchAdminRecords(),
@@ -106,10 +103,10 @@ const AdminHome = () => {
   // Show loading while checking authorization
   if (!isAuthorized && user !== null) {
     return (
-      <div className="flex items-center justify-center h-screen bg-gray-50">
-        <div className="text-center">
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 p-4">
+        <div className="text-center max-w-sm mx-auto">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Checking permissions...</p>
+          <p className="mt-4 text-gray-600 text-sm sm:text-base">Checking permissions...</p>
         </div>
       </div>
     );
@@ -125,10 +122,10 @@ const AdminHome = () => {
     return (
       <div className="min-h-screen bg-gray-50">
         <Admin_Navbar />
-        <div className="flex items-center justify-center h-96">
-          <div className="text-center">
+        <div className="flex items-center justify-center h-[calc(100vh-64px)] p-4">
+          <div className="text-center max-w-sm mx-auto">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading data...</p>
+            <p className="mt-4 text-gray-600 text-sm sm:text-base">Loading data...</p>
           </div>
         </div>
       </div>
@@ -140,13 +137,16 @@ const AdminHome = () => {
     return (
       <div className="min-h-screen bg-gray-50">
         <Admin_Navbar />
-        <div className="flex items-center justify-center h-96">
-          <div className="text-center text-red-600">
-            <p className="text-lg font-semibold">Error</p>
-            <p className="mt-2">{error}</p>
+        <div className="flex items-center justify-center h-[calc(100vh-64px)] p-4">
+          <div className="text-center text-red-600 max-w-md mx-auto">
+            <svg className="w-16 h-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+            </svg>
+            <p className="text-lg font-semibold mb-2">Error</p>
+            <p className="text-sm sm:text-base mb-4">{error}</p>
             <button
               onClick={fetchAllData}
-              className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors"
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm sm:text-base"
             >
               Retry
             </button>
@@ -161,24 +161,25 @@ const AdminHome = () => {
     switch (activeAdminView) {
       case "home":
         return (
-          <Dashbord
+          <Dashbord 
             records={records}
             todaysdata={todaysdata}
             allusers={allusers}
           />
         );
       case "employees":
-        // EmployeeLayout now fetches its own data, so we don't need to pass allusers
         return <EmployeeLayout />;
       case "records":
         return <AttendanceRecordLayout records={records} />;
       case "reports":
         return (
-          <div className="p-6 bg-gray-50 min-h-screen">
-            <h1 className="text-2xl font-bold text-gray-800">📊 Reports</h1>
-            <p className="text-gray-600 mt-2">
-              Reports functionality coming soon...
-            </p>
+          <div className="p-4 sm:p-6 bg-gray-50 min-h-[calc(100vh-64px)]">
+            <div className="max-w-7xl mx-auto">
+              <h1 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">📊 Reports</h1>
+              <p className="text-gray-600 text-sm sm:text-base">
+                Reports functionality coming soon...
+              </p>
+            </div>
           </div>
         );
       case "qr":
@@ -189,7 +190,7 @@ const AdminHome = () => {
         return <AITestPage />;
       default:
         return (
-          <Dashbord
+          <Dashbord 
             records={records}
             todaysdata={todaysdata}
             allusers={allusers}
@@ -201,7 +202,9 @@ const AdminHome = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Admin_Navbar />
-      <main className="transition-all duration-300">{renderContent()}</main>
+      <main className="transition-all duration-300">
+        {renderContent()}
+      </main>
     </div>
   );
 };
