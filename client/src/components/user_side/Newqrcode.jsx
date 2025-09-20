@@ -20,7 +20,7 @@ const NewQrcode = () => {
   const [isProcessing, setIsProcessing] = useState(false);
 
   // const BASE_URL = "https://csi-attendance-web-s1yf.onrender.com";
-  const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL;
+  const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL||"https://csi-attendance-web-s1yf.onrender.com";
   const token = localStorage.getItem("accessToken");
 
   const cancel = () => navigate("/");
