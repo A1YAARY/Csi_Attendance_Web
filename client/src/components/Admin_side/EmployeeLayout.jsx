@@ -180,21 +180,7 @@ const EmployeeLayout = () => {
           </div>
         </div>
 
-        {/* Debug Information (Remove in production) */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="mt-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <h3 className="text-sm font-medium text-yellow-800 mb-2">Debug Info:</h3>
-            <p className="text-sm text-yellow-700">Total users: {allusers.length}</p>
-            <p className="text-sm text-yellow-700">Filtered users: {filteredUsers.length}</p>
-            <p className="text-sm text-yellow-700">Search term: "{searchTerm}"</p>
-            <details className="mt-2">
-              <summary className="text-sm text-yellow-700 cursor-pointer">View raw data</summary>
-              <pre className="text-xs text-yellow-600 mt-2 overflow-auto max-h-40">
-                {JSON.stringify(allusers, null, 2)}
-              </pre>
-            </details>
-          </div>
-        )}
+        
       </div>
     </div>
   );

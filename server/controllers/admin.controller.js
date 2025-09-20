@@ -258,21 +258,149 @@ const getTodaysAttendance = async (req, res) => {
   }
 };
 
+const updateUserByAdmin = async (req, res) => {
+  try {
+    const userId = req.params.id;
+    const {
+      name,
+      email,
+      department,
+      role,
+      phone,
+      institute,
+      workingHours,
+      password,
+    } = req.body;
+
+    // Check if the requesting user is an admin
+    if (req.user.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Only admins can update user profiles",
+      });
+    }
+
+    // Find the user to update
+    const userToUpdate = await User.findById(userId);
+    if (!userToUpdate) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Check if user belongs to same organization
+    if (
+      String(userToUpdate.organizationId) !== String(req.user.organizationId)
+    ) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden to update user outside your organization",
+      });
+    }
+
+    // Build update data
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (email) updateData.email = email;
+    if (department) updateData.department = department;
+    if (role) updateData.role = role;
+    if (phone) updateData.phone = phone;
+    if (institute) updateData.institute = institute;
+    if (workingHours) updateData.workingHours = workingHours;
+    if (password) {
+      // Hash password if provided
+      const bcrypt = require("bcryptjs");
+      updateData.password = await bcrypt.hash(password, 10);
+    }
+
+    console.log("Updating user:", userId, "with data:", updateData);
+
+    // Update user
+    const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
+      new: true,
+      runValidators: true,
+    }).select("-password"); // Exclude password from response
+
+    if (!updatedUser) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    console.log("User updated successfully:", updatedUser);
+
+    res.status(200).json({
+      success: true,
+      message: "User updated successfully",
+      data: updatedUser,
+    });
+  } catch (error) {
+    console.error("Update user profile error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to update user profile",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
+  }
+};
+
 const deleteUser = async (req, res) => {
   try {
     const userId = req.params.id;
+
+    // Check if the requesting user is an admin
+    if (req.user.role !== "admin") {
+      return res.status(403).json({
+        success: false,
+        message: "Only admins can delete users",
+      });
+    }
+
+    // Find the user to delete
     const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: "User not found" });
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Check if user belongs to same organization
     if (String(user.organizationId) !== String(req.user.organizationId)) {
       return res.status(403).json({
+        success: false,
         message: "Forbidden to delete user outside your organization",
       });
     }
+
+    // Prevent admin from deleting themselves
+    if (String(user._id) === String(req.user._id)) {
+      return res.status(400).json({
+        success: false,
+        message: "You cannot delete your own account",
+      });
+    }
+
+    console.log("Deleting user:", userId, "by admin:", req.user._id);
+
+    // Delete the user
     await User.findByIdAndDelete(userId);
-    res.json({ message: "User deleted successfully" });
+
+    console.log("User deleted successfully:", userId);
+
+    res.status(200).json({
+      success: true,
+      message: "User deleted successfully",
+    });
   } catch (error) {
     console.error("Error deleting user:", error);
-    res.status(500).json({ message: "Failed to delete user" });
+    res.status(500).json({
+      success: false,
+      message: "Failed to delete user",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
   }
 };
 
@@ -297,4 +425,5 @@ module.exports = {
   deleteUser,
   getQRCodeByType,
   getusers,
+  updateUserByAdmin,
 };
