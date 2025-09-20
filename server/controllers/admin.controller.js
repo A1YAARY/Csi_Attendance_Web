@@ -4,6 +4,24 @@ const QRCode = require("../models/Qrcode.models");
 const Organization = require("../models/organization.models");
 
 // Define the missing records function to avoid route errors
+
+const getusers = async (req, res) => {
+  try {
+    const orgId = req.user.organizationId;
+    if (!orgId) {
+      return res
+        .status(400)
+        .json({ message: "User not associated with any organization" });
+    }
+    const allusers = await User.find({ organizationId: orgId }).sort({
+      createdAt: -1,
+    });
+    res.json({ allusers });
+  } catch (error) {
+    console.error("Error getting records:", error);
+    res.status(500).json({ message: "Failed to fetch all users" });
+  }
+};
 const records = async (req, res) => {
   try {
     const orgId = req.user.organizationId;
@@ -147,7 +165,6 @@ const getQRCodeByType = async (req, res) => {
   }
 };
 
-
 const getTodaysAttendance = async (req, res) => {
   try {
     const orgId = req.user.organizationId;
@@ -251,4 +268,5 @@ module.exports = {
   getTodaysAttendance,
   deleteUser,
   getQRCodeByType,
+  getusers,
 };

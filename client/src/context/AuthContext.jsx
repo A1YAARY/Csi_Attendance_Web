@@ -111,6 +111,7 @@ export function AuthProvider({ children }) {
     });
     return await response.json();
   };
+  
 
   const uploadAttendance = async (formData) => {
     const response = await fetch(`${BASE_URL}/attend/upload`, {
@@ -159,7 +160,7 @@ export function AuthProvider({ children }) {
 
   const deleteUser = async (userId) => {
     const response = await fetch(`${BASE_URL}/admin/user/${userId}`, {
-      method: 'DELETE',
+      method: 'DELETE', 
       headers: getAuthHeaders()
     });
     return await response.json();

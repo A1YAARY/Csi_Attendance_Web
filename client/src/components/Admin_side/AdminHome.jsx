@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Admin_Navbar } from "./Admin_Navbar";
 import EmployeeLayout from "./EmployeeLayout";
 import { AttendanceRecordLayout } from "./AttendanceRecordLayout";
@@ -7,9 +7,27 @@ import QRcodeView from "./QRcodeView";
 import Dashbord from "./Dashbord";
 import AITestPage from "./AITestPage"; // If you want to include AI test page
 import { useAdminProtection } from "../../hooks/useAdminProtection"; // Import the protection hook
-
 const AdminHome = () => {
-  const { activeAdminView, setAdminView } = useAuth();
+  const {
+    activeAdminView,
+    setAdminView,
+    getAdminRecords,
+    getTodaysAttendance,
+  } = useAuth();
+  const [records, setRecords] = useState([]);
+  const [todaysdata, settodaysdata] = useState([]);
+
+  useEffect(() => {
+    const fetchAdminRecords = async () => {
+      const data = await getAdminRecords();
+      const todaysdata = await getTodaysAttendance();
+      setRecords(data);
+      settodaysdata(todaysdata);
+      console.log("Fetched admin records:", data);
+      console.log("Fetched admin todays record:", todaysdata);
+    };
+    fetchAdminRecords();
+  }, [getAdminRecords, getTodaysAttendance]);
 
   // 🔐 Apply role-based protection
   const isAuthorized = useAdminProtection();

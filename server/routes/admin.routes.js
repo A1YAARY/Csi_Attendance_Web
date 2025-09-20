@@ -8,6 +8,7 @@ const cache = require("../middleware/cache.middleware");
 
 // Existing routes
 router.get("/records", auth, role(["organization"]), adminController.records);
+router.get("/allusers",auth,role(["organization"]),adminController.getusers)
 router.get(
   "/singleUser/:id",
   auth,
