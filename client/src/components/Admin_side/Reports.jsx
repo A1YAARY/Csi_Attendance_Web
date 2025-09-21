@@ -209,7 +209,7 @@ const Reports = () => {
   const downloadTemplate = async () => {
     try {
       const response = await fetch(
-        `http://localhost:3000/api/bulk-users/template`,
+        `${baseurl}/api/bulk-users/template`,
         {
           headers: {
             Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
