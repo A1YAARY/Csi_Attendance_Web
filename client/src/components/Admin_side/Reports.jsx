@@ -48,9 +48,10 @@ const Reports = () => {
           "Organization code not found. Please ensure you're properly logged in as an admin."
         );
       }
+      const baseurl = import.meta.env.VITE_BACKEND_BASE_URL
 
       const response = await fetch(
-        `http://localhost:3000/auth2/register-user`,
+        `${baseurl}/auth2/register-user`,
         {
           method: "POST",
           headers: {
