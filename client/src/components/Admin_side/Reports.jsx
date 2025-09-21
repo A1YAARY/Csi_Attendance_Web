@@ -175,7 +175,7 @@ const Reports = () => {
 
     try {
       const response = await fetch(
-        `http://localhost:3000/api/bulk-users/upload-users`,
+        `${baseurl}/api/bulk-users/upload-users`,
         {
           method: "POST",
           headers: {
