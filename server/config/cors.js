@@ -6,7 +6,7 @@ const corsOptions = {
     if (!origin) return callback(null, true);
 
     const allowedOrigins = [
-      "*",
+      // "*",
       "https://csi-attendance-frontend.onrender.com",
       "https://csi-attendance-web-1-40fy.onrender.com",
       "http://192.168.29.219:5173",
