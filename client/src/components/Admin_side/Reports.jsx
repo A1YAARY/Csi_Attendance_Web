@@ -252,15 +252,7 @@ const Reports = () => {
           </p>
         </div>
 
-        {/* Debug Info - Remove in production */}
-        {process.env.NODE_ENV === "development" && (
-          <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
-            <p className="text-sm text-yellow-800">
-              <strong>Debug Info:</strong> Organization Code:{" "}
-              {organizationCode || "Not Found"}
-            </p>
-          </div>
-        )}
+     
 
         {/* Show warning if no organization code */}
         {!organizationCode && (

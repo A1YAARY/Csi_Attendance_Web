@@ -26,7 +26,7 @@ export const Admin_Navbar = () => {
           (activeAdminView === "home" || !activeAdminView)
         ) {
           radio.checked = true;
-        } else if (id === "nav-employees" && activeAdminView === "employees") {
+        } else if (id === "nav-employees" && activeAdminView === "employees") { 
           radio.checked = true;
         } else if (id === "nav-records" && activeAdminView === "records") {
           radio.checked = true;
