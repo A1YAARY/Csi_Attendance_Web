@@ -1,6 +1,7 @@
 require("dotenv").config();
 // import 'dotenv/config';
 
+const path = require("path");
 
 const express = require("express");
 const connectDB = require("./config/Database");
@@ -124,6 +125,7 @@ app.use((err, req, res, next) => {
     }),
   });
 });
+app.use('/api/audio', express.static(path.join(__dirname, 'temp/audio')));
 
 // ✅ GLOBAL ERROR HANDLER (final catch-all)
 app.use((error, req, res, next) => {

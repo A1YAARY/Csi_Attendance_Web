@@ -25,495 +25,292 @@ class AttendanceAIAgent {
             () => reject(new Error("MongoDB connection timeout")),
             10000
           );
-          mongoose.connection.on("connected", () => {
+          mongoose.connection.once("connected", () => {
             clearTimeout(timeout);
             resolve();
           });
         });
       }
 
-      // Setup optimized Groq LLM
+      // Initialize Groq LLM
       this.llm = new ChatGroq({
-        model: process.env.GROQ_MODEL || "llama-3.1-70b-versatile",
         apiKey: process.env.GROQ_API_KEY,
+        model: process.env.GROQ_MODEL || "llama-3.1-70b-versatile",
         temperature: 0.1,
         maxTokens: 2000,
         timeout: 30000,
-        maxRetries: 3,
-        streaming: false,
       });
 
       this.isInitialized = true;
       console.log("✅ AI Agent initialized successfully");
+
+      return { success: true, message: "AI Agent ready" };
     } catch (error) {
       console.error("❌ AI Agent initialization failed:", error);
+      this.isInitialized = false;
       throw error;
     }
   }
 
-  // 🔧 FIXED: ObjectId validation helper [web:132][web:128]
-  isValidObjectId(id) {
-    if (!id) return false;
-
-    // Convert to string if it's not already
-    const idStr = String(id);
-
-    // Check if it's a valid ObjectId format
-    if (!mongoose.Types.ObjectId.isValid(idStr)) {
-      return false;
-    }
-
-    // Additional check to ensure it's exactly 24 hex characters [web:132]
-    if (idStr.length === 24 && /^[0-9a-fA-F]{24}$/.test(idStr)) {
-      return true;
-    }
-
-    return false;
-  }
-
-  // 🔧 FIXED: Safe ObjectId conversion [web:128]
-  toObjectId(id) {
-    if (!this.isValidObjectId(id)) {
-      throw new Error(
-        `Invalid ObjectId format: ${id}. Must be a 24 character hex string.`
-      );
-    }
-    return new mongoose.Types.ObjectId(id);
-  }
-
-  async query(question, organizationId = null) {
+  async query(question, organizationId) {
     if (!this.isInitialized) {
       await this.initialize();
     }
 
-    if (!organizationId) {
-      return "❌ Error: Organization context is required for security";
-    }
-
-    // 🔧 FIXED: Validate organizationId before using it [web:128]
-    if (!this.isValidObjectId(organizationId)) {
-      return `❌ Error: Invalid organization ID format: ${organizationId}. Please check your authentication.`;
-    }
-
     try {
-      // Check cache first for performance
-      const cacheKey = `${organizationId}_${question}`;
-      const cached = this.getCachedResult(cacheKey);
-      if (cached) {
-        return `${cached} (cached)`;
+      // Check cache first
+      const cacheKey = `${organizationId}:${question}`;
+      const cached = this.cache.get(cacheKey);
+      if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
+        console.log("📖 Returning cached response");
+        return cached.response;
       }
 
-      // Create intelligent prompt that includes data context
-      const contextPrompt = await this.buildContextPrompt(
-        question,
-        organizationId
-      );
+      // Get attendance data for context
+      const context = await this.getAttendanceContext(organizationId);
 
-      const response = await this.llm.invoke([
-        new HumanMessage({
-          content: contextPrompt,
-        }),
-      ]);
+      // Build comprehensive prompt
+      const prompt = this.buildPrompt(question, context);
 
-      const result = response.content;
+      console.log("🤖 Querying AI with context...");
+
+      // Get AI response
+      const messages = [new HumanMessage({ content: prompt })];
+      const aiResponse = await this.llm.invoke(messages);
+
+      const responseText = aiResponse.content;
+      console.log("✅ AI response generated successfully");
+
+      const result = {
+        success: true,
+        response: responseText,
+        model: process.env.GROQ_MODEL || "llama-3.1-70b-versatile",
+        timestamp: new Date().toISOString(),
+      };
 
       // Cache the result
-      this.setCacheResult(cacheKey, result);
+      this.cache.set(cacheKey, {
+        response: result,
+        timestamp: Date.now(),
+      });
+
+      // Clean old cache entries
+      this.cleanCache();
 
       return result;
     } catch (error) {
-      console.error("AI Agent query error:", error);
-      return `❌ Error processing request: ${error.message}`;
+      console.error("❌ AI Query failed:", error);
+      throw new Error(`AI processing failed: ${error.message}`);
     }
   }
 
-  async buildContextPrompt(question, organizationId) {
-    const today = new Date().toISOString().split("T")[0];
-    const context = await this.gatherRelevantData(
-      question,
-      organizationId,
-      today
-    );
+  async getAttendanceContext(organizationId) {
+    try {
+      const User = mongoose.model("User");
+      const Attendance = mongoose.model("Attendance");
+      const DailyTimeSheet = mongoose.model("DailyTimeSheet");
 
-    return `You are an advanced attendance analytics assistant for an organization.
+      // Get organization users
+      const users = await User.find({ organizationId })
+        .select("email firstName lastName")
+        .lean();
 
-ORGANIZATION CONTEXT:
-- Organization ID: ${organizationId}
-- Current Date: ${today}
+      // Get today's attendance
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
 
-CURRENT DATA CONTEXT:
-${context}
+      const todayAttendance = await Attendance.find({
+        organizationId,
+        createdAt: { $gte: today, $lt: tomorrow },
+      })
+        .populate("userId", "email firstName lastName")
+        .lean();
+
+      // Get recent timesheets (last 7 days)
+      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+      const recentTimesheets = await DailyTimeSheet.find({
+        organizationId,
+        date: { $gte: weekAgo },
+      })
+        .populate("userId", "email firstName lastName")
+        .lean();
+
+      // Calculate basic stats
+      const totalUsers = users.length;
+      const presentToday = todayAttendance.filter(
+        (a) => a.status === "present"
+      ).length;
+      const absentToday = totalUsers - presentToday;
+      const attendanceRate =
+        totalUsers > 0 ? ((presentToday / totalUsers) * 100).toFixed(1) : 0;
+
+      return {
+        organizationId,
+        totalUsers,
+        users: users.slice(0, 20),
+        todayAttendance,
+        recentTimesheets: recentTimesheets.slice(0, 50),
+        stats: {
+          presentToday,
+          absentToday,
+          attendanceRate: `${attendanceRate}%`,
+        },
+        contextGeneratedAt: new Date().toISOString(),
+      };
+    } catch (error) {
+      console.error("❌ Context generation failed:", error);
+      return {
+        organizationId,
+        error: "Failed to load attendance context",
+        contextGeneratedAt: new Date().toISOString(),
+      };
+    }
+  }
+
+  buildPrompt(question, context) {
+    const currentDate = new Date().toDateString();
+    const currentTime = new Date().toLocaleTimeString();
+
+    return `You are an advanced AI assistant for attendance management system analysis.
+
+CURRENT CONTEXT:
+Date: ${currentDate}
+Time: ${currentTime}
+Organization ID: ${context.organizationId}
+Total Users: ${context.totalUsers}
+
+TODAY'S ATTENDANCE SUMMARY:
+- Present: ${context.stats?.presentToday || 0} employees
+- Absent: ${context.stats?.absentToday || 0} employees  
+- Attendance Rate: ${context.stats?.attendanceRate || "0%"}
+- Total Records: ${context.todayAttendance?.length || 0}
+
+USERS IN ORGANIZATION:
+${
+  context.users
+    ?.map((u) => `- ${u.email} (${u.firstName} ${u.lastName})`)
+    .join("\n") || "No users found"
+}
+
+TODAY'S ATTENDANCE DETAILS:
+${
+  context.todayAttendance
+    ?.map((a) => {
+      const user = a.userId;
+      const time = new Date(a.createdAt).toLocaleTimeString();
+      return `- ${user?.email || "Unknown"}: ${a.status} at ${time}`;
+    })
+    .join("\n") || "No attendance records today"
+}
+
+RECENT ACTIVITY (Last 7 days):
+${
+  context.recentTimesheets
+    ?.slice(0, 10)
+    .map((t) => {
+      const user = t.userId;
+      const date = new Date(t.date).toDateString();
+      return `- ${user?.email || "Unknown"}: ${date} - ${
+        t.totalHours || "N/A"
+      } hours`;
+    })
+    .join("\n") || "No recent timesheet data"
+}
+
+INSTRUCTIONS:
+1. Provide clear, concise answers about attendance data
+2. Use specific numbers and statistics when available
+3. Format responses in a friendly, professional tone
+4. Use bullet points for lists and clear structure
+5. If data is missing, clearly state what information is not available
+6. Provide actionable insights when possible
+7. Keep responses focused and relevant to the question
 
 USER QUESTION: ${question}
 
-INSTRUCTIONS:
-1. Use the provided data context to answer the question accurately
-2. If asking about "today", use ${today}
-3. If asking about specific users, check the data carefully
-4. Provide clear, formatted responses with emojis
-5. If no data is available, say so clearly
-6. Always be specific with numbers and percentages
-
-Please provide a comprehensive answer based on the available data:`;
+Please provide a helpful answer based on the available attendance data:`;
   }
 
-  async gatherRelevantData(question, organizationId, date) {
+  cleanCache() {
+    const now = Date.now();
+    let cleaned = 0;
+    for (const [key, value] of this.cache.entries()) {
+      if (now - value.timestamp > this.cacheTimeout) {
+        this.cache.delete(key);
+        cleaned++;
+      }
+    }
+    if (cleaned > 0) {
+      console.log(`🧹 Cleaned ${cleaned} expired cache entries`);
+    }
+  }
+
+  getCapabilities() {
+    return {
+      model: process.env.GROQ_MODEL || "llama-3.1-70b-versatile",
+      tts: "Frontend Browser TTS",
+      version: "2.0.0-simplified",
+      features: [
+        "Attendance Analytics",
+        "User Behavior Insights",
+        "Time Tracking Analysis",
+        "Organizational Reports",
+        "Real-time Data Context",
+        "Intelligent Caching",
+      ],
+    };
+  }
+
+  getHealthStatus() {
+    return {
+      status: this.isInitialized ? "healthy" : "unhealthy",
+      initialized: this.isInitialized,
+      cacheSize: this.cache.size,
+      model: process.env.GROQ_MODEL || "llama-3.1-70b-versatile",
+      lastHealthCheck: new Date().toISOString(),
+      audioMode: "frontend-only",
+    };
+  }
+
+  async cleanup() {
     try {
-      // 🔧 FIXED: Validate organizationId before database operations [web:128]
-      if (!this.isValidObjectId(organizationId)) {
-        return `Error: Invalid organization ID format. Cannot retrieve data.`;
-      }
-
-      const User = mongoose.model("User");
-      const Attendance = mongoose.model("Attendance");
-
-      let context = "";
-
-      // Check if question is about today's attendance
-      if (this.isAboutToday(question)) {
-        const todayData = await this.getTodaysSummary(organizationId, date);
-        context += `TODAY'S ATTENDANCE DATA (${date}):\n${todayData}\n\n`;
-      }
-
-      // Check if question mentions specific user
-      const userEmail = this.extractEmailFromQuestion(question);
-      if (userEmail) {
-        const userData = await this.getUserData(
-          userEmail,
-          organizationId,
-          date
-        );
-        context += `USER SPECIFIC DATA:\n${userData}\n\n`;
-      }
-
-      // Check if question is about absent users
-      if (this.isAboutAbsent(question)) {
-        const absentData = await this.getAbsentUsers(organizationId, date);
-        context += `ABSENT USERS DATA:\n${absentData}\n\n`;
-      }
-
-      // Check if question is about late arrivals
-      if (this.isAboutLate(question)) {
-        const lateData = await this.getLateUsers(organizationId, date);
-        context += `LATE ARRIVALS DATA:\n${lateData}\n\n`;
-      }
-
-      // Add general statistics for context
-      const generalStats = await this.getGeneralStats(organizationId);
-      context += `GENERAL ORGANIZATION STATS:\n${generalStats}`;
-
-      return context;
+      this.cache.clear();
+      console.log("✅ AI Agent cleanup completed");
     } catch (error) {
-      console.error("Error gathering context:", error);
-      return `No data available due to error: ${error.message}`;
-    }
-  }
-
-  // 🔧 FIXED: All database query methods with proper ObjectId handling [web:128]
-  async getTodaysSummary(organizationId, date) {
-    try {
-      // 🔧 FIXED: Safe ObjectId conversion [web:128]
-      const orgObjectId = this.toObjectId(organizationId);
-
-      const User = mongoose.model("User");
-      const Attendance = mongoose.model("Attendance");
-
-      const startOfDay = new Date(date + "T00:00:00.000Z");
-      const endOfDay = new Date(date + "T23:59:59.999Z");
-
-      // 🔧 FIXED: Proper ObjectId usage in queries [web:128]
-      const [totalUsers, attendanceRecords] = await Promise.all([
-        User.countDocuments({
-          role: "user",
-          organizationId: orgObjectId, // Using proper ObjectId
-        }),
-        Attendance.find({
-          organizationId: orgObjectId, // Using proper ObjectId
-          createdAt: { $gte: startOfDay, $lte: endOfDay },
-        })
-          .populate("userId", "name email")
-          .lean(),
-      ]);
-
-      const presentCount = attendanceRecords.length;
-      const absentCount = totalUsers - presentCount;
-      const presentPercent =
-        totalUsers > 0 ? Math.round((presentCount / totalUsers) * 100) : 0;
-
-      // Detailed breakdown
-      const checkIns = attendanceRecords.filter(
-        (r) => r.type === "check-in"
-      ).length;
-      const checkOuts = attendanceRecords.filter(
-        (r) => r.type === "check-out"
-      ).length;
-
-      return `📊 ATTENDANCE SUMMARY FOR ${date}:
-• Total Employees: ${totalUsers}
-• Present: ${presentCount}/${totalUsers} (${presentPercent}%)
-• Absent: ${absentCount}
-• Check-ins: ${checkIns}
-• Check-outs: ${checkOuts}
-• Active Sessions: ${checkIns - checkOuts}
-
-PRESENT EMPLOYEES:
-${
-  presentCount > 0
-    ? attendanceRecords
-        .map(
-          (r) =>
-            `• ${r.userId?.name || "Unknown"} (${
-              r.userId?.email || "No email"
-            })`
-        )
-        .join("\n")
-    : "• No employees present today"
-}`;
-    } catch (error) {
-      console.error("Error in getTodaysSummary:", error);
-      return `Error getting today's summary: ${error.message}`;
-    }
-  }
-
-  async getAbsentUsers(organizationId, date) {
-    try {
-      // 🔧 FIXED: Safe ObjectId conversion [web:128]
-      const orgObjectId = this.toObjectId(organizationId);
-
-      const User = mongoose.model("User");
-      const Attendance = mongoose.model("Attendance");
-
-      const startOfDay = new Date(date + "T00:00:00.000Z");
-      const endOfDay = new Date(date + "T23:59:59.999Z");
-
-      // 🔧 FIXED: Proper ObjectId usage [web:128]
-      const presentUserIds = await Attendance.distinct("userId", {
-        organizationId: orgObjectId, // Using proper ObjectId
-        createdAt: { $gte: startOfDay, $lte: endOfDay },
-      });
-
-      const absentUsers = await User.find({
-        _id: { $nin: presentUserIds },
-        role: "user",
-        organizationId: orgObjectId, // Using proper ObjectId
-      })
-        .select("name email department")
-        .lean();
-
-      if (absentUsers.length === 0) {
-        return `✅ ALL EMPLOYEES PRESENT - No one is absent on ${date}`;
-      }
-
-      return `❌ ABSENT EMPLOYEES ON ${date} (${absentUsers.length} total):
-${absentUsers
-  .map(
-    (user) =>
-      `• ${user.name || "No name"} (${user.email || "No email"}) - ${
-        user.department || "No department"
-      }`
-  )
-  .join("\n")}`;
-    } catch (error) {
-      console.error("Error in getAbsentUsers:", error);
-      return `Error getting absent users: ${error.message}`;
-    }
-  }
-
-  async getLateUsers(organizationId, date) {
-    try {
-      // 🔧 FIXED: Safe ObjectId conversion [web:128]
-      const orgObjectId = this.toObjectId(organizationId);
-
-      const Attendance = mongoose.model("Attendance");
-
-      const startOfDay = new Date(date + "T00:00:00.000Z");
-      const endOfDay = new Date(date + "T23:59:59.999Z");
-
-      // Consider late if check-in is after 9:30 AM
-      const lateThreshold = new Date(date + "T09:30:00.000Z");
-
-      // 🔧 FIXED: Proper ObjectId usage [web:128]
-      const lateArrivals = await Attendance.find({
-        organizationId: orgObjectId, // Using proper ObjectId
-        createdAt: { $gte: lateThreshold, $lte: endOfDay },
-        type: "check-in",
-      })
-        .populate("userId", "name email")
-        .lean();
-
-      if (lateArrivals.length === 0) {
-        return `✅ NO LATE ARRIVALS - Everyone arrived on time on ${date}`;
-      }
-
-      return `⏰ LATE ARRIVALS ON ${date} (${lateArrivals.length} total):
-${lateArrivals
-  .map((record) => {
-    const time = new Date(record.createdAt).toLocaleTimeString();
-    return `• ${record.userId?.name || "Unknown"} (${
-      record.userId?.email || "No email"
-    }) - Arrived at ${time}`;
-  })
-  .join("\n")}`;
-    } catch (error) {
-      console.error("Error in getLateUsers:", error);
-      return `Error getting late users: ${error.message}`;
-    }
-  }
-
-  async getUserData(userEmail, organizationId, date) {
-    try {
-      // 🔧 FIXED: Safe ObjectId conversion [web:128]
-      const orgObjectId = this.toObjectId(organizationId);
-
-      const User = mongoose.model("User");
-      const Attendance = mongoose.model("Attendance");
-
-      // 🔧 FIXED: Proper ObjectId usage [web:128]
-      const user = await User.findOne({
-        email: userEmail,
-        organizationId: orgObjectId, // Using proper ObjectId
-      }).lean();
-
-      if (!user) {
-        return `❌ USER NOT FOUND: ${userEmail} not found in your organization`;
-      }
-
-      const startOfDay = new Date(date + "T00:00:00.000Z");
-      const endOfDay = new Date(date + "T23:59:59.999Z");
-
-      // 🔧 FIXED: user._id is already an ObjectId, no need to convert [web:128]
-      const todayAttendance = await Attendance.find({
-        userId: user._id, // user._id is already ObjectId from database
-        organizationId: orgObjectId,
-        createdAt: { $gte: startOfDay, $lte: endOfDay },
-      }).lean();
-
-      const checkIn = todayAttendance.find((r) => r.type === "check-in");
-      const checkOut = todayAttendance.find((r) => r.type === "check-out");
-
-      return `👤 USER DATA FOR ${
-        user.name || "Unknown"
-      } (${userEmail}) ON ${date}:
-• Department: ${user.department || "Not specified"}
-• Role: ${user.role || "user"}
-• Check-in: ${
-        checkIn
-          ? new Date(checkIn.createdAt).toLocaleTimeString()
-          : "Not checked in"
-      }
-• Check-out: ${
-        checkOut
-          ? new Date(checkOut.createdAt).toLocaleTimeString()
-          : "Not checked out"
-      }
-• Status: ${
-        checkIn ? (checkOut ? "Completed day" : "Currently active") : "Absent"
-      }`;
-    } catch (error) {
-      console.error("Error in getUserData:", error);
-      return `Error getting user data: ${error.message}`;
-    }
-  }
-
-  async getGeneralStats(organizationId) {
-    try {
-      // 🔧 FIXED: Safe ObjectId conversion [web:128]
-      const orgObjectId = this.toObjectId(organizationId);
-
-      const User = mongoose.model("User");
-
-      // 🔧 FIXED: Proper ObjectId usage [web:128]
-      const totalEmployees = await User.countDocuments({
-        role: "user",
-        organizationId: orgObjectId, // Using proper ObjectId
-      });
-
-      return `• Total Employees in Organization: ${totalEmployees}`;
-    } catch (error) {
-      console.error("Error in getGeneralStats:", error);
-      return `Error getting general stats: ${error.message}`;
-    }
-  }
-
-  // Helper methods for intelligent parsing
-  isAboutToday(question) {
-    const todayKeywords = ["today", "today's", "current", "now", "present day"];
-    return todayKeywords.some((keyword) =>
-      question.toLowerCase().includes(keyword)
-    );
-  }
-
-  isAboutAbsent(question) {
-    const absentKeywords = [
-      "absent",
-      "missing",
-      "not present",
-      "didn't come",
-      "who was absent",
-    ];
-    return absentKeywords.some((keyword) =>
-      question.toLowerCase().includes(keyword)
-    );
-  }
-
-  isAboutLate(question) {
-    const lateKeywords = [
-      "late",
-      "delayed",
-      "tardy",
-      "late arrival",
-      "came late",
-    ];
-    return lateKeywords.some((keyword) =>
-      question.toLowerCase().includes(keyword)
-    );
-  }
-
-  extractEmailFromQuestion(question) {
-    const emailRegex = /[\w.-]+@[\w.-]+\.\w+/;
-    const match = question.match(emailRegex);
-    return match ? match[0] : null;
-  }
-
-  // Caching for performance optimization
-  getCachedResult(key) {
-    const cached = this.cache.get(key);
-    if (cached && Date.now() - cached.timestamp < this.cacheTimeout) {
-      return cached.data;
-    }
-    return null;
-  }
-
-  setCacheResult(key, data) {
-    this.cache.set(key, {
-      data,
-      timestamp: Date.now(),
-    });
-
-    // Clean old cache entries
-    if (this.cache.size > 100) {
-      const oldestKey = this.cache.keys().next().value;
-      this.cache.delete(oldestKey);
+      console.error("❌ AI Agent cleanup failed:", error);
     }
   }
 }
 
-// Singleton pattern for performance
-let aiAgent = null;
+// Singleton instance
+let aiAgentInstance = null;
 
 const getAIAgent = async () => {
-  if (!aiAgent) {
-    aiAgent = new AttendanceAIAgent();
-    await aiAgent.initialize();
+  if (!aiAgentInstance) {
+    aiAgentInstance = new AttendanceAIAgent();
+    try {
+      await aiAgentInstance.initialize();
+    } catch (error) {
+      console.error("❌ Failed to initialize AI Agent:", error);
+      throw error;
+    }
   }
-  return aiAgent;
+  return aiAgentInstance;
 };
 
-const cleanupAIAgent = () => {
-  if (aiAgent) {
-    aiAgent.cache.clear();
-    aiAgent = null;
+// Cleanup on process termination
+process.on("SIGTERM", async () => {
+  if (aiAgentInstance) {
+    await aiAgentInstance.cleanup();
   }
-};
+});
 
-module.exports = { getAIAgent, AttendanceAIAgent, cleanupAIAgent };
+process.on("SIGINT", async () => {
+  if (aiAgentInstance) {
+    await aiAgentInstance.cleanup();
+  }
+});
+
+module.exports = { getAIAgent, AttendanceAIAgent };

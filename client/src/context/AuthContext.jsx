@@ -217,29 +217,52 @@ export function AuthProvider({ children }) {
   // AI API CALLS
   // ===========================================
 
+  // AI API Functions - Add these to your AuthContext
   const getAIHealth = async () => {
-    const response = await fetch(`${BASE_URL}/api/ai-analytics/health`, {
-      method: "GET",
-      headers: getAuthHeaders(),
-    });
-    return await response.json();
+    try {
+      const response = await fetch(`${BASE_URL}/api/ai-analytics/health`, {
+        method: "GET",
+        headers: getAuthHeaders(),
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`AI Health Check Failed: ${error.message}`);
+    }
   };
 
   const getAICapabilities = async () => {
-    const response = await fetch(`${BASE_URL}/api/ai-analytics/capabilities`, {
-      method: "GET",
-      headers: getAuthHeaders(),
-    });
-    return await response.json();
+    try {
+      const response = await fetch(
+        `${BASE_URL}/api/ai-analytics/capabilities`,
+        {
+          method: "GET",
+          headers: getAuthHeaders(),
+        }
+      );
+      return await response.json();
+    } catch (error) {
+      throw new Error(`AI Capabilities Fetch Failed: ${error.message}`);
+    }
   };
 
   const queryAI = async (data) => {
-    const response = await fetch(`${BASE_URL}/api/ai-analytics/query`, {
-      method: "POST",
-      headers: getAuthHeaders(),
-      body: JSON.stringify(data),
-    });
-    return await response.json();
+    try {
+      console.log("🚀 Sending AI request:", data);
+
+      const response = await fetch(`${BASE_URL}/api/ai-analytics/query`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(data),
+      });
+
+      const result = await response.json();
+      console.log("📥 AI response received:", result);
+
+      return result;
+    } catch (error) {
+      console.error("❌ AI Query Failed:", error);
+      throw new Error(`AI Query Failed: ${error.message}`);
+    }
   };
 
   // ===========================================

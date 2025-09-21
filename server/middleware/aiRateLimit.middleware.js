@@ -1,60 +1,85 @@
 const rateLimit = require("express-rate-limit");
+const { ipKeyGenerator } = require("express-rate-limit");
 
-// Enhanced rate limiting with user-based limits
+// Enhanced AI-specific rate limiter with proper IPv6 handling
 const aiRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
-  max: (req, res) => {
-    // Different limits based on user type or plan
-    if (req.user?.isPremium) return 200;
-    if (req.user?.role === "organization") return 100;
-    return 50;
+
+  // Dynamic limit based on user type
+  limit: (req, res) => {
+    if (req.user?.organizationId) {
+      return 50; // Higher limit for authenticated organization users
+    }
+    return 10; // Lower limit for unauthenticated users
   },
+
   message: {
     success: false,
-    error: "Too many AI requests from this user",
-    retryAfter: "Please try again in 15 minutes",
+    message: "AI request limit exceeded. Please try again after 15 minutes.",
+    retryAfter: 15 * 60,
   },
-  standardHeaders: true,
+
+  standardHeaders: "draft-8",
   legacyHeaders: false,
-  keyGenerator: (req) => {
-    // Use user ID for authenticated requests
-    if (req.user?._id) {
-      return `ai_${req.user._id.toString()}`;
+
+  // FIXED: Proper keyGenerator with IPv6 support
+  keyGenerator: (req, res) => {
+    // Priority 1: Organization + User based limiting
+    if (req.user?.organizationId && req.user?._id) {
+      const orgId =
+        typeof req.user.organizationId === "object"
+          ? req.user.organizationId._id || req.user.organizationId.id
+          : req.user.organizationId;
+      return `ai:org:${orgId}:user:${req.user._id}`;
     }
-    return `ai_${req.ip}`;
+
+    // Priority 2: IP-based with proper IPv6 handling
+    return `ai:ip:${ipKeyGenerator(req.ip)}`;
   },
-  handler: (req, res) => {
-    console.log(
-      `🚨 AI Rate limit exceeded for user: ${req.user?.email || req.ip}`
-    );
+
+  // Enhanced skip logic
+  skip: (req, res) => {
+    // Skip for health checks
+    if (req.path === "/health") return true;
+
+    // Skip for admin users (optional)
+    if (req.user?.role === "admin") return true;
+
+    return false;
+  },
+
+  // Detailed logging and response
+  handler: (req, res, next, options) => {
+    const userInfo = req.user
+      ? `${req.user.email} (${req.user._id})`
+      : `IP: ${req.ip}`;
+
+    console.warn(`🚫 AI Rate limit exceeded for: ${userInfo}`);
+    console.warn(`📊 Request details: ${req.method} ${req.path}`);
+
     res.status(429).json({
       success: false,
-      error: "Too many AI requests",
-      message: "You've exceeded the AI query limit. Please try again later.",
-      retryAfter: Math.round(req.rateLimit.resetTime / 1000),
-      currentUsage: req.rateLimit.current,
-      maxAllowed: req.rateLimit.limit,
+      error: "RATE_LIMIT_EXCEEDED",
+      message: "Too many AI requests. Please wait before trying again.",
+      retryAfter: options.message.retryAfter,
+      timestamp: new Date().toISOString(),
+      resetTime: new Date(Date.now() + options.windowMs).toISOString(),
+      suggestions: [
+        "Wait for the rate limit to reset",
+        "Consider optimizing your queries to reduce frequency",
+      ],
     });
   },
 });
 
-// Lighter rate limiting for info endpoints
+
 const aiInfoRateLimit = rateLimit({
-  windowMs: 5 * 60 * 1000, // 5 minutes
-  max: 200, // 200 requests per 5 minutes
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  limit: 100, // Higher limit for info endpoints
   message: {
     success: false,
-    error: "Too many requests for AI info",
-  },
-  keyGenerator: (req) => {
-    if (req.user?._id) {
-      return `info_${req.user._id.toString()}`;
-    }
-    return `info_${req.ip}`;
+    message: "Info request limit exceeded. Please try again after 15 minutes.",
   },
 });
 
-module.exports = {
-  aiRateLimit,
-  aiInfoRateLimit,
-};
+module.exports = { aiRateLimit, aiInfoRateLimit };
