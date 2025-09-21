@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 
 const AuthContext = createContext();
-// const BASE_URL = "https://csi-attendance-web.onrender.com";
+
 const BASE_URL =
   import.meta.env.VITE_BACKEND_BASE_URL ||
   "https://csi-attendance-web.onrender.com";
@@ -29,195 +29,269 @@ export function AuthProvider({ children }) {
   // ===========================================
   // AUTHENTICATION API CALLS
   // ===========================================
-
   const registerOrganization = async (data) => {
-    const response = await fetch(`${BASE_URL}/auth2/organization-register`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    return await response.json();
+    try {
+      const response = await fetch(`${BASE_URL}/auth2/organization-register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`Organization registration failed: ${error.message}`);
+    }
   };
 
   const registerUser = async (data) => {
-    const response = await fetch(`${BASE_URL}/auth2/register-user`, {
-      method: "POST",
-      headers: getAuthHeaders(),
-      body: JSON.stringify(data),
-    });
-    return await response.json();
+    try {
+      const response = await fetch(`${BASE_URL}/auth2/register-user`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(data),
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`User registration failed: ${error.message}`);
+    }
   };
 
   const loginUser = async (data) => {
-    const response = await fetch(`${BASE_URL}/auth2/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    return await response.json();
+    try {
+      const response = await fetch(`${BASE_URL}/auth2/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`Login failed: ${error.message}`);
+    }
   };
 
   const viewProfile = async () => {
-    const response = await fetch(`${BASE_URL}/auth2/viewProfile`, {
-      method: "GET",
-      headers: getAuthHeaders(),
-    });
-    return await response.json();
+    try {
+      const response = await fetch(`${BASE_URL}/auth2/viewProfile`, {
+        method: "GET",
+        headers: getAuthHeaders(),
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`Profile fetch failed: ${error.message}`);
+    }
   };
 
   const updateProfile = async (data) => {
-    const response = await fetch(`${BASE_URL}/auth2/updateProfile`, {
-      method: "PUT",
-      headers: getAuthHeaders(),
-      body: JSON.stringify(data),
-    });
-    return await response.json();
+    try {
+      const response = await fetch(`${BASE_URL}/auth2/updateProfile`, {
+        method: "PUT",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(data),
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`Profile update failed: ${error.message}`);
+    }
   };
 
   const logoutUser = async () => {
-    const response = await fetch(`${BASE_URL}/auth2/logout`, {
-      method: "POST",
-      headers: getAuthHeaders(),
-    });
-    return await response.json();
+    try {
+      const response = await fetch(`${BASE_URL}/auth2/logout`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`Logout failed: ${error.message}`);
+    }
   };
 
   // ===========================================
   // QR CODE API CALLS
   // ===========================================
-
   const getActiveQRCode = async () => {
-    const response = await fetch(`${BASE_URL}/qrcode/active`, {
-      method: "GET",
-      headers: getAuthHeaders(),
-    });
-    return await response.json();
+    try {
+      const response = await fetch(`${BASE_URL}/qrcode/active`, {
+        method: "GET",
+        headers: getAuthHeaders(),
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`QR Code fetch failed: ${error.message}`);
+    }
   };
 
   // ===========================================
   // ATTENDANCE API CALLS
   // ===========================================
-
   const scanAttendance = async (data) => {
-    const response = await fetch(`${BASE_URL}/attend/scan`, {
-      method: "POST",
-      headers: getAuthHeaders(),
-      body: JSON.stringify(data),
-    });
-    return await response.json();
+    try {
+      const response = await fetch(`${BASE_URL}/attend/scan`, {
+        method: "POST",
+        headers: getAuthHeaders(),
+        body: JSON.stringify(data),
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`Attendance scan failed: ${error.message}`);
+    }
   };
 
   const getPastAttendance = async () => {
-    const response = await fetch(`${BASE_URL}/attend/past`, {
-      method: "GET",
-      headers: getAuthHeaders(),
-    });
-    return await response.json();
+    try {
+      const response = await fetch(`${BASE_URL}/attend/past`, {
+        method: "GET",
+        headers: getAuthHeaders(),
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`Past attendance fetch failed: ${error.message}`);
+    }
   };
 
   const uploadAttendance = async (formData) => {
-    const response = await fetch(`${BASE_URL}/attend/upload`, {
-      method: "POST",
-      headers: getFileHeaders(),
-      body: formData,
-    });
-    return await response.json();
+    try {
+      const response = await fetch(`${BASE_URL}/attend/upload`, {
+        method: "POST",
+        headers: getFileHeaders(),
+        body: formData,
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`Attendance upload failed: ${error.message}`);
+    }
   };
 
   // ===========================================
   // ADMIN API CALLS
   // ===========================================
-
   const getAdminRecords = async () => {
-    const response = await fetch(`${BASE_URL}/admin/records`, {
-      method: "GET",
-      headers: getAuthHeaders(),
-    });
-    return await response.json();
+    try {
+      const response = await fetch(`${BASE_URL}/admin/records`, {
+        method: "GET",
+        headers: getAuthHeaders(),
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`Admin records fetch failed: ${error.message}`);
+    }
   };
 
   const getSingleUser = async (userId) => {
-    const response = await fetch(`${BASE_URL}/admin/singleUser/${userId}`, {
-      method: "GET",
-      headers: getAuthHeaders(),
-    });
-    return await response.json();
+    try {
+      const response = await fetch(`${BASE_URL}/admin/singleUser/${userId}`, {
+        method: "GET",
+        headers: getAuthHeaders(),
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`Single user fetch failed: ${error.message}`);
+    }
   };
-  const getallusers = async (userId) => {
-    const response = await fetch(`${BASE_URL}/admin/allusers`, {
-      method: "GET",
-      headers: getAuthHeaders(),
-    });
-    return await response.json();
+
+  const getallusers = async () => {
+    try {
+      const response = await fetch(`${BASE_URL}/admin/allusers`, {
+        method: "GET",
+        headers: getAuthHeaders(),
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`All users fetch failed: ${error.message}`);
+    }
   };
 
   const getAdminQRCodes = async () => {
-    const response = await fetch(`${BASE_URL}/admin/qrcodes`, {
-      method: "GET",
-      headers: getAuthHeaders(),
-    });
-    return await response.json();
+    try {
+      const response = await fetch(`${BASE_URL}/admin/qrcodes`, {
+        method: "GET",
+        headers: getAuthHeaders(),
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`Admin QR codes fetch failed: ${error.message}`);
+    }
   };
 
   const getTodaysAttendance = async () => {
-    const response = await fetch(`${BASE_URL}/admin/todays-attendance`, {
-      method: "GET",
-      headers: getAuthHeaders(),
-    });
-    return await response.json();
+    try {
+      const response = await fetch(`${BASE_URL}/admin/todays-attendance`, {
+        method: "GET",
+        headers: getAuthHeaders(),
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`Today's attendance fetch failed: ${error.message}`);
+    }
   };
 
   const deleteUser = async (userId) => {
-    const response = await fetch(`${BASE_URL}/admin/user/${userId}`, {
-      method: "DELETE",
-      headers: getAuthHeaders(),
-    });
-    return await response.json();
+    try {
+      const response = await fetch(`${BASE_URL}/admin/user/${userId}`, {
+        method: "DELETE",
+        headers: getAuthHeaders(),
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`User deletion failed: ${error.message}`);
+    }
   };
 
   const getDailyReport = async () => {
-    const response = await fetch(`${BASE_URL}/admin/daily-report`, {
-      method: "GET",
-      headers: getAuthHeaders(),
-    });
-    return await response.json();
+    try {
+      const response = await fetch(`${BASE_URL}/admin/daily-report`, {
+        method: "GET",
+        headers: getAuthHeaders(),
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`Daily report fetch failed: ${error.message}`);
+    }
   };
 
   const getWeeklyReport = async () => {
-    const response = await fetch(`${BASE_URL}/admin/weekly-report`, {
-      method: "GET",
-      headers: getAuthHeaders(),
-    });
-    return await response.json();
+    try {
+      const response = await fetch(`${BASE_URL}/admin/weekly-report`, {
+        method: "GET",
+        headers: getAuthHeaders(),
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`Weekly report fetch failed: ${error.message}`);
+    }
   };
 
   // ===========================================
   // PASSWORD RESET API CALLS
   // ===========================================
-
   const requestPasswordReset = async (data) => {
-    const response = await fetch(`${BASE_URL}/password/request-reset`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    return await response.json();
+    try {
+      const response = await fetch(`${BASE_URL}/password/request-reset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`Password reset request failed: ${error.message}`);
+    }
   };
 
   const resetPassword = async (data) => {
-    const response = await fetch(`${BASE_URL}/password/reset-password`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(data),
-    });
-    return await response.json();
+    try {
+      const response = await fetch(`${BASE_URL}/password/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`Password reset failed: ${error.message}`);
+    }
   };
 
   // ===========================================
   // AI API CALLS
   // ===========================================
-
-  // AI API Functions - Add these to your AuthContext
   const getAIHealth = async () => {
     try {
       const response = await fetch(`${BASE_URL}/api/ai-analytics/health`, {
@@ -248,16 +322,13 @@ export function AuthProvider({ children }) {
   const queryAI = async (data) => {
     try {
       console.log("🚀 Sending AI request:", data);
-
       const response = await fetch(`${BASE_URL}/api/ai-analytics/query`, {
         method: "POST",
         headers: getAuthHeaders(),
         body: JSON.stringify(data),
       });
-
       const result = await response.json();
       console.log("📥 AI response received:", result);
-
       return result;
     } catch (error) {
       console.error("❌ AI Query Failed:", error);
@@ -268,21 +339,28 @@ export function AuthProvider({ children }) {
   // ===========================================
   // SYSTEM API CALLS
   // ===========================================
-
   const getSystemHealth = async () => {
-    const response = await fetch(`${BASE_URL}/`, {
-      method: "GET",
-      headers: { "Content-Type": "application/json" },
-    });
-    return await response.json();
+    try {
+      const response = await fetch(`${BASE_URL}/`, {
+        method: "GET",
+        headers: { "Content-Type": "application/json" },
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`System health check failed: ${error.message}`);
+    }
   };
 
   const getScanLogs = async () => {
-    const response = await fetch(`${BASE_URL}/logs/scans`, {
-      method: "GET",
-      headers: getAuthHeaders(),
-    });
-    return await response.json();
+    try {
+      const response = await fetch(`${BASE_URL}/logs/scans`, {
+        method: "GET",
+        headers: getAuthHeaders(),
+      });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`Scan logs fetch failed: ${error.message}`);
+    }
   };
 
   // ===========================================
@@ -318,7 +396,9 @@ export function AuthProvider({ children }) {
     localStorage.removeItem("userData");
     localStorage.removeItem("checkInTime");
     localStorage.removeItem("checkOutTime");
+    localStorage.removeItem("orginizationcode");
     setUser(null);
+    setorginization(null);
   };
 
   // Set admin view
@@ -331,11 +411,13 @@ export function AuthProvider({ children }) {
     user,
     loading,
     activeAdminView,
+    orginization,
 
     // Auth functions
     login,
     logout,
     setAdminView,
+    setorginization,
 
     // API functions - Authentication
     registerOrganization,
@@ -343,8 +425,8 @@ export function AuthProvider({ children }) {
     loginUser,
     viewProfile,
     updateProfile,
-    BASE_URL,
     logoutUser,
+    BASE_URL,
 
     // API functions - QR Code
     getActiveQRCode,
@@ -353,8 +435,7 @@ export function AuthProvider({ children }) {
     scanAttendance,
     getPastAttendance,
     uploadAttendance,
-    setorginization,
-    orginization,
+
     // API functions - Admin
     getAdminRecords,
     getSingleUser,
@@ -393,27 +474,3 @@ export function useAuth() {
   }
   return context;
 }
-
-// Usage Example:
-/*
-const { 
-  loginUser, 
-  viewProfile, 
-  scanAttendance, 
-  getAdminRecords,
-  user,
-  logout 
-} = useAuth();
-
-// Login
-const loginData = await loginUser({ email: 'user@example.com', password: 'password' });
-
-// Get profile
-const profile = await viewProfile();
-
-// Scan attendance
-const scanResult = await scanAttendance({ qrCode: 'some-qr-code' });
-
-// Get admin records
-const records = await getAdminRecords();
-*/

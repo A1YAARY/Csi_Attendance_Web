@@ -8,11 +8,13 @@ import { Route, Routes, useLocation, Navigate } from "react-router-dom";
 import Logout from "./components/user_side/LogoutPage";
 import Dashboad from "./components/user_side/Dashboad";
 import { LoginPage } from "./components/user_side/LoginPage";
+import OrganizationRegister from "./components/user_side/OrganizationRegister";
 import LoginPage_G from "./components/Guard_side/LoginPage_G";
 import QRGenrator_G from "./components/Guard_side/QRGenrator_G";
 import AdminHome from "./components/Admin_side/AdminHome";
 import ProtectedRoute from "./components/ProtectedRoute";
 import PublicRoute from "./components/PublicRoute";
+import { useAuth } from "./context/AuthContext";
 import { useAdminProtection } from "./hooks/useAdminProtection";
 import "cally";
 import AdminProtected from "./components/AdminProtected";
@@ -44,6 +46,22 @@ function App() {
                     transition={{ duration: 0.3 }}
                   >
                     <LoginPage />
+                  </motion.div>
+                </PublicRoute>
+              }
+            />
+
+            <Route
+              path="/register-organization"
+              element={
+                <PublicRoute>
+                  <motion.div
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -20 }}
+                    transition={{ duration: 0.3 }}
+                  >
+                    <OrganizationRegister />
                   </motion.div>
                 </PublicRoute>
               }
