@@ -4,17 +4,17 @@ import { useNavigate } from "react-router-dom";
 export const EmployeeData = ({ allusers }) => {
   const navigate = useNavigate();
 
-  useEffect(() => {
-    console.log("EmployeeData received allusers:", allusers);
-    console.log("allusers type:", typeof allusers);
-    console.log("allusers is array:", Array.isArray(allusers));
-    console.log("allusers length:", allusers?.length);
-  }, [allusers]);
+  // useEffect(() => {
+  //   console.log("EmployeeData received allusers:", allusers);
+  //   console.log("allusers type:", typeof allusers);
+  //   console.log("allusers is array:", Array.isArray(allusers));
+  //   console.log("allusers length:", allusers?.length);
+  // }, [allusers]);
 
   // Handle clicking on user row to navigate to single user page
   const handleUserClick = (userId, userEmail) => {
-    console.log("Navigating to user ID:", userId);
-    console.log("User email:", userEmail);
+    // console.log("Navigating to user ID:", userId);
+    // console.log("User email:", userEmail);
     navigate(`/admin/user/${userId}`);
   };
 
@@ -35,13 +35,13 @@ export const EmployeeData = ({ allusers }) => {
   // Handle checkbox change
   const handleCheckboxChange = (event, userId) => {
     event.stopPropagation();
-    console.log("Checkbox changed for user:", userId);
+    // console.log("Checkbox changed for user:", userId);
   };
 
   // Handle three dots menu click
   const handleMenuClick = (event, userId) => {
     event.stopPropagation();
-    console.log("Menu clicked for user:", userId);
+    // console.log("Menu clicked for user:", userId);
   };
 
   // Check if allusers is valid and has data

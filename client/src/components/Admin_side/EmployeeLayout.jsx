@@ -35,9 +35,9 @@ const EmployeeLayout = () => {
     try {
       setLoading(true);
       setError(null);
-      console.log("Fetching all users...");
+      // console.log("Fetching all users...");
       const response = await getallusers();
-      console.log("Raw response:", response);
+      // console.log("Raw response:", response);
 
       // Handle different response formats
       let usersData = [];
@@ -53,7 +53,7 @@ const EmployeeLayout = () => {
           : [response.data];
       }
 
-      console.log("Processed users data:", usersData);
+      // console.log("Processed users data:", usersData);
       setAllUsers(usersData);
       setFilteredUsers(usersData);
     } catch (err) {

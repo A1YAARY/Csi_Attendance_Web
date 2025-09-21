@@ -1,18 +1,43 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Card from "./Card";
 import Previous from "./Previous";
 import Navbar from "./Navbar";
 import { LoginPage } from "./LoginPage";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 
 const Dashboard = () => {
+  const { getPastAttendance } = useAuth();
   const navigate = useNavigate();
+  const [pastAttendance, setPastAttendance] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Fixed useEffect - create async function inside or use .then()
+  useEffect(() => {
+    const fetchPastAttendance = async () => {
+      try {
+        setLoading(true);
+        const data = await getPastAttendance();
+        console.log("Past attendance data:", data);
+        setPastAttendance(data);
+      } catch (error) {
+        console.error("Error fetching past attendance:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchPastAttendance();
+  }, []); // Remove getPastAttendance from dependency array to avoid infinite loops
+
   const hidden = () => {
     navigate("/ScanQR");
   };
+
   const hidden1 = () => {
     navigate("/ShowLogOut");
   };
+
   return (
     <div className="min-h-screen w-full">
       {/* Responsive Navbar */}
@@ -59,8 +84,24 @@ const Dashboard = () => {
             Previous Attendance
           </h3>
           <div className="flex flex-col gap-2 sm:gap-3 lg:gap-4">
-            <Previous />
-            <Previous />
+            {loading ? (
+              <div className="flex justify-center items-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#1D61E7]"></div>
+                <span className="ml-2 text-gray-600">
+                  Loading attendance...
+                </span>
+              </div>
+            ) : pastAttendance && pastAttendance.length > 0 ? (
+              pastAttendance
+                .slice(0, 5)
+                .map((attendance, index) => (
+                  <Previous key={attendance.id || index} data={attendance} />
+                ))
+            ) : (
+              <div className="text-center py-4 text-gray-500">
+                <p>No previous attendance records found</p>
+              </div>
+            )}
           </div>
         </div>
       </div>

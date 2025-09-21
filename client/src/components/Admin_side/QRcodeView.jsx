@@ -16,10 +16,10 @@ const QRcodeView = () => {
   const [regenerating, setRegenerating] = useState(false);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    console.log(qrCodes);
-    console.log("BASE_URL", BASE_URL);
-  }, []);
+  // useEffect(() => {
+  //   console.log(qrCodes);
+  //   console.log("BASE_URL", BASE_URL);
+  // }, []);
 
   // Optional: keep dummy only for explicit fallback testing
   const dummyData = {

@@ -50,8 +50,7 @@ const AdminHome = () => {
         processedRecords = data.result;
       }
 
-      console.log("✅ AdminHome: Processed records:", processedRecords);
-      console.log("📈 AdminHome: Records count:", processedRecords.length);
+
 
       setRecords(processedRecords || []);
     } catch (err) {
@@ -63,9 +62,7 @@ const AdminHome = () => {
 
   const fetchTodaysAttendance = useCallback(async () => {
     try {
-      console.log("🔍 AdminHome: Fetching today's attendance...");
       const todaysdata = await getTodaysAttendance();
-      console.log("📊 AdminHome: Today's data response:", todaysdata);
 
       // Handle different response structures
       let processedTodaysData = [];
@@ -85,7 +82,6 @@ const AdminHome = () => {
         processedTodaysData = todaysdata.attendance;
       }
 
-      console.log("✅ AdminHome: Processed today's data:", processedTodaysData);
       settodaysdata(processedTodaysData || []);
     } catch (err) {
       console.error("❌ Error fetching today's attendance:", err);
@@ -96,9 +92,7 @@ const AdminHome = () => {
 
   const fetchAllUsers = useCallback(async () => {
     try {
-      console.log("🔍 AdminHome: Fetching all users...");
       const usersData = await getallusers();
-      console.log("📊 AdminHome: Raw users response:", usersData);
 
       let processedUsers = [];
       if (Array.isArray(usersData)) {
@@ -119,8 +113,7 @@ const AdminHome = () => {
         processedUsers = usersData.allusers;
       }
 
-      console.log("✅ AdminHome: Processed users:", processedUsers);
-      console.log("👥 AdminHome: Users count:", processedUsers.length);
+     
       setallusers(processedUsers);
     } catch (err) {
       console.error("❌ Error fetching all users:", err);
@@ -131,7 +124,6 @@ const AdminHome = () => {
 
   // Optimized data fetching - fetch all data concurrently
   const fetchAllData = useCallback(async () => {
-    console.log("🚀 AdminHome: Starting data fetch...");
     setLoading(true);
     setError(null);
 
@@ -146,9 +138,9 @@ const AdminHome = () => {
       results.forEach((result, index) => {
         const names = ["Records", "Today's Attendance", "Users"];
         if (result.status === "rejected") {
-          console.error(`❌ ${names[index]} fetch failed:`, result.reason);
+          // console.error(`❌ ${names[index]} fetch failed:`, result.reason);
         } else {
-          console.log(`✅ ${names[index]} fetch completed`);
+          // console.log(`✅ ${names[index]} fetch completed`);
         }
       });
     } catch (err) {
@@ -156,7 +148,7 @@ const AdminHome = () => {
       setError("Failed to fetch data");
     } finally {
       setLoading(false);
-      console.log("🏁 AdminHome: Data fetch completed");
+      // console.log("🏁 AdminHome: Data fetch completed");
     }
   }, [fetchAdminRecords, fetchTodaysAttendance, fetchAllUsers]);
 
@@ -165,14 +157,14 @@ const AdminHome = () => {
     fetchAllData();
   }, [fetchAllData]);
 
-  // Debug effect to log state changes
-  useEffect(() => {
-    console.log("🔄 AdminHome State Update:");
-    console.log("📊 Records:", records);
-    console.log("📅 Today's Data:", todaysdata);
-    console.log("👥 All Users:", allusers);
-    console.log("🎯 Active View:", activeAdminView);
-  }, [records, todaysdata, allusers, activeAdminView]);
+  // // Debug effect to log state changes
+  // useEffect(() => {
+  //   console.log("🔄 AdminHome State Update:");
+  //   console.log("📊 Records:", records);
+  //   console.log("📅 Today's Data:", todaysdata);
+  //   console.log("👥 All Users:", allusers);
+  //   console.log("🎯 Active View:", activeAdminView);
+  // }, [records, todaysdata, allusers, activeAdminView]);
 
   // 🔐 Apply role-based protection
   const isAuthorized = useAdminProtection();

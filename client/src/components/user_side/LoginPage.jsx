@@ -4,6 +4,7 @@ import { toast, ToastContainer } from "react-toastify";
 import axios from "axios";
 import { useAuth } from "../../context/AuthContext";
 import "react-toastify/dist/ReactToastify.css";
+import Magnet from "../../reactbitscomponents/Magnet";
 
 export const LoginPage = () => {
   const navigate = useNavigate();
@@ -107,27 +108,28 @@ export const LoginPage = () => {
                   required
                   className="p-3 lg:p-4 rounded-lg border border-gray-300 focus:border-[#1D61E7] focus:outline-none focus:ring-2 focus:ring-[#1D61E7]/20 transition-all text-sm sm:text-base"
                 />
+                <Magnet padding={90} disabled={false} magnetStrength={90}>
+                  <div className="w-full flex gap-3 lg:gap-4">
+                    <button
+                      type="submit"
+                      className="flex justify-center items-center rounded-lg font-medium gap-3 bg-[#1D61E7] hover:bg-[#1a56d1] text-white flex-1 h-[48px] lg:h-[52px] shadow-[0px_4px_4px_0px_#00000040] active:shadow-[0px_2px_1px_0px_#00000040] transition-all duration-200 text-sm sm:text-base"
+                    >
+                      Login
+                    </button>
 
-                <div className="w-full flex gap-3 lg:gap-4">
-                  <button
-                    type="submit"
-                    className="flex justify-center items-center rounded-lg font-medium gap-3 bg-[#1D61E7] hover:bg-[#1a56d1] text-white flex-1 h-[48px] lg:h-[52px] shadow-[0px_4px_4px_0px_#00000040] active:shadow-[0px_2px_1px_0px_#00000040] transition-all duration-200 text-sm sm:text-base"
-                  >
-                    Login
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleGoogleLogin}
-                    className="flex justify-center items-center gap-[10px] border border-[#EFF0F6] hover:border-gray-300 rounded-full w-[48px] lg:w-[52px] h-[48px] lg:h-[52px] shadow-[0px_4px_4px_0px_#00000040] active:shadow-[0px_2px_1px_0px_#00000040] transition-all duration-200"
-                  >
-                    <img
-                      className="h-[20px] w-[22px] sm:h-[24px] sm:w-[26px]"
-                      src="/google.png"
-                      alt="google"
-                    />
-                  </button>
-                </div>
+                    {/* <button
+                      type="button"
+                      onClick={handleGoogleLogin}
+                      className="flex justify-center items-center gap-[10px] border border-[#EFF0F6] hover:border-gray-300 rounded-full w-[48px] lg:w-[52px] h-[48px] lg:h-[52px] shadow-[0px_4px_4px_0px_#00000040] active:shadow-[0px_2px_1px_0px_#00000040] transition-all duration-200"
+                    >
+                      <img
+                        className="h-[20px] w-[22px] sm:h-[24px] sm:w-[26px]"
+                        src="/google.png"
+                        alt="google"
+                      />
+                    </button> */}
+                  </div>
+                </Magnet>
               </form>
 
               {/* Uncomment if needed */}

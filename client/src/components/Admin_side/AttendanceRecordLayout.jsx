@@ -23,7 +23,7 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
   // Fetch records on component mount or use props
   useEffect(() => {
     if (propRecords && Array.isArray(propRecords)) {
-      console.log("Using prop records:", propRecords);
+      // console.log("Using prop records:", propRecords);
       setRecords(propRecords);
       setFilteredRecords(propRecords);
       setLoading(false);
@@ -67,9 +67,9 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
       setLoading(true);
       setError(null);
 
-      console.log("Fetching admin records...");
+      // console.log("Fetching admin records...");
       const response = await getAdminRecords();
-      console.log("Raw records response:", response);
+      // console.log("Raw records response:", response);
 
       // Handle different response formats
       let recordsData = [];
@@ -91,7 +91,7 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
         recordsData = response.attendanceRecords;
       }
 
-      console.log("Processed records data:", recordsData);
+      // console.log("Processed records data:", recordsData);
       setRecords(recordsData);
       setFilteredRecords(recordsData);
     } catch (err) {
