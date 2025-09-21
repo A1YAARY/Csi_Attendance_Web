@@ -262,19 +262,7 @@ const AdminHome = () => {
       <Admin_Navbar />
       <main className="pt-16">
         {/* Debug panel - Remove in production */}
-        {process.env.NODE_ENV === "development" && (
-          <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
-            <div className="flex">
-              <div className="ml-3">
-                <p className="text-sm text-yellow-700">
-                  <strong>Debug Info:</strong> Active View: {activeAdminView} |
-                  Records: {records.length} | Users: {allusers.length} | Today's
-                  Data: {todaysdata.length}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
+       
 
         {renderContent()}
       </main>

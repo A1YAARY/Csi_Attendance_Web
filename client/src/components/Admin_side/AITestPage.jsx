@@ -428,43 +428,9 @@ const AITestPage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 text-white">
-      {/* Animated Background */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-purple-500 rounded-full mix-blend-multiply filter blur-xl opacity-10 animate-pulse"></div>
-        <div className="absolute top-3/4 right-1/4 w-96 h-96 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl opacity-10 animate-pulse animation-delay-1000"></div>
-        <div className="absolute bottom-1/4 left-1/2 w-96 h-96 bg-indigo-500 rounded-full mix-blend-multiply filter blur-xl opacity-10 animate-pulse animation-delay-2000"></div>
-      </div>
-
       <div className="relative z-10 container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <div className="flex justify-center items-center mb-6">
-            <div className="relative">
-              <div className="w-24 h-24 bg-gradient-to-r from-purple-400 to-pink-400 rounded-full flex items-center justify-center shadow-2xl shadow-purple-500/25">
-                <Brain className="w-12 h-12 text-white animate-pulse" />
-              </div>
-              <div className="absolute inset-0 bg-purple-400 rounded-full opacity-20 animate-ping"></div>
-              <div className="absolute -top-1 -right-1 w-6 h-6 bg-green-400 rounded-full flex items-center justify-center">
-                <Volume2 className="w-4 h-4 text-green-900" />
-              </div>
-            </div>
-          </div>
-          <h1 className="text-6xl font-bold bg-gradient-to-r from-purple-400 via-pink-400 to-blue-400 bg-clip-text text-transparent mb-4">
-            AI Analytics Hub
-          </h1>
-          <p className="text-xl text-gray-300 max-w-3xl mx-auto leading-relaxed">
-            Ask questions about attendance data and get intelligent insights
-            with
-            <span className="text-purple-400 font-semibold">
-              {" "}
-              realistic voice responses
-            </span>{" "}
-            powered by your browser
-          </p>
-        </div>
-
         {/* Voice Settings Panel - Show when voice is enabled */}
-        {isVoiceEnabled && (
+        {/* {isVoiceEnabled && (
           <div className="mb-8 max-w-4xl mx-auto">
             <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20">
               <div className="flex items-center gap-4 flex-wrap">
@@ -534,7 +500,7 @@ const AITestPage = () => {
               </div>
             </div>
           </div>
-        )}
+        )} */}
 
         {/* AI Health Status */}
         <div className="mb-8 flex justify-center">

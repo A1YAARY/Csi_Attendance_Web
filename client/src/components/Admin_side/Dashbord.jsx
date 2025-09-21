@@ -10,6 +10,7 @@ import {
   UserCheck,
 } from "lucide-react";
 import { useAuth } from "../../context/AuthContext";
+import CountUp from "../../reactbitscomponents/CountUp";
 
 const Dashbord = ({ records, todaysdata, allusers }) => {
   const { setAdminView } = useAuth();
@@ -297,9 +298,15 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
                 <div className="flex justify-between w-full">
                   <div className="flex flex-col flex-1">
                     <div className="justify-between h-full flex flex-col space-y-3 sm:space-y-4">
-                      <p className="text-xl sm:text-2xl lg:text-3xl font-bold">
-                        {stats.totalEmployees}
-                      </p>
+                      <p className="text-xl sm:text-2xl lg:text-3xl font-bold"></p>
+                      <CountUp
+                        from={0}
+                        to={stats.totalEmployees}
+                        separator=","
+                        direction="up"
+                        duration={0.4}
+                        className="count-up-text text-xl sm:text-2xl lg:text-3xl font-bold"
+                      />{" "}
                       <p className="text-sm sm:text-base font-semibold text-gray-800">
                         Total Employees
                       </p>
@@ -329,7 +336,14 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
                   <div className="flex flex-col flex-1">
                     <div className="justify-between h-full flex flex-col space-y-3 sm:space-y-4">
                       <p className="text-xl sm:text-2xl lg:text-3xl font-bold">
-                        {stats.onTime}
+                        <CountUp
+                          from={0}
+                          to={stats.onTime}
+                          separator=","
+                          direction="up"
+                          duration={0.4}
+                          className="count-up-text text-xl sm:text-2xl lg:text-3xl font-bold"
+                        />
                       </p>
                       <p className="text-sm sm:text-base font-semibold text-gray-800">
                         On Time
@@ -365,7 +379,14 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
                   <div className="flex flex-col flex-1">
                     <div className="justify-between h-full flex flex-col space-y-3 sm:space-y-4">
                       <p className="text-xl sm:text-2xl lg:text-3xl font-bold">
-                        {stats.absent}
+                        <CountUp
+                          from={0}
+                          to={stats.absent}
+                          separator=","
+                          direction="up"
+                          duration={0.6}
+                          className="count-up-text text-xl sm:text-2xl lg:text-3xl font-bold"
+                        />
                       </p>
                       <p className="text-sm sm:text-base font-semibold text-gray-800">
                         Absent
@@ -407,7 +428,14 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
                   <div className="flex flex-col flex-1">
                     <div className="justify-between h-full flex flex-col space-y-3 sm:space-y-4">
                       <p className="text-xl sm:text-2xl lg:text-3xl font-bold">
-                        {stats.lateArrival}
+                        <CountUp
+                          from={0}
+                          to={stats.lateArrival}
+                          separator=","
+                          direction="up"
+                          duration={0.4}
+                          className="count-up-text text-xl sm:text-2xl lg:text-3xl font-bold"
+                        />
                       </p>
                       <p className="text-sm sm:text-base font-semibold text-gray-800">
                         Late Arrival
