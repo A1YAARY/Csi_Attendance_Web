@@ -6,8 +6,24 @@ const Reports = () => {
   const [activeTab, setActiveTab] = useState("single");
   const [loading, setLoading] = useState(false);
   const { user, getAuthHeaders } = useAuth();
-  console.log(user);
-  
+
+  // Fixed: Corrected the typo and logic for organization code
+  const getOrganizationCode = () => {
+    // Try localStorage first, then fall back to user object
+    const storedOrgCode = localStorage.getItem("orginizationcode");
+
+    if (storedOrgCode) return storedOrgCode;
+
+    // Fall back to user's organization information
+    return (
+      user?.organizationId?.name ||
+      user?.organization?.name ||
+      user?.organizationCode ||
+      null
+    );
+  };
+
+  const organizationCode = getOrganizationCode();
 
   // Single user registration state
   const [singleUser, setSingleUser] = useState({
@@ -26,7 +42,13 @@ const Reports = () => {
   // Register user using the admin's organization automatically
   const registerUserInOrganization = async (userData) => {
     try {
-      // Use localhost:3000 as specified in your Postman
+      // Check if organization code is available
+      if (!organizationCode) {
+        throw new Error(
+          "Organization code not found. Please ensure you're properly logged in as an admin."
+        );
+      }
+
       const response = await fetch(
         `http://localhost:3000/auth2/register-user`,
         {
@@ -37,9 +59,7 @@ const Reports = () => {
           },
           body: JSON.stringify({
             ...userData,
-            // Use the logged-in admin's organization name as organizationCode
-            organizationCode:
-              user?.organizationId?.name || user?.organization?.name,
+            organizationCode: organizationCode,
             role: "user",
           }),
         }
@@ -59,9 +79,11 @@ const Reports = () => {
     setLoading(true);
 
     try {
-      // Check if user has organization info
-      if (!user?.organizationId?.name && !user?.organization?.name) {
-        toast.error("Organization information not found. Please login again.");
+      // Check if organization code is available
+      if (!organizationCode) {
+        toast.error(
+          "Organization information not found. Please login again or contact support."
+        );
         setLoading(false);
         return;
       }
@@ -88,7 +110,7 @@ const Reports = () => {
       }
     } catch (error) {
       console.error("Registration error:", error);
-      toast.error("Registration failed. Please try again.");
+      toast.error(error.message || "Registration failed. Please try again.");
     } finally {
       setLoading(false);
     }
@@ -139,12 +161,18 @@ const Reports = () => {
       return;
     }
 
+    if (!organizationCode) {
+      toast.error("Organization information not found. Please login again.");
+      return;
+    }
+
     setLoading(true);
     const formData = new FormData();
     formData.append("excel", selectedFile);
+    // Add organization code to form data if your backend expects it
+    formData.append("organizationCode", organizationCode);
 
     try {
-      // Use localhost:3000 for bulk upload as well
       const response = await fetch(
         `http://localhost:3000/api/bulk-users/upload-users`,
         {
@@ -179,7 +207,6 @@ const Reports = () => {
   // Download template
   const downloadTemplate = async () => {
     try {
-      // Use localhost:3000 for template download
       const response = await fetch(
         `http://localhost:3000/api/bulk-users/template`,
         {
@@ -220,9 +247,7 @@ const Reports = () => {
           <p className="text-gray-600">
             Register users for organization:{" "}
             <span className="font-semibold text-blue-600">
-              {user?.organizationId?.name ||
-                user?.organization?.name ||
-                "Loading..."}
+              {organizationCode || "Loading..."}
             </span>
           </p>
         </div>
@@ -231,10 +256,18 @@ const Reports = () => {
         {process.env.NODE_ENV === "development" && (
           <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
             <p className="text-sm text-yellow-800">
-              <strong>Debug Info:</strong> Organization Code will be:{" "}
-              {user?.organizationId?.name ||
-                user?.organization?.name ||
-                "Not Found"}
+              <strong>Debug Info:</strong> Organization Code:{" "}
+              {organizationCode || "Not Found"}
+            </p>
+          </div>
+        )}
+
+        {/* Show warning if no organization code */}
+        {!organizationCode && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
+            <p className="text-sm text-red-800">
+              <strong>Warning:</strong> No organization code found. Please
+              ensure you're logged in properly or contact support.
             </p>
           </div>
         )}
@@ -363,10 +396,7 @@ const Reports = () => {
               <div className="flex justify-end">
                 <button
                   type="submit"
-                  disabled={
-                    loading ||
-                    (!user?.organizationId?.name && !user?.organization?.name)
-                  }
+                  disabled={loading || !organizationCode}
                   className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {loading && (
@@ -491,7 +521,7 @@ const Reports = () => {
               <div className="mt-6 flex justify-end">
                 <button
                   onClick={handleBulkUpload}
-                  disabled={loading}
+                  disabled={loading || !organizationCode}
                   className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
                   {loading && (

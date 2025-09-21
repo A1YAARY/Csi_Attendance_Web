@@ -7,7 +7,7 @@ import "react-toastify/dist/ReactToastify.css";
 
 export const LoginPage = () => {
   const navigate = useNavigate();
-  const { login, BASE_URL } = useAuth();
+  const { login, BASE_URL,setorginization } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
 
@@ -28,6 +28,8 @@ export const LoginPage = () => {
         }
       );
       if (res.data.accessToken) {
+        
+        localStorage.setItem("orginizationcode",res.data.organization.name)
         login(res.data.user, res.data.accessToken);
         toast.success("Login successful!");
         navigate("/Teacherinfo");

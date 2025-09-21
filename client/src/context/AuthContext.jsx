@@ -10,6 +10,7 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeAdminView, setActiveAdminView] = useState("home");
+  const [orginization, setorginization] = useState(null);
 
   // Get auth token from localStorage
   const getToken = () => localStorage.getItem("accessToken");
@@ -329,7 +330,8 @@ export function AuthProvider({ children }) {
     scanAttendance,
     getPastAttendance,
     uploadAttendance,
-
+    setorginization,
+    orginization,
     // API functions - Admin
     getAdminRecords,
     getSingleUser,
