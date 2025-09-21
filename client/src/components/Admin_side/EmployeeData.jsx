@@ -21,17 +21,14 @@ export const EmployeeData = ({ allusers }) => {
   // Format working hours display
   const formatWorkingHours = (workingHours) => {
     if (!workingHours) return "N/A";
-
     if (typeof workingHours === "object") {
       return `${workingHours.start || "09:00"} - ${
         workingHours.end || "17:00"
       }`;
     }
-
     if (typeof workingHours === "string") {
       return workingHours;
     }
-
     return "N/A";
   };
 
@@ -51,38 +48,26 @@ export const EmployeeData = ({ allusers }) => {
   if (!allusers || !Array.isArray(allusers)) {
     console.error("allusers is not a valid array:", allusers);
     return (
-      <div className="text-center py-12">
-        <div className="mx-auto h-24 w-24 text-red-400">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="1"
-              d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
-            />
-          </svg>
-        </div>
-        <p className="mt-4 text-lg text-red-600">Invalid user data</p>
-        <p className="text-sm text-gray-400">Please check the data format</p>
+      <div className="bg-white rounded-lg shadow-sm p-6 sm:p-8 text-center">
+        <div className="text-red-500 text-4xl sm:text-6xl mb-4">⚠️</div>
+        <h3 className="text-lg sm:text-xl font-semibold text-gray-800 mb-2">
+          Invalid user data
+        </h3>
+        <p className="text-sm sm:text-base text-gray-600">
+          Please check the data format
+        </p>
       </div>
     );
   }
 
   if (allusers.length === 0) {
     return (
-      <div className="text-center py-12">
-        <div className="mx-auto h-24 w-24 text-gray-400">
-          <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="1"
-              d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"
-            />
-          </svg>
-        </div>
-        <p className="mt-4 text-lg text-gray-600">No users found</p>
-        <p className="text-sm text-gray-400">
+      <div className="bg-white rounded-lg shadow-sm p-6 sm:p-8 text-center">
+        <div className="text-gray-400 text-4xl sm:text-6xl mb-4">👥</div>
+        <h3 className="text-lg sm:text-xl font-semibold text-gray-800 mb-2">
+          No users found
+        </h3>
+        <p className="text-sm sm:text-base text-gray-600">
           Users will appear here once they register
         </p>
       </div>
@@ -90,90 +75,149 @@ export const EmployeeData = ({ allusers }) => {
   }
 
   return (
-    <div className="space-y-3">
-      {allusers.map((record, index) => {
-        // Ensure we have a valid user object
-        if (!record || typeof record !== "object") {
-          console.warn(`Invalid user record at index ${index}:`, record);
-          return null;
-        }
+    <div className="bg-white rounded-b-lg lg:rounded-t-none shadow-sm overflow-hidden">
+      <div className="divide-y divide-gray-200">
+        {allusers.map((record, index) => {
+          const userId = record._id || record.id || `user-${index}`;
+          const userName = record.name || record.fullName || "Unknown User";
+          const userEmail = record.email || "No email provided";
+          const userDepartment = record.department || "N/A";
+          const userRole = record.role || "N/A";
 
-        const userId = record._id || record.id || `user-${index}`;
-        const userName = record.name || "Unknown User";
-        const userEmail = record.email || "N/A";
-        const userDepartment = record.department || "N/A";
-        const userRole = record.role || "N/A";
-
-        return (
-          <div
-            key={userId}
-            onClick={() => handleUserClick(userId, userEmail)}
-            className="border-[0.5px] border-[#00000033] rounded-[10px] flex justify-between p-[24px] gap-[10px] text-[14px] text-[#6C7278] font-normal cursor-pointer hover:bg-gray-50 transition-all duration-200 hover:shadow-md"
-          >
-            <div className="flex gap-[16px] items-center">
-              <input
-                type="checkbox"
-                onClick={(e) => handleCheckboxChange(e, userId)}
-                className="cursor-pointer w-4 h-4 text-blue-600 rounded focus:ring-blue-500"
-              />
-              <div className="relative">
-                <img
-                  className="h-[44px] w-[44px] rounded-full object-cover border-2 border-gray-200"
-                  src={
-                    record.profileImage ||
-                    `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                      userName
-                    )}&size=44&background=4F46E5&color=fff&rounded=true`
-                  }
-                  alt={userName}
-                  onError={(e) => {
-                    e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(
-                      userName
-                    )}&size=44&background=4F46E5&color=fff&rounded=true`;
-                  }}
-                />
-                {record.isActive !== false && (
-                  <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-green-500 rounded-full border-2 border-white"></div>
-                )}
-              </div>
-              <div>
-                <p className="text-[16px] font-medium text-black">{userName}</p>
-                <p className="text-[12px] text-gray-500">
-                  ID: {userId.slice(-6)}
-                </p>
-              </div>
-            </div>
-            <div className="flex justify-between w-[60%] items-center">
-              <div className="flex-1 truncate">
-                <p className="font-medium">{userEmail}</p>
-              </div>
-              <div className="flex-1 truncate text-center">
-                <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
-                  {userDepartment}
-                </span>
-              </div>
-              <div className="flex-1 truncate text-center">
-                <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs">
-                  {userRole}
-                </span>
-              </div>
-              <div className="flex-1 truncate text-center">
-                <p className="text-xs">
-                  {formatWorkingHours(record.workingHours)}
-                </p>
-              </div>
-            </div>
-            <button
-              onClick={(e) => handleMenuClick(e, userId)}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-colors duration-200"
+          return (
+            <div
+              key={userId}
+              onClick={() => handleUserClick(userId, userEmail)}
+              className="cursor-pointer hover:bg-gray-50 transition-colors duration-200"
             >
-              <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-              </svg>
-            </button>
-          </div>
-        );
-      })}
+              {/* Desktop Layout - Hidden on mobile */}
+              <div className="hidden lg:grid lg:grid-cols-12 lg:gap-4 lg:p-4 lg:items-center">
+                <div className="col-span-1 flex justify-center">
+                  <input
+                    type="checkbox"
+                    onClick={(e) => handleCheckboxChange(e, userId)}
+                    className="rounded w-4 h-4"
+                  />
+                </div>
+                <div className="col-span-4">
+                  <div className="flex items-center">
+                    <div className="h-10 w-10 flex-shrink-0 bg-blue-500 rounded-full flex items-center justify-center text-white font-medium text-sm">
+                      {userName.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm font-medium text-gray-900">
+                        {userName}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        ID: {userId.slice(-6)}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate max-w-[200px]">
+                        {userEmail}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="col-span-3">
+                  <span className="inline-flex px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                    {userDepartment}
+                  </span>
+                </div>
+                <div className="col-span-2">
+                  <span className="inline-flex px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+                    {userRole}
+                  </span>
+                </div>
+                <div className="col-span-2 text-center">
+                  <span className="text-sm text-gray-600">
+                    {formatWorkingHours(record.workingHours)}
+                  </span>
+                  <button
+                    onClick={(e) => handleMenuClick(e, userId)}
+                    className="ml-2 text-gray-400 hover:text-gray-600"
+                  >
+                    <svg
+                      className="w-4 h-4"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              {/* Mobile/Tablet Layout - Hidden on desktop */}
+              <div className="lg:hidden p-4 space-y-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center flex-1 min-w-0">
+                    <input
+                      type="checkbox"
+                      onClick={(e) => handleCheckboxChange(e, userId)}
+                      className="rounded w-4 h-4 mr-3 mt-1 flex-shrink-0"
+                    />
+                    <div className="h-12 w-12 flex-shrink-0 bg-blue-500 rounded-full flex items-center justify-center text-white font-medium">
+                      {userName.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="ml-3 flex-1 min-w-0">
+                      <p className="text-base font-medium text-gray-900 truncate">
+                        {userName}
+                      </p>
+                      <p className="text-sm text-gray-500 truncate">
+                        {userEmail}
+                      </p>
+                      <p className="text-xs text-gray-400">
+                        ID: {userId.slice(-6)}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={(e) => handleMenuClick(e, userId)}
+                    className="text-gray-400 hover:text-gray-600 p-1 flex-shrink-0"
+                  >
+                    <svg
+                      className="w-5 h-5"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+                    </svg>
+                  </button>
+                </div>
+
+                {/* Mobile Info Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-16 sm:pl-0">
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                      Department
+                    </p>
+                    <span className="inline-flex px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
+                      {userDepartment}
+                    </span>
+                  </div>
+
+                  <div className="bg-gray-50 p-3 rounded-lg">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                      Role
+                    </p>
+                    <span className="inline-flex px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
+                      {userRole}
+                    </span>
+                  </div>
+
+                  <div className="bg-gray-50 p-3 rounded-lg sm:col-span-2">
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
+                      Work Hours
+                    </p>
+                    <p className="text-sm text-gray-700">
+                      {formatWorkingHours(record.workingHours)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 };

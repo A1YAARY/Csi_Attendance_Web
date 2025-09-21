@@ -20,7 +20,7 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
     absent: 0,
     lateArrival: 0,
     earlyDepartures: 0,
-    activeSessions: 0, // Users who checked in but haven't checked out
+    activeSessions: 0,
   });
 
   // Update current time every second
@@ -38,8 +38,6 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
   }, [records, todaysdata, allusers]);
 
   const calculateStats = () => {
-    // console.log("Calculating stats with data:", { records, todaysdata, allusers });
-
     // Get all users data
     let allUsersData = [];
     if (Array.isArray(allusers)) {
@@ -76,8 +74,6 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
       recordsData = records.data;
     }
 
-    // console.log("Processed data:", { allUsersData, todaysAttendanceData, recordsData });
-
     const totalEmployees = allUsersData.length;
 
     // Get today's date in YYYY-MM-DD format
@@ -95,8 +91,6 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
         return recordDate === today;
       }
     );
-
-    // console.log("Today's records:", todaysRecords);
 
     let onTimeCount = 0;
     let lateArrivalCount = 0;
@@ -123,7 +117,6 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
 
       const userRecord = userAttendanceMap.get(userId);
 
-      // Update check in/out times
       if (record.checkInTime) {
         userRecord.checkIn = record.checkInTime;
       }
@@ -143,7 +136,6 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
         end: "17:00",
       };
 
-      // Convert working hours to minutes for comparison
       const startTime = userWorkingHours.start || "09:00";
       const endTime = userWorkingHours.end || "17:00";
 
@@ -156,12 +148,10 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
       const userAttendance = userAttendanceMap.get(userId);
 
       if (userAttendance) {
-        // User has attendance record for today
         const checkInTime = userAttendance.checkIn;
         const checkOutTime = userAttendance.checkOut;
 
         if (checkInTime) {
-          // Parse check-in time
           let checkInMinutes = 0;
           try {
             if (checkInTime.includes(":")) {
@@ -170,7 +160,6 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
                 .map((s) => parseInt(s.replace(/[^0-9]/g, "")));
               checkInMinutes = hour * 60 + (min || 0);
 
-              // Handle AM/PM format
               if (checkInTime.toLowerCase().includes("pm") && hour !== 12) {
                 checkInMinutes += 12 * 60;
               } else if (
@@ -184,19 +173,15 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
             console.error("Error parsing check-in time:", checkInTime);
           }
 
-          // Determine if on time or late
           if (checkInMinutes <= workStartInMinutes + 15) {
-            // 15 minutes grace period
             onTimeCount++;
           } else {
             lateArrivalCount++;
           }
 
-          // Check if user is still active (checked in but not checked out)
           if (!checkOutTime) {
             activeSessionsCount++;
           } else {
-            // Check for early departure
             try {
               let checkOutMinutes = 0;
               if (checkOutTime.includes(":")) {
@@ -205,7 +190,6 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
                   .map((s) => parseInt(s.replace(/[^0-9]/g, "")));
                 checkOutMinutes = hour * 60 + (min || 0);
 
-                // Handle AM/PM format
                 if (checkOutTime.toLowerCase().includes("pm") && hour !== 12) {
                   checkOutMinutes += 12 * 60;
                 } else if (
@@ -217,7 +201,6 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
               }
 
               if (checkOutMinutes < workEndInMinutes - 30) {
-                // 30 minutes before end time
                 earlyDeparturesCount++;
               }
             } catch (error) {
@@ -226,23 +209,11 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
           }
         }
       } else {
-        // User has no attendance record for today
-        // Check if work time has passed to mark as absent
         if (currentTimeInMinutes > workStartInMinutes + 60) {
-          // 1 hour after start time
           absentCount++;
         }
       }
     });
-
-    // console.log("Calculated stats:", {
-    //   totalEmployees,
-    //   onTimeCount,
-    //   lateArrivalCount,
-    //   activeSessionsCount,
-    //   earlyDeparturesCount,
-    //   absentCount
-    // });
 
     setStats({
       totalEmployees,
@@ -276,78 +247,101 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
   };
 
   return (
-    <div className="h-6 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
-      <div className="p-6 w-[100vw]">
-        <div className="flex gap-[20px] justify-center ">
-          <div className="border-[1px] border-[#00000033] rounded-[10px] px-[24px] py-[40px] bg-white w-[431px] h-[367px]">
-            <div className="flex flex-col justify-between h-full">
-              <div className="flex gap-[px] flex-col">
-                <div className="text-[16px] font-medium text-black">
+    <div className="min-h-screen overflow-hidden [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <div className="p-3 sm:p-4 lg:p-6 w-full">
+        {/* Main Dashboard Content */}
+        <div className="flex flex-col xl:flex-row gap-4 lg:gap-5 xl:gap-6 justify-center">
+          {/* System Status Card */}
+          <div className="border border-gray-200 rounded-lg px-4 sm:px-6 py-6 sm:py-8 lg:py-10 bg-white w-full xl:w-96 2xl:w-[431px] order-2 xl:order-1">
+            <div className="flex flex-col justify-between h-full space-y-6 lg:space-y-8">
+              <div className="flex flex-col space-y-2">
+                <div className="text-sm sm:text-base font-medium text-black">
                   System Status:
                 </div>
-                <div className="flex align-center gap-[10px]">
-                  <div className=" font-medium flex gap-[16px]">
-                    <div className="text-[56px] leading-none">Active</div>
-                    <p className="h-[20px] w-[20px] mr-0 my-auto inset-0 bg-[#01AB06] rounded-4xl"></p>
+                <div className="flex items-center gap-3">
+                  <div className="font-medium flex items-center gap-3 lg:gap-4">
+                    <div className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl leading-none">
+                      Active
+                    </div>
+                    <div className="h-4 w-4 sm:h-5 sm:w-5 bg-green-500 rounded-full"></div>
                   </div>
                 </div>
               </div>
-              <div className="flex gap-[px] flex-col">
-                <div className="stat-desc text-[32px] font-medium text-black">
+
+              <div className="flex flex-col space-y-1">
+                <div className="text-lg sm:text-xl lg:text-2xl xl:text-3xl font-medium text-black">
                   {formatCurrentTime(currentTime)}
                 </div>
-                <div className="stat-time text-[16px] font-medium text-[#6C7278]">
+                <div className="text-sm sm:text-base font-medium text-gray-500">
                   {formatCurrentDate(currentTime)}
                 </div>
               </div>
-              <div className="flex gap-[px] flex-col">
-                <div className="stat-desc text-[24px] font-medium">Users:</div>
-                <div className="stat-desc text-[16px] font-medium text-black">
+
+              <div className="flex flex-col space-y-1">
+                <div className="text-lg sm:text-xl lg:text-2xl font-medium">
+                  Users:
+                </div>
+                <div className="text-sm sm:text-base font-medium text-black">
                   {stats.activeSessions} Sessions Active
                 </div>
               </div>
             </div>
           </div>
-          <div className="flex gap-[20px] flex-col">
-            <div className="flex gap-[20px]">
-              <div className="stats border-[1px] bg-white border-[#00000033] rounded-[10px] px-[23px] py-[29px] w-[270.67px] h-[173.5px]">
+
+          {/* Stats Grid */}
+          <div className="flex flex-col gap-4 lg:gap-5 order-1 xl:order-2 flex-1">
+            {/* First Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 lg:gap-5">
+              {/* Total Employees */}
+              <div className="border border-gray-200 bg-white rounded-lg px-4 sm:px-5 lg:px-6 py-5 sm:py-6 lg:py-7">
                 <div className="flex justify-between w-full">
-                  <div className="flex flex-col">
-                    <div className="justify-between h-full flex flex-col">
-                      <p className="text-[32px] font-bold">
+                  <div className="flex flex-col flex-1">
+                    <div className="justify-between h-full flex flex-col space-y-3 sm:space-y-4">
+                      <p className="text-xl sm:text-2xl lg:text-3xl font-bold">
                         {stats.totalEmployees}
                       </p>
-                      <p className="text-[16px] font-semibold text-[#1A1C1E]">
+                      <p className="text-sm sm:text-base font-semibold text-gray-800">
                         Total Employees
                       </p>
                     </div>
-                    <div className="flex gap-[8px]">
-                      <img className="h-[24px]" src="/add_green.svg" alt="" />
-                      <p className="text-[14px] text-[#01AB06] font-medium">
+                    <div className="flex items-center gap-2 mt-2">
+                      <img
+                        className="h-5 w-5 sm:h-6 sm:w-6"
+                        src="/add_green.svg"
+                        alt=""
+                      />
+                      <p className="text-xs sm:text-sm text-green-600 font-medium">
                         {stats.totalEmployees > 0 ? "Active" : "No"} Employees
                       </p>
                     </div>
                   </div>
                   <img
-                    className="h-[40px]"
+                    className="h-8 w-8 sm:h-10 sm:w-10 flex-shrink-0"
                     src="/Total Employees Icon.svg"
                     alt=""
                   />
                 </div>
               </div>
 
-              <div className="stats border-[1px] bg-white border-[#00000033] rounded-[10px] px-[23px] py-[29px] w-[270.67px] h-[173.5px]">
+              {/* On Time */}
+              <div className="border border-gray-200 bg-white rounded-lg px-4 sm:px-5 lg:px-6 py-5 sm:py-6 lg:py-7">
                 <div className="flex justify-between w-full">
-                  <div className="flex flex-col">
-                    <div className="justify-between h-full flex flex-col">
-                      <p className="text-[32px] font-bold">{stats.onTime}</p>
-                      <p className="text-[16px] font-semibold text-[#1A1C1E]">
+                  <div className="flex flex-col flex-1">
+                    <div className="justify-between h-full flex flex-col space-y-3 sm:space-y-4">
+                      <p className="text-xl sm:text-2xl lg:text-3xl font-bold">
+                        {stats.onTime}
+                      </p>
+                      <p className="text-sm sm:text-base font-semibold text-gray-800">
                         On Time
                       </p>
                     </div>
-                    <div className="flex gap-[8px]">
-                      <img className="h-[24px]" src="/grow_green.svg" alt="" />
-                      <p className="text-[14px] text-[#01AB06] font-medium">
+                    <div className="flex items-center gap-2 mt-2">
+                      <img
+                        className="h-5 w-5 sm:h-6 sm:w-6"
+                        src="/grow_green.svg"
+                        alt=""
+                      />
+                      <p className="text-xs sm:text-sm text-green-600 font-medium">
                         {stats.onTime > 0
                           ? `${Math.round(
                               (stats.onTime / stats.totalEmployees) * 100
@@ -358,33 +352,36 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
                     </div>
                   </div>
                   <img
-                    className="h-[40px]"
+                    className="h-8 w-8 sm:h-10 sm:w-10 flex-shrink-0"
                     src="/Currently Ongoing Icon.svg"
                     alt=""
                   />
                 </div>
               </div>
 
-              <div className="stats border-[1px] bg-white border-[#00000033] rounded-[10px] px-[23px] py-[29px] w-[270.67px] h-[173.5px]">
+              {/* Absent */}
+              <div className="border border-gray-200 bg-white rounded-lg px-4 sm:px-5 lg:px-6 py-5 sm:py-6 lg:py-7 sm:col-span-2 xl:col-span-1">
                 <div className="flex justify-between w-full">
-                  <div className="flex flex-col">
-                    <div className="justify-between h-full flex flex-col">
-                      <p className="text-[32px] font-bold">{stats.absent}</p>
-                      <p className="text-[16px] font-semibold text-[#1A1C1E]">
+                  <div className="flex flex-col flex-1">
+                    <div className="justify-between h-full flex flex-col space-y-3 sm:space-y-4">
+                      <p className="text-xl sm:text-2xl lg:text-3xl font-bold">
+                        {stats.absent}
+                      </p>
+                      <p className="text-sm sm:text-base font-semibold text-gray-800">
                         Absent
                       </p>
                     </div>
-                    <div className="flex gap-[8px]">
+                    <div className="flex items-center gap-2 mt-2">
                       <img
-                        className="h-[24px]"
+                        className="h-5 w-5 sm:h-6 sm:w-6"
                         src={
                           stats.absent > 0 ? "/fall_red.svg" : "/grow_green.svg"
                         }
                         alt=""
                       />
                       <p
-                        className={`text-[14px] font-medium ${
-                          stats.absent > 0 ? "text-[#AB0101]" : "text-[#01AB06]"
+                        className={`text-xs sm:text-sm font-medium ${
+                          stats.absent > 0 ? "text-red-600" : "text-green-600"
                         }`}
                       >
                         {stats.absent > 0
@@ -393,25 +390,32 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
                       </p>
                     </div>
                   </div>
-                  <img className="h-[40px]" src="/Absent Icon.svg" alt="" />
+                  <img
+                    className="h-8 w-8 sm:h-10 sm:w-10 flex-shrink-0"
+                    src="/Absent Icon.svg"
+                    alt=""
+                  />
                 </div>
               </div>
             </div>
-            <div className="flex gap-[20px] ">
-              <div className="stats border-[1px] bg-white border-[#00000033] rounded-[10px] px-[23px] py-[29px] w-[270.67px] h-[173.5px]">
+
+            {/* Second Row */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 lg:gap-5">
+              {/* Late Arrival */}
+              <div className="border border-gray-200 bg-white rounded-lg px-4 sm:px-5 lg:px-6 py-5 sm:py-6 lg:py-7">
                 <div className="flex justify-between w-full">
-                  <div className="flex flex-col">
-                    <div className="justify-between h-full flex flex-col">
-                      <p className="text-[32px] font-bold">
+                  <div className="flex flex-col flex-1">
+                    <div className="justify-between h-full flex flex-col space-y-3 sm:space-y-4">
+                      <p className="text-xl sm:text-2xl lg:text-3xl font-bold">
                         {stats.lateArrival}
                       </p>
-                      <p className="text-[16px] font-semibold text-[#1A1C1E]">
+                      <p className="text-sm sm:text-base font-semibold text-gray-800">
                         Late Arrival
                       </p>
                     </div>
-                    <div className="flex gap-[8px]">
+                    <div className="flex items-center gap-2 mt-2">
                       <img
-                        className="h-[24px]"
+                        className="h-5 w-5 sm:h-6 sm:w-6"
                         src={
                           stats.lateArrival === 0
                             ? "/grow_green.svg"
@@ -420,10 +424,10 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
                         alt=""
                       />
                       <p
-                        className={`text-[14px] font-medium ${
+                        className={`text-xs sm:text-sm font-medium ${
                           stats.lateArrival === 0
-                            ? "text-[#01AB06]"
-                            : "text-[#AB0101]"
+                            ? "text-green-600"
+                            : "text-red-600"
                         }`}
                       >
                         {stats.lateArrival === 0
@@ -433,27 +437,28 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
                     </div>
                   </div>
                   <img
-                    className="h-[40px]"
+                    className="h-8 w-8 sm:h-10 sm:w-10 flex-shrink-0"
                     src="/Late Arrivals Icon.svg"
                     alt=""
                   />
                 </div>
               </div>
 
-              <div className="stats border-[1px] bg-white border-[#00000033] rounded-[10px] px-[23px] py-[29px] w-[270.67px] h-[173.5px]">
+              {/* Early Departures */}
+              <div className="border border-gray-200 bg-white rounded-lg px-4 sm:px-5 lg:px-6 py-5 sm:py-6 lg:py-7">
                 <div className="flex justify-between w-full">
-                  <div className="flex flex-col">
-                    <div className="justify-between h-full flex flex-col">
-                      <p className="text-[32px] font-bold">
+                  <div className="flex flex-col flex-1">
+                    <div className="justify-between h-full flex flex-col space-y-3 sm:space-y-4">
+                      <p className="text-xl sm:text-2xl lg:text-3xl font-bold">
                         {stats.earlyDepartures}
                       </p>
-                      <p className="text-[16px] font-semibold text-[#1A1C1E]">
+                      <p className="text-sm sm:text-base font-semibold text-gray-800">
                         Early Departures
                       </p>
                     </div>
-                    <div className="flex gap-[8px]">
+                    <div className="flex items-center gap-2 mt-2">
                       <img
-                        className="h-[24px]"
+                        className="h-5 w-5 sm:h-6 sm:w-6"
                         src={
                           stats.earlyDepartures === 0
                             ? "/grow_green.svg"
@@ -462,10 +467,10 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
                         alt=""
                       />
                       <p
-                        className={`text-[14px] font-medium ${
+                        className={`text-xs sm:text-sm font-medium ${
                           stats.earlyDepartures === 0
-                            ? "text-[#01AB06]"
-                            : "text-[#AB0101]"
+                            ? "text-green-600"
+                            : "text-red-600"
                         }`}
                       >
                         {stats.earlyDepartures === 0
@@ -475,63 +480,77 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
                     </div>
                   </div>
                   <img
-                    className="h-[40px]"
+                    className="h-8 w-8 sm:h-10 sm:w-10 flex-shrink-0"
                     src="/Early Departure Icon.svg"
                     alt=""
                   />
                 </div>
               </div>
 
-              <div className="stats border-[1px] bg-white border-[#00000033] rounded-[10px] px-[23px] py-[29px] w-[270.67px] h-[173.5px]">
+              {/* Time Off */}
+              <div className="border border-gray-200 bg-white rounded-lg px-4 sm:px-5 lg:px-6 py-5 sm:py-6 lg:py-7 sm:col-span-2 xl:col-span-1">
                 <div className="flex justify-between w-full">
-                  <div className="flex flex-col">
-                    <div className="justify-between h-full flex flex-col">
-                      <p className="text-[32px] font-bold">24</p>
-                      <p className="text-[16px] font-semibold text-[#1A1C1E]">
+                  <div className="flex flex-col flex-1">
+                    <div className="justify-between h-full flex flex-col space-y-3 sm:space-y-4">
+                      <p className="text-xl sm:text-2xl lg:text-3xl font-bold">
+                        24
+                      </p>
+                      <p className="text-sm sm:text-base font-semibold text-gray-800">
                         Time Off
                       </p>
                     </div>
-                    <div className="flex gap-[8px]">
-                      <img className="h-[24px]" src="/grow_blue.svg" alt="" />
-                      <p className="text-[14px] text-[#1D61E7] font-medium">
+                    <div className="flex items-center gap-2 mt-2">
+                      <img
+                        className="h-5 w-5 sm:h-6 sm:w-6"
+                        src="/grow_blue.svg"
+                        alt=""
+                      />
+                      <p className="text-xs sm:text-sm text-blue-600 font-medium">
                         2 less than yesterday
                       </p>
                     </div>
                   </div>
-                  <img className="h-[40px]" src="/Time off icon.svg" alt="" />
+                  <img
+                    className="h-8 w-8 sm:h-10 sm:w-10 flex-shrink-0"
+                    src="/Time off icon.svg"
+                    alt=""
+                  />
                 </div>
               </div>
             </div>
           </div>
         </div>
 
-        <div className="bg-white p-6 rounded-lg shadow mt-6">
-          <h2 className="text-lg font-semibold mb-4">Quick Actions</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {/* Quick Actions Section */}
+        <div className="bg-white p-4 sm:p-6 rounded-lg shadow mt-4 sm:mt-6">
+          <h2 className="text-base sm:text-lg font-semibold mb-3 sm:mb-4">
+            Quick Actions
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
             <button
               onClick={() => setAdminView("qrcodes")}
-              className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 transition-colors"
+              className="p-4 sm:p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 transition-colors touch-manipulation"
             >
-              <QrCode className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-              <p className="text-sm">
+              <QrCode className="h-6 w-6 sm:h-8 sm:w-8 mx-auto mb-2 text-gray-400" />
+              <p className="text-xs sm:text-sm text-center">
                 Generate QR codes for attendance tracking and access control
               </p>
             </button>
             <button
               onClick={() => setAdminView("employees")}
-              className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 transition-colors"
+              className="p-4 sm:p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 transition-colors touch-manipulation"
             >
-              <Users className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-              <p className="text-sm">
+              <Users className="h-6 w-6 sm:h-8 sm:w-8 mx-auto mb-2 text-gray-400" />
+              <p className="text-xs sm:text-sm text-center">
                 Manage employee information and profiles
               </p>
             </button>
             <button
               onClick={() => setAdminView("reports")}
-              className="p-4 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 transition-colors"
+              className="p-4 sm:p-6 border-2 border-dashed border-gray-300 rounded-lg hover:border-blue-500 transition-colors md:col-span-1"
             >
-              <FileText className="h-8 w-8 mx-auto mb-2 text-gray-400" />
-              <p className="text-sm">
+              <FileText className="h-6 w-6 sm:h-8 sm:w-8 mx-auto mb-2 text-gray-400" />
+              <p className="text-xs sm:text-sm text-center">
                 View detailed attendance reports and analytics
               </p>
             </button>
