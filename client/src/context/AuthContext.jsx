@@ -218,7 +218,7 @@ export function AuthProvider({ children }) {
   // ===========================================
 
   const getAIHealth = async () => {
-    const response = await fetch(`${BASE_URL}/ai/health`, {
+    const response = await fetch(`${BASE_URL}/api/ai-analytics/health`, {
       method: "GET",
       headers: getAuthHeaders(),
     });
@@ -226,7 +226,7 @@ export function AuthProvider({ children }) {
   };
 
   const getAICapabilities = async () => {
-    const response = await fetch(`${BASE_URL}/ai/capabilities`, {
+    const response = await fetch(`${BASE_URL}/api/ai-analytics/capabilities`, {
       method: "GET",
       headers: getAuthHeaders(),
     });
@@ -234,7 +234,7 @@ export function AuthProvider({ children }) {
   };
 
   const queryAI = async (data) => {
-    const response = await fetch(`${BASE_URL}/ai/query`, {
+    const response = await fetch(`${BASE_URL}/api/ai-analytics/query`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: JSON.stringify(data),

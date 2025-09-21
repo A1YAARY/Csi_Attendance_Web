@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../../context/AuthContext";
 import {
   Brain,
@@ -12,11 +12,17 @@ import {
   Trash2,
   Clock,
   TrendingUp,
+  Volume2,
+  VolumeX,
+  Mic,
+  MicOff,
+  Sparkles,
+  XCircle, // ← Added this missing icon
 } from "lucide-react";
 import { toast } from "react-toastify";
 
 const AITestPage = () => {
-  const { baseURL, token, user } = useAuth();
+  const { BASE_URL, getAuthHeaders, user } = useAuth();
   const [question, setQuestion] = useState("");
   const [response, setResponse] = useState("");
   const [loading, setLoading] = useState(false);
@@ -24,6 +30,14 @@ const AITestPage = () => {
   const [aiHealth, setAiHealth] = useState(null);
   const [queryHistory, setQueryHistory] = useState([]);
   const [activeTab, setActiveTab] = useState("query");
+  const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isListening, setIsListening] = useState(false);
+  const [speechSupported, setSpeechSupported] = useState(false);
+
+  const synthRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const responseRef = useRef("");
 
   // Enhanced sample questions with categories
   const sampleQuestions = [
@@ -65,54 +79,152 @@ const AITestPage = () => {
     },
   ];
 
-  // Fetch AI capabilities and health on component mount
+  // Initialize speech synthesis and recognition
   useEffect(() => {
+    if ("speechSynthesis" in window) {
+      synthRef.current = window.speechSynthesis;
+      setSpeechSupported(true);
+    }
+
+    if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
+      const SpeechRecognition =
+        window.webkitSpeechRecognition || window.SpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.continuous = false;
+      recognitionRef.current.interimResults = false;
+      recognitionRef.current.lang = "en-US";
+
+      recognitionRef.current.onresult = (event) => {
+        const transcript = event.results[0][0].transcript;
+        setQuestion(transcript);
+        setIsListening(false);
+      };
+
+      recognitionRef.current.onerror = (event) => {
+        console.error("Speech recognition error:", event.error);
+        setIsListening(false);
+        toast.error("Speech recognition failed. Please try again.");
+      };
+
+      recognitionRef.current.onend = () => {
+        setIsListening(false);
+      };
+    }
+
     fetchAICapabilities();
     checkAIHealth();
     loadQueryHistory();
   }, []);
 
+  // Update response ref when response changes
+  useEffect(() => {
+    responseRef.current = response;
+  }, [response]);
+
+  // Text-to-Speech function [web:76][web:79]
+  const speakText = useCallback(
+    (text) => {
+      if (!speechSupported || !synthRef.current || !isVoiceEnabled) return;
+
+      // Stop any ongoing speech
+      synthRef.current.cancel();
+
+      // Clean text for better speech
+      const cleanText = text
+        .replace(/❌|✅|📊|📅|📈|🔍|⚠️|👤|⏰/g, "") // Remove emojis
+        .replace(/\n/g, " ") // Replace newlines with spaces
+        .replace(/\s+/g, " ") // Normalize spaces
+        .trim();
+
+      if (cleanText.length === 0) return;
+
+      const utterance = new SpeechSynthesisUtterance(cleanText);
+
+      // Voice settings for better experience
+      utterance.rate = 1.1;
+      utterance.pitch = 1.0;
+      utterance.volume = 0.8;
+
+      // Choose best available voice
+      const voices = synthRef.current.getVoices();
+      const preferredVoice =
+        voices.find(
+          (voice) => voice.name.includes("Google") && voice.lang.includes("en")
+        ) ||
+        voices.find((voice) => voice.lang.includes("en")) ||
+        voices[0];
+
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
+      }
+
+      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => {
+        setIsSpeaking(false);
+        toast.error("Voice synthesis failed");
+      };
+
+      synthRef.current.speak(utterance);
+    },
+    [speechSupported, isVoiceEnabled]
+  );
+
+  // Stop speaking
+  const stopSpeaking = useCallback(() => {
+    if (synthRef.current) {
+      synthRef.current.cancel();
+      setIsSpeaking(false);
+    }
+  }, []);
+
+  // Start voice recognition
+  const startListening = useCallback(() => {
+    if (!recognitionRef.current) {
+      toast.error("Speech recognition not supported in this browser");
+      return;
+    }
+
+    setIsListening(true);
+    try {
+      recognitionRef.current.start();
+    } catch (error) {
+      console.error("Speech recognition start error:", error);
+      setIsListening(false);
+      toast.error("Could not start speech recognition");
+    }
+  }, []);
+
   const fetchAICapabilities = useCallback(async () => {
     try {
-      const response = await fetch(`${baseURL}/api/ai-analytics/capabilities`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      });
-
+      const response = await fetch(
+        `${BASE_URL}/api/ai-analytics/capabilities`,
+        {
+          headers: getAuthHeaders(),
+        }
+      );
       if (response.ok) {
         const data = await response.json();
         setAiCapabilities(data);
-      } else {
-        throw new Error("Failed to fetch capabilities");
       }
     } catch (error) {
       console.error("Failed to fetch AI capabilities:", error);
-      toast.error("Could not load AI capabilities");
     }
-  }, [baseURL, token]);
+  }, [BASE_URL, getAuthHeaders]);
 
   const checkAIHealth = useCallback(async () => {
     try {
-      const response = await fetch(`${baseURL}/api/ai-analytics/health`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+      const response = await fetch(`${BASE_URL}/api/ai-analytics/health`, {
+        headers: getAuthHeaders(),
       });
-
       if (response.ok) {
         const data = await response.json();
         setAiHealth(data);
-      } else {
-        throw new Error("Failed to check AI health");
       }
     } catch (error) {
-      console.error("Failed to check AI health:", error);
       setAiHealth({ status: "unhealthy", error: error.message });
     }
-  }, [baseURL, token]);
+  }, [BASE_URL, getAuthHeaders]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -123,14 +235,12 @@ const AITestPage = () => {
 
     setLoading(true);
     setResponse("");
+    stopSpeaking();
 
     try {
-      const response = await fetch(`${baseURL}/api/ai-analytics/query`, {
+      const response = await fetch(`${BASE_URL}/api/ai-analytics/query`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ question: question.trim() }),
       });
 
@@ -148,9 +258,14 @@ const AITestPage = () => {
           user: user?.email || "Unknown",
         };
 
-        const newHistory = [historyItem, ...queryHistory.slice(0, 9)]; // Keep last 10
+        const newHistory = [historyItem, ...queryHistory.slice(0, 9)];
         setQueryHistory(newHistory);
         saveQueryHistory(newHistory);
+
+        // Speak the response
+        if (isVoiceEnabled && aiResponse) {
+          setTimeout(() => speakText(aiResponse), 500);
+        }
 
         toast.success("AI response received!");
       } else {
@@ -180,6 +295,7 @@ const AITestPage = () => {
   const clearResponse = () => {
     setResponse("");
     setQuestion("");
+    stopSpeaking();
   };
 
   const copyResponse = () => {
@@ -219,350 +335,517 @@ const AITestPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-6">
+    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-indigo-100 p-3 sm:p-4 lg:p-6">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
-        <div className="bg-white rounded-xl shadow-lg mb-6 p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-3 rounded-lg">
-                <Brain className="w-8 h-8 text-white" />
-              </div>
-              <div>
-                <h1 className="text-3xl font-bold text-gray-900">
-                  AI Analytics Dashboard
-                </h1>
-                <p className="text-gray-600 mt-1">
-                  Test your AI-powered attendance analytics system
-                </p>
-              </div>
+        {/* Header - Responsive */}
+        <div className="text-center mb-6 sm:mb-8">
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <div className="relative">
+              <Brain className="w-8 h-8 sm:w-10 sm:h-10 text-purple-600" />
+              <Sparkles className="w-4 h-4 text-yellow-500 absolute -top-1 -right-1 animate-pulse" />
             </div>
+            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold bg-gradient-to-r from-purple-600 to-blue-600 bg-clip-text text-transparent">
+              AI Analytics Assistant
+            </h1>
+          </div>
+          <p className="text-sm sm:text-base text-gray-600 max-w-2xl mx-auto px-4">
+            Test your AI-powered attendance analytics system with voice support
+          </p>
 
-            {/* AI Health Status */}
-            <div className="flex items-center space-x-2">
-              <div
-                className={`flex items-center px-3 py-2 rounded-full text-sm font-medium ${
-                  aiHealth?.status === "healthy"
-                    ? "bg-green-100 text-green-800"
-                    : aiHealth?.status === "initializing"
-                    ? "bg-yellow-100 text-yellow-800"
-                    : "bg-red-100 text-red-800"
-                }`}
-              >
-                {aiHealth?.status === "healthy" ? (
-                  <CheckCircle className="w-4 h-4 mr-1" />
-                ) : aiHealth?.status === "initializing" ? (
-                  <Clock className="w-4 h-4 mr-1" />
-                ) : (
-                  <AlertCircle className="w-4 h-4 mr-1" />
-                )}
-                AI {aiHealth?.status || "Unknown"}
-              </div>
-              <button
-                onClick={checkAIHealth}
-                className="p-2 text-gray-500 hover:text-gray-700 transition-colors"
-                title="Refresh AI Status"
-              >
-                <RefreshCw className="w-5 h-5" />
-              </button>
-            </div>
+          {/* AI Health Status */}
+          <div className="flex items-center justify-center gap-2 mt-3">
+            {aiHealth?.status === "healthy" ? (
+              <CheckCircle className="w-4 h-4 text-green-500" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-red-500" />
+            )}
+            <span
+              className={`text-xs sm:text-sm font-medium ${
+                aiHealth?.status === "healthy"
+                  ? "text-green-600"
+                  : "text-red-600"
+              }`}
+            >
+              AI Status: {aiHealth?.status || "Checking..."}
+            </span>
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="bg-white rounded-xl shadow-lg mb-6">
-          <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8 px-6">
-              {[
-                { id: "query", name: "AI Query", icon: MessageSquare },
-                { id: "samples", name: "Sample Questions", icon: Zap },
-                { id: "history", name: "Query History", icon: Clock },
-                {
-                  id: "capabilities",
-                  name: "AI Capabilities",
-                  icon: TrendingUp,
-                },
-              ].map(({ id, name, icon: Icon }) => (
-                <button
-                  key={id}
-                  onClick={() => setActiveTab(id)}
-                  className={`flex items-center py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
-                    activeTab === id
-                      ? "border-blue-500 text-blue-600"
-                      : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                  }`}
-                >
-                  <Icon className="w-4 h-4 mr-2" />
-                  {name}
-                </button>
-              ))}
-            </nav>
-          </div>
+        {/* Tab Navigation - Mobile Friendly */}
+        <div className="flex flex-wrap justify-center gap-2 mb-6">
+          {[
+            { id: "query", label: "Query AI", icon: MessageSquare },
+            { id: "samples", label: "Examples", icon: Zap },
+            { id: "history", label: "History", icon: Clock },
+            { id: "capabilities", label: "Features", icon: TrendingUp },
+          ].map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              onClick={() => setActiveTab(id)}
+              className={`flex items-center gap-2 px-3 sm:px-4 py-2 rounded-lg transition-all touch-manipulation text-xs sm:text-sm font-medium ${
+                activeTab === id
+                  ? "bg-purple-600 text-white shadow-lg"
+                  : "bg-white text-gray-600 hover:bg-purple-50 border border-gray-200"
+              }`}
+            >
+              <Icon className="w-4 h-4" />
+              <span className="hidden sm:inline">{label}</span>
+            </button>
+          ))}
+        </div>
 
-          {/* Tab Content */}
-          <div className="p-6">
-            {/* Query Tab */}
-            {activeTab === "query" && (
-              <div className="space-y-6">
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Ask AI about attendance data:
-                    </label>
-                    <textarea
-                      value={question}
-                      onChange={(e) => setQuestion(e.target.value)}
-                      placeholder="e.g., Show me today's attendance summary or Who was absent yesterday?"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-                      rows="3"
-                      disabled={loading}
-                    />
-                  </div>
-
-                  <div className="flex space-x-3">
-                    <button
-                      type="submit"
-                      disabled={loading || !question.trim()}
-                      className="flex-1 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-6 py-3 rounded-lg hover:from-blue-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center justify-center"
-                    >
-                      {loading ? (
-                        <>
-                          <RefreshCw className="animate-spin w-5 h-5 mr-2" />
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          <Send className="w-5 h-5 mr-2" />
-                          Ask AI
-                        </>
-                      )}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={clearResponse}
-                      className="px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                      title="Clear Input & Response"
-                    >
-                      <Trash2 className="w-5 h-5" />
-                    </button>
-                  </div>
-                </form>
-
-                {/* Response Section */}
-                <div className="bg-gray-50 rounded-lg p-6">
+        {/* Main Content Area */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
+          {/* Query Interface */}
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+              {activeTab === "query" && (
+                <>
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                      <Brain className="w-5 h-5 mr-2 text-blue-600" />
-                      AI Response
-                    </h3>
+                    <h2 className="text-lg sm:text-xl font-semibold text-gray-800">
+                      Ask Your Question
+                    </h2>
 
-                    {response && (
-                      <button
-                        onClick={copyResponse}
-                        className="flex items-center px-3 py-1 text-sm text-blue-600 hover:text-blue-800 transition-colors"
-                        title="Copy Response"
-                      >
-                        <Copy className="w-4 h-4 mr-1" />
-                        Copy
-                      </button>
-                    )}
-                  </div>
-
-                  <div className="bg-white rounded-lg p-4 min-h-[200px] border-2 border-dashed border-gray-200">
-                    {loading ? (
-                      <div className="flex items-center justify-center h-32">
-                        <div className="text-center">
-                          <RefreshCw className="animate-spin w-8 h-8 text-blue-600 mx-auto mb-2" />
-                          <p className="text-gray-600">
-                            AI is processing your query...
-                          </p>
-                        </div>
-                      </div>
-                    ) : response ? (
-                      <div className="prose max-w-none">
-                        <pre className="whitespace-pre-wrap text-gray-800 font-medium">
-                          {response}
-                        </pre>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center h-32 text-gray-500">
-                        <div className="text-center">
-                          <MessageSquare className="w-12 h-12 mx-auto mb-2 text-gray-300" />
-                          <p>
-                            AI response will appear here after you submit a
-                            query.
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Sample Questions Tab */}
-            {activeTab === "samples" && (
-              <div className="space-y-6">
-                <div className="text-center mb-8">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                    Sample Questions
-                  </h2>
-                  <p className="text-gray-600">
-                    Click on any question to try it out
-                  </p>
-                </div>
-
-                {sampleQuestions.map((category, categoryIndex) => (
-                  <div
-                    key={categoryIndex}
-                    className="bg-gray-50 rounded-lg p-6"
-                  >
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                      {category.category}
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                      {category.questions.map((q, qIndex) => (
+                    {/* Voice Controls */}
+                    {speechSupported && (
+                      <div className="flex items-center gap-2">
                         <button
-                          key={qIndex}
-                          onClick={() => handleSampleQuestion(q)}
-                          className="text-left p-4 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-all duration-200 group"
+                          onClick={() => setIsVoiceEnabled(!isVoiceEnabled)}
+                          className={`p-2 rounded-lg transition-colors touch-manipulation ${
+                            isVoiceEnabled
+                              ? "bg-green-100 text-green-600 hover:bg-green-200"
+                              : "bg-gray-100 text-gray-400 hover:bg-gray-200"
+                          }`}
+                          title={
+                            isVoiceEnabled ? "Voice enabled" : "Voice disabled"
+                          }
                         >
-                          <div className="flex items-start">
-                            <MessageSquare className="w-4 h-4 text-gray-400 group-hover:text-blue-500 mt-1 mr-3 flex-shrink-0" />
-                            <span className="text-gray-700 group-hover:text-blue-700 font-medium">
-                              {q}
+                          {isVoiceEnabled ? (
+                            <Volume2 className="w-4 h-4" />
+                          ) : (
+                            <VolumeX className="w-4 h-4" />
+                          )}
+                        </button>
+
+                        <button
+                          onClick={isSpeaking ? stopSpeaking : startListening}
+                          disabled={loading}
+                          className={`p-2 rounded-lg transition-colors touch-manipulation ${
+                            isListening
+                              ? "bg-red-100 text-red-600 hover:bg-red-200 animate-pulse"
+                              : isSpeaking
+                              ? "bg-blue-100 text-blue-600 hover:bg-blue-200"
+                              : "bg-purple-100 text-purple-600 hover:bg-purple-200"
+                          }`}
+                          title={
+                            isListening
+                              ? "Listening..."
+                              : isSpeaking
+                              ? "Speaking..."
+                              : "Start voice input"
+                          }
+                        >
+                          {isListening ? (
+                            <MicOff className="w-4 h-4" />
+                          ) : (
+                            <Mic className="w-4 h-4" />
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+
+                  <form onSubmit={handleSubmit} className="space-y-4">
+                    <div className="relative">
+                      <textarea
+                        value={question}
+                        onChange={(e) => setQuestion(e.target.value)}
+                        placeholder="Ask about attendance, user presence, daily summaries, or any analytics question..."
+                        rows={3}
+                        className="w-full p-3 sm:p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none text-sm sm:text-base"
+                        disabled={loading}
+                      />
+                      {isListening && (
+                        <div className="absolute inset-0 bg-red-50 bg-opacity-50 rounded-lg flex items-center justify-center">
+                          <div className="flex items-center gap-2 bg-red-100 px-3 py-1 rounded-full">
+                            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                            <span className="text-xs font-medium text-red-600">
+                              Listening...
                             </span>
                           </div>
-                        </button>
-                      ))}
+                        </div>
+                      )}
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
 
-            {/* Query History Tab */}
-            {activeTab === "history" && (
-              <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-2xl font-bold text-gray-900">
-                    Query History
-                  </h2>
-                  {queryHistory.length > 0 && (
-                    <button
-                      onClick={clearHistory}
-                      className="flex items-center px-4 py-2 text-red-600 hover:text-red-800 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4 mr-1" />
-                      Clear History
-                    </button>
-                  )}
-                </div>
-
-                {queryHistory.length === 0 ? (
-                  <div className="text-center py-12">
-                    <Clock className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-500 text-lg">No queries yet</p>
-                    <p className="text-gray-400">
-                      Your AI queries will appear here
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {queryHistory.map((item) => (
-                      <div
-                        key={item.id}
-                        className="bg-white rounded-lg border border-gray-200 p-6"
+                    <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
+                      <button
+                        type="submit"
+                        disabled={loading || !question.trim()}
+                        className="flex-1 sm:flex-none bg-purple-600 hover:bg-purple-700 disabled:bg-gray-400 text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg transition-colors flex items-center justify-center gap-2 font-medium touch-manipulation text-sm sm:text-base"
                       >
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="flex-1">
-                            <p className="font-medium text-gray-900 mb-1">
-                              {item.question}
-                            </p>
-                            <p className="text-sm text-gray-500">
-                              {formatTimestamp(item.timestamp)} • {item.user}
-                            </p>
-                          </div>
+                        {loading ? (
+                          <RefreshCw className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Send className="w-4 h-4" />
+                        )}
+                        {loading ? "Processing..." : "Ask AI"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={clearResponse}
+                        className="bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 sm:px-4 py-2 sm:py-3 rounded-lg transition-colors touch-manipulation text-sm sm:text-base"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </form>
+
+                  {/* Response Area */}
+                  <div className="mt-6">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-base sm:text-lg font-semibold text-gray-800">
+                        AI Response
+                      </h3>
+                      {response && (
+                        <div className="flex gap-2">
+                          {speechSupported && isVoiceEnabled && (
+                            <button
+                              onClick={
+                                isSpeaking
+                                  ? stopSpeaking
+                                  : () => speakText(response)
+                              }
+                              className={`p-2 rounded-lg transition-colors touch-manipulation ${
+                                isSpeaking
+                                  ? "bg-red-100 text-red-600 hover:bg-red-200"
+                                  : "bg-blue-100 text-blue-600 hover:bg-blue-200"
+                              }`}
+                              title={
+                                isSpeaking ? "Stop speaking" : "Read aloud"
+                              }
+                            >
+                              {isSpeaking ? (
+                                <VolumeX className="w-4 h-4" />
+                              ) : (
+                                <Volume2 className="w-4 h-4" />
+                              )}
+                            </button>
+                          )}
                           <button
-                            onClick={() => handleSampleQuestion(item.question)}
-                            className="ml-4 text-blue-600 hover:text-blue-800 transition-colors"
-                            title="Use this question"
+                            onClick={copyResponse}
+                            className="p-2 rounded-lg bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors touch-manipulation"
+                            title="Copy response"
                           >
-                            <RefreshCw className="w-4 h-4" />
+                            <Copy className="w-4 h-4" />
                           </button>
                         </div>
-                        <div className="bg-gray-50 rounded-lg p-4">
-                          <pre className="whitespace-pre-wrap text-sm text-gray-700">
-                            {item.response}
-                          </pre>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* AI Capabilities Tab */}
-            {activeTab === "capabilities" && (
-              <div className="space-y-6">
-                <div className="text-center mb-8">
-                  <h2 className="text-2xl font-bold text-gray-900 mb-2">
-                    AI Capabilities
-                  </h2>
-                  <p className="text-gray-600">What our AI can help you with</p>
-                </div>
-
-                {aiCapabilities ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-lg p-6">
-                      <h3 className="text-lg font-semibold text-blue-900 mb-4 flex items-center">
-                        <TrendingUp className="w-5 h-5 mr-2" />
-                        Capabilities
-                      </h3>
-                      <ul className="space-y-2">
-                        {aiCapabilities.capabilities?.map(
-                          (capability, index) => (
-                            <li key={index} className="flex items-start">
-                              <CheckCircle className="w-4 h-4 text-green-600 mt-1 mr-3 flex-shrink-0" />
-                              <span className="text-blue-800">
-                                {capability}
-                              </span>
-                            </li>
-                          )
-                        )}
-                      </ul>
+                      )}
                     </div>
 
-                    <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-lg p-6">
-                      <h3 className="text-lg font-semibold text-green-900 mb-4 flex items-center">
-                        <MessageSquare className="w-5 h-5 mr-2" />
-                        Example Queries
-                      </h3>
-                      <div className="space-y-2">
-                        {aiCapabilities.examples?.map((example, index) => (
-                          <button
-                            key={index}
-                            onClick={() => handleSampleQuestion(example)}
-                            className="w-full text-left p-3 bg-white rounded-lg border border-green-200 hover:border-green-300 hover:bg-green-50 transition-all duration-200 group"
-                          >
-                            <span className="text-green-800 group-hover:text-green-900 font-medium">
-                              "{example}"
+                    <div className="bg-gray-50 rounded-lg p-4 min-h-[120px] max-h-[400px] overflow-y-auto">
+                      {loading ? (
+                        <div className="flex items-center justify-center py-8">
+                          <div className="flex items-center gap-3 text-purple-600">
+                            <Brain className="w-6 h-6 animate-pulse" />
+                            <span className="text-sm sm:text-base">
+                              AI is processing your query...
                             </span>
+                          </div>
+                        </div>
+                      ) : response ? (
+                        <div className="text-sm sm:text-base text-gray-800 whitespace-pre-wrap leading-relaxed">
+                          {response}
+                        </div>
+                      ) : (
+                        <div className="text-center py-8 text-gray-500 text-sm sm:text-base">
+                          AI response will appear here after you submit a query.
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </>
+              )}
+
+              {/* Sample Questions */}
+              {activeTab === "samples" && (
+                <div className="space-y-4 sm:space-y-6">
+                  <h2 className="text-lg sm:text-xl font-semibold text-gray-800 text-center">
+                    Click on any question to try it out
+                  </h2>
+                  {sampleQuestions.map((category, idx) => (
+                    <div key={idx} className="space-y-3">
+                      <h3 className="text-base sm:text-lg font-medium text-gray-700 border-b pb-2">
+                        {category.category}
+                      </h3>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                        {category.questions.map((q, qIdx) => (
+                          <button
+                            key={qIdx}
+                            onClick={() => handleSampleQuestion(q)}
+                            className="text-left p-3 sm:p-4 bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg hover:from-purple-100 hover:to-blue-100 transition-all border border-purple-200 hover:border-purple-300 touch-manipulation text-sm sm:text-base"
+                          >
+                            {q}
                           </button>
                         ))}
                       </div>
                     </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Query History */}
+              {activeTab === "history" && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-lg sm:text-xl font-semibold text-gray-800">
+                      Query History
+                    </h2>
+                    {queryHistory.length > 0 && (
+                      <button
+                        onClick={clearHistory}
+                        className="flex items-center gap-2 px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors touch-manipulation"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        Clear History
+                      </button>
+                    )}
                   </div>
-                ) : (
-                  <div className="text-center py-12">
-                    <RefreshCw className="animate-spin w-8 h-8 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-500">Loading AI capabilities...</p>
+
+                  {queryHistory.length === 0 ? (
+                    <div className="text-center py-8 text-gray-500">
+                      <Clock className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+                      <p className="text-sm sm:text-base">No queries yet</p>
+                      <p className="text-xs sm:text-sm">
+                        Your AI queries will appear here
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-4 max-h-[500px] overflow-y-auto">
+                      {queryHistory.map((item) => (
+                        <div
+                          key={item.id}
+                          className="bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg p-4 border border-gray-200"
+                        >
+                          <div className="flex items-start justify-between gap-3 mb-2">
+                            <p className="font-medium text-gray-800 text-sm sm:text-base flex-1">
+                              {item.question}
+                            </p>
+                            {speechSupported && isVoiceEnabled && (
+                              <button
+                                onClick={() => speakText(item.response)}
+                                className="p-1 rounded bg-blue-100 text-blue-600 hover:bg-blue-200 transition-colors touch-manipulation flex-shrink-0"
+                                title="Read response aloud"
+                              >
+                                <Volume2 className="w-3 h-3" />
+                              </button>
+                            )}
+                          </div>
+                          <p className="text-xs sm:text-sm text-gray-500 mb-3">
+                            {formatTimestamp(item.timestamp)} • {item.user}
+                          </p>
+                          <div className="bg-white p-3 rounded text-sm text-gray-700 max-h-32 overflow-y-auto">
+                            {item.response}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* AI Capabilities */}
+              {activeTab === "capabilities" && (
+                <div className="space-y-4 sm:space-y-6">
+                  <h2 className="text-lg sm:text-xl font-semibold text-gray-800 text-center">
+                    What our AI can help you with
+                  </h2>
+                  {aiCapabilities ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                      <div className="space-y-3">
+                        <h3 className="text-base sm:text-lg font-medium text-purple-600">
+                          Capabilities
+                        </h3>
+                        <ul className="space-y-2">
+                          {aiCapabilities.capabilities?.map(
+                            (capability, idx) => (
+                              <li
+                                key={idx}
+                                className="flex items-start gap-2 text-sm sm:text-base"
+                              >
+                                <CheckCircle className="w-4 h-4 text-green-500 mt-1 flex-shrink-0" />
+                                <span className="text-gray-700">
+                                  {capability}
+                                </span>
+                              </li>
+                            )
+                          )}
+                        </ul>
+                      </div>
+
+                      <div className="space-y-3">
+                        <h3 className="text-base sm:text-lg font-medium text-blue-600">
+                          Example Queries
+                        </h3>
+                        <ul className="space-y-2">
+                          {aiCapabilities.examples?.map((example, idx) => (
+                            <li
+                              key={idx}
+                              className="text-sm sm:text-base text-gray-600 italic"
+                            >
+                              "{example}"
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      <Brain className="w-12 h-12 mx-auto mb-3 text-gray-300 animate-pulse" />
+                      <p className="text-sm sm:text-base">
+                        Loading AI capabilities...
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Sidebar - Quick Actions */}
+          <div className="space-y-4 sm:space-y-6">
+            {/* Quick Actions */}
+            <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-4">
+                Quick Actions
+              </h3>
+              <div className="space-y-3">
+                <button
+                  onClick={() =>
+                    handleSampleQuestion("Show me today's attendance summary")
+                  }
+                  className="w-full text-left p-3 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg hover:from-green-100 hover:to-emerald-100 transition-all border border-green-200 hover:border-green-300 touch-manipulation"
+                >
+                  <div className="text-sm font-medium text-green-800">
+                    Today's Summary
                   </div>
-                )}
+                  <div className="text-xs text-green-600">
+                    Get current attendance status
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => handleSampleQuestion("Who was absent today?")}
+                  className="w-full text-left p-3 bg-gradient-to-r from-red-50 to-pink-50 rounded-lg hover:from-red-100 hover:to-pink-100 transition-all border border-red-200 hover:border-red-300 touch-manipulation"
+                >
+                  <div className="text-sm font-medium text-red-800">
+                    Absent Users
+                  </div>
+                  <div className="text-xs text-red-600">
+                    Check who's missing today
+                  </div>
+                </button>
+
+                <button
+                  onClick={() =>
+                    handleSampleQuestion("Show me late arrivals today")
+                  }
+                  className="w-full text-left p-3 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-lg hover:from-yellow-100 hover:to-orange-100 transition-all border border-yellow-200 hover:border-yellow-300 touch-manipulation"
+                >
+                  <div className="text-sm font-medium text-yellow-800">
+                    Late Arrivals
+                  </div>
+                  <div className="text-xs text-yellow-600">
+                    Find late employees
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            {/* Voice Features */}
+            {speechSupported && (
+              <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+                <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-4">
+                  Voice Features
+                </h3>
+                <div className="space-y-3 text-sm sm:text-base">
+                  <div className="flex items-center gap-3">
+                    <Volume2 className="w-4 h-4 text-blue-500" />
+                    <span className="text-gray-700">
+                      AI responses read aloud
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Mic className="w-4 h-4 text-purple-500" />
+                    <span className="text-gray-700">Voice input supported</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Sparkles className="w-4 h-4 text-yellow-500" />
+                    <span className="text-gray-700">
+                      Enhanced accessibility
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                  <div className="text-xs sm:text-sm text-blue-800">
+                    <strong>Pro Tip:</strong> Use the microphone button to ask
+                    questions with your voice!
+                  </div>
+                </div>
               </div>
             )}
+
+            {/* System Status */}
+            <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-800 mb-4">
+                System Status
+              </h3>
+              <div className="space-y-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">AI Engine</span>
+                  <div
+                    className={`flex items-center gap-2 ${
+                      aiHealth?.status === "healthy"
+                        ? "text-green-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {aiHealth?.status === "healthy" ? (
+                      <CheckCircle className="w-4 h-4" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4" />
+                    )}
+                    <span className="font-medium">
+                      {aiHealth?.status || "Unknown"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">Voice Support</span>
+                  <div
+                    className={`flex items-center gap-2 ${
+                      speechSupported ? "text-green-600" : "text-gray-400"
+                    }`}
+                  >
+                    {speechSupported ? (
+                      <CheckCircle className="w-4 h-4" />
+                    ) : (
+                      <XCircle className="w-4 h-4" />
+                    )}
+                    <span className="font-medium">
+                      {speechSupported ? "Available" : "Not Supported"}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-600">Response Time</span>
+                  <span className="text-blue-600 font-medium">~2-3s</span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

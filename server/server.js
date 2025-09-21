@@ -86,7 +86,7 @@ app.use("/password", passwordResetRoutes);
 app.use("/bulk", bulkUserRoutes);
 
 // ✅ NEW: AI Analytics Routes
-app.use("/ai", aiAnalyticsRoutes);
+app.use("/api/ai-analytics", aiAnalyticsRoutes);
 
 // ✅ ENHANCED Health check endpoint
 app.get("/", (req, res) => {
