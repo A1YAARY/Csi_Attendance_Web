@@ -1,4 +1,3 @@
-// Qrcode.jsx - Complete Fixed Version
 import React, { useEffect, useRef, useState } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import { useNavigate } from "react-router-dom";
@@ -6,352 +5,213 @@ import axios from "axios";
 
 const NewQrcode = () => {
   const navigate = useNavigate();
-  const html5QrCodeRef = useRef(null);
-  const [scannerRunning, setScannerRunning] = useState(false);
-  const [data, setData] = useState("No result");
-  const [isCheckedIn, setIsCheckedIn] = useState(() => {
-    const inT = localStorage.getItem("checkInTime");
-    const outT = localStorage.getItem("checkOutTime");
-    return !!inT && !outT;
-  });
-  const [errorMessage, setErrorMessage] = useState("");
+  const qrRef = useRef(null);
+  const [running, setRunning] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
 
-  // Fixed BASE_URL - use consistent URL
   const BASE_URL =
     import.meta.env.VITE_BACKEND_BASE_URL ||
     "https://csi-attendance-web.onrender.com";
   const token = localStorage.getItem("accessToken");
 
-  const cancel = () => navigate("/");
+  // Determine next expected type based on local flags
+  const nextType = (() => {
+    const inT = localStorage.getItem("checkInTime");
+    const outT = localStorage.getItem("checkOutTime");
+    return inT && !outT ? "check-out" : "check-in";
+  })();
 
-  const isValidURL = (str) => {
+  // Extract code from plain text, JSON, or URL with ?code=
+  const extractCode = (decodedText) => {
     try {
-      new URL(str);
-      return true;
-    } catch {
-      return false;
-    }
+      const j = JSON.parse(decodedText);
+      if (j.code) return j.code.toString();
+    } catch {}
+    try {
+      const url = new URL(decodedText);
+      const c = url.searchParams.get("code");
+      if (c) return c.toString();
+    } catch {}
+    return decodedText?.toString().trim();
   };
 
-  // Helper function to find rear camera
-  const findRearCamera = (cameras) => {
-    // Look for rear camera (environment facing)
-    const rearCamera = cameras.find(
-      (camera) =>
-        camera.label.toLowerCase().includes("back") ||
-        camera.label.toLowerCase().includes("rear") ||
-        camera.label.toLowerCase().includes("environment")
-    );
-    // If no specific rear camera found, try to get the last camera (often rear on mobile)
-    return rearCamera || cameras[cameras.length - 1] || cameras[0];
-  };
-
-  // ✅ Fixed handleScanning function
-  const handleScanning = async (decodedText) => {
-    // Prevent multiple scans
+  const postScan = async (decodedText) => {
     if (isProcessing) return;
     setIsProcessing(true);
+    setErrorMsg("");
 
-    // Parse QR (could be plain text or JSON string)
-    let qrCode;
-    try {
-      const parsed = JSON.parse(decodedText);
-      qrCode = parsed.code || decodedText;
-    } catch {
-      qrCode = decodedText;
+    const code = extractCode(decodedText);
+    if (!code) {
+      setErrorMsg("Invalid QR content");
+      setIsProcessing(false);
+      return;
     }
 
-    // Prepare request body according to API spec
-    const requestBody = {
-      code: qrCode,
-      type: isCheckedIn ? "check-out" : "check-in",
-    };
-
-    console.log("📤 Sending request:", requestBody);
-
     try {
-      const res = await axios.post(`${BASE_URL}/attend/scan`, requestBody, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        withCredentials: true,
-      });
+      const res = await axios.post(
+        `${BASE_URL}/attend/scan`,
+        { code, type: nextType },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          withCredentials: true,
+          timeout: 10000,
+        }
+      );
 
-      console.log("✅ Response from backend:", res.data);
-
-      // Update check-in/out status based on current state
-      const now = new Date();
-      if (isCheckedIn) {
-        // Checking out
-        localStorage.setItem("checkOutTime", now.toISOString());
-      } else {
-        // Checking in
-        localStorage.setItem("checkInTime", now.toISOString());
+      // Update local phase flags so the next scan flips correctly
+      const now = new Date().toISOString();
+      if (nextType === "check-in") {
+        localStorage.setItem("checkInTime", now);
         localStorage.removeItem("checkOutTime");
+      } else {
+        localStorage.setItem("checkOutTime", now);
       }
 
-      // Navigate to success page
       navigate("/animation");
-    } catch (error) {
-      console.error("❌ Scan failed:", error.response?.data || error.message);
-      console.error("❌ Request that failed:", requestBody);
-      setErrorMessage(error.response?.data?.message || "Scan request failed.");
+    } catch (err) {
+      const msg = err.response?.data?.message || "Scan failed";
+      setErrorMsg(msg);
       setIsProcessing(false);
-
-      // Navigate to error page after showing error
-      setTimeout(() => {
-        navigate("/scan-error");
-      }, 2000);
     }
+  };
+
+  // Prefer rear camera for Android
+  const pickRear = (devices) => {
+    return (
+      devices.find((d) => (d.label || "").toLowerCase().includes("back")) ||
+      devices.find((d) => (d.label || "").toLowerCase().includes("rear")) ||
+      devices[devices.length - 1] ||
+      devices[0]
+    );
   };
 
   useEffect(() => {
-    const elementId = "qr-reader";
-    let scanner = null;
+    const id = "qr-canvas";
+    let scanner;
 
-    const startScanner = async () => {
+    const start = async () => {
       try {
-        scanner = new Html5Qrcode(elementId);
-        html5QrCodeRef.current = scanner;
+        scanner = new Html5Qrcode(id);
+        qrRef.current = scanner;
 
-        const devices = await Html5Qrcode.getCameras();
-        if (!devices || devices.length === 0) {
-          setErrorMessage("No camera found");
+        const cams = await Html5Qrcode.getCameras();
+        if (!cams || cams.length === 0) {
+          setErrorMsg("No camera found");
           return;
         }
-
-        // Use rear camera preferentially
-        const selectedCamera = findRearCamera(devices);
-        const cameraId = selectedCamera.id;
-
-        console.log("📱 Using camera:", selectedCamera.label);
+        const cam = pickRear(cams);
 
         await scanner.start(
-          cameraId,
+          cam.id,
           {
-            fps: 10,
-            qrbox: { width: 300, height: 300 },
-            aspectRatio: 0.7,
+            fps: 12,
+            qrbox: { width: 260, height: 260 },
+            aspectRatio: 1.33,
             disableFlip: true,
-            facingMode: "environment",
           },
-          (decodedText) => {
-            // Prevent multiple scans
-            if (isProcessing) return;
-
-            console.log("📷 Scanned:", decodedText);
-            setData(decodedText);
-            localStorage.setItem("scannedData", decodedText);
-
-            // Stop scanner immediately after scan
-            if (scanner && scannerRunning) {
-              scanner
-                .stop()
-                .then(() => {
-                  scanner.clear();
-                  setScannerRunning(false);
-                  // Handle the scan result after stopping
-                  handleScanning(decodedText);
-                })
-                .catch((err) => {
-                  console.warn("Scanner stop failed", err);
-                  // Handle scan even if stop failed
-                  handleScanning(decodedText);
-                });
-            } else {
-              // Handle scan if scanner not running
-              handleScanning(decodedText);
-            }
+          async (decodedText) => {
+            if (!running || isProcessing) return;
+            setRunning(false);
+            try {
+              await scanner.stop();
+              await scanner.clear();
+            } catch {}
+            await postScan(decodedText);
           },
-          (error) => {
-            // Ignore frequent scan errors
-            if (error && !error.includes("NotFoundException")) {
-              console.warn("Scan error:", error);
-            }
+          (scanErr) => {
+            // ignore continuous decode errors to keep UI smooth
           }
         );
 
-        setScannerRunning(true);
-      } catch (err) {
-        console.error("Failed to start scanner", err);
-        setErrorMessage("Failed to start scanner: " + err.message);
-
-        // Handle specific camera permission errors
-        if (err.name === "NotAllowedError") {
-          setErrorMessage(
-            "Camera permission denied. Please allow camera access and refresh the page."
-          );
-        } else if (err.name === "NotFoundError") {
-          setErrorMessage("No camera found on this device.");
-        } else if (err.name === "NotSupportedError") {
-          setErrorMessage("Camera not supported on this browser.");
-        }
+        setRunning(true);
+      } catch (e) {
+        setErrorMsg(e?.message || "Failed to start camera");
       }
     };
 
-    // Start scanner
-    startScanner();
+    start();
 
-    // Cleanup function
     return () => {
-      if (scanner && scannerRunning) {
-        scanner
-          .stop()
-          .then(() => {
-            scanner.clear();
-          })
-          .catch((err) => console.warn("Cleanup stop failed", err));
-      }
+      const stop = async () => {
+        try {
+          if (qrRef.current) {
+            const s = qrRef.current;
+            await s.stop();
+            await s.clear();
+          }
+        } catch {}
+      };
+      stop();
     };
-  }, []); // Remove dependency on scannerRunning to prevent re-initialization
+  }, []); // one-time init for Android-friendly behavior
+
+  const tryAgain = async () => {
+    setErrorMsg("");
+    setIsProcessing(false);
+    // Soft reload the component route for a clean camera session
+    navigate(0);
+  };
 
   return (
-    <div className="qr-scanner-container">
-      <div className="scanner-header">
-        <h2 className="scanner-title">
-          {isCheckedIn ? "Scan to Check Out" : "Scan to Check In"}
-        </h2>
-        <button onClick={cancel} className="cancel-button">
-          Cancel
-        </button>
-      </div>
-
-      {errorMessage && (
-        <div className="error-message">
-          <p>{errorMessage}</p>
+    <div className="min-h-screen w-full bg-gradient-to-b from-slate-900 to-slate-800 text-white flex flex-col items-center justify-start px-4 py-6">
+      <div className="w-full max-w-md">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold tracking-tight">
+            {nextType === "check-in" ? "Scan to Check‑In" : "Scan to Check‑Out"}
+          </h2>
+          <span className="text-xs px-2 py-1 rounded bg-emerald-500/15 text-emerald-300 border border-emerald-400/30">
+            {nextType.toUpperCase()}
+          </span>
         </div>
-      )}
 
-      <div className="scanner-wrapper">
-        <div id="qr-reader" className="qr-reader"></div>
+        <div className="relative rounded-2xl overflow-hidden border border-white/10 shadow-lg">
+          <div id="qr-canvas" className="w-full h-[320px] bg-black" />
 
-        {isProcessing && (
-          <div className="processing-overlay">
-            <p>Processing scan...</p>
+          {/* Neon scan line */}
+          <div className="pointer-events-none absolute inset-0">
+            <div className="absolute left-4 right-4 top-1/2 h-[2px] bg-gradient-to-r from-transparent via-cyan-300 to-transparent animate-pulse" />
+            <div className="absolute inset-0 border border-white/10 rounded-2xl" />
+          </div>
+
+          {/* Processing overlay */}
+          {isProcessing && (
+            <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+              <div className="h-10 w-10 border-2 border-cyan-300 border-t-transparent rounded-full animate-spin" />
+            </div>
+          )}
+        </div>
+
+        {errorMsg && (
+          <div className="mt-4 rounded-lg bg-red-500/15 border border-red-400/30 text-red-200 px-3 py-2 text-sm">
+            {errorMsg}
           </div>
         )}
 
-        {data !== "No result" && (
-          <div className="scan-result">
-            <p>Scanned: {data}</p>
-          </div>
-        )}
+        <div className="mt-5 flex gap-3">
+          <button
+            onClick={() => navigate(-1)}
+            className="flex-1 h-11 rounded-lg bg-white/10 hover:bg-white/15 border border-white/15 transition"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={tryAgain}
+            disabled={isProcessing}
+            className="flex-1 h-11 rounded-lg bg-cyan-500 hover:bg-cyan-600 transition disabled:opacity-60"
+          >
+            Scan Again
+          </button>
+        </div>
+
+        <p className="mt-3 text-xs text-white/70 text-center">
+          Hold the phone steady and center the QR in the box for fastest
+          detection.
+        </p>
       </div>
-
-      <style jsx>{`
-        .qr-scanner-container {
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          padding: 20px;
-          max-width: 500px;
-          margin: 0 auto;
-        }
-
-        .scanner-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          width: 100%;
-          margin-bottom: 20px;
-        }
-
-        .scanner-title {
-          font-size: 24px;
-          font-weight: bold;
-          color: #333;
-        }
-
-        .cancel-button {
-          padding: 10px 20px;
-          background-color: #f44336;
-          color: white;
-          border: none;
-          border-radius: 5px;
-          cursor: pointer;
-          font-size: 16px;
-        }
-
-        .cancel-button:hover {
-          background-color: #da190b;
-        }
-
-        .error-message {
-          background-color: #ffebee;
-          border: 1px solid #f44336;
-          border-radius: 5px;
-          padding: 15px;
-          margin-bottom: 20px;
-          width: 100%;
-          text-align: center;
-        }
-
-        .error-message p {
-          color: #f44336;
-          margin: 0;
-          font-weight: bold;
-        }
-
-        .scanner-wrapper {
-          position: relative;
-          width: 100%;
-          max-width: 400px;
-        }
-
-        .qr-reader {
-          width: 100%;
-          border-radius: 10px;
-          overflow: hidden;
-          box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-        }
-
-        .processing-overlay {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background-color: rgba(0, 0, 0, 0.7);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 10px;
-        }
-
-        .processing-overlay p {
-          color: white;
-          font-size: 18px;
-          font-weight: bold;
-        }
-
-        .scan-result {
-          margin-top: 15px;
-          padding: 10px;
-          background-color: #e8f5e8;
-          border: 1px solid #4caf50;
-          border-radius: 5px;
-          text-align: center;
-        }
-
-        .scan-result p {
-          color: #2e7d32;
-          margin: 0;
-          font-weight: bold;
-        }
-
-        @media (max-width: 768px) {
-          .scanner-header {
-            flex-direction: column;
-            gap: 10px;
-          }
-
-          .scanner-title {
-            font-size: 20px;
-          }
-        }
-      `}</style>
     </div>
   );
 };
