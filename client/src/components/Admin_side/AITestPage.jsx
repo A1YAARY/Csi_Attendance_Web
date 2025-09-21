@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import TextType from "../../reactbitscomponents/TextType";
+
 import { useAuth } from "../../context/AuthContext";
 import {
   Brain,
@@ -905,7 +907,13 @@ const AITestPage = () => {
                     ) : response ? (
                       <div className="space-y-4">
                         <div className="whitespace-pre-wrap text-gray-200 leading-relaxed">
-                          {response}
+                          <TextType
+                            text={[response]}
+                            typingSpeed={20}
+                            pauseDuration={1500}
+                            showCursor={true}
+                            cursorCharacter="|"
+                          />
                         </div>
 
                         <div className="flex items-center gap-4 pt-4 border-t border-white/10 text-xs text-gray-400">

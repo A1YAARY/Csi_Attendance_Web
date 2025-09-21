@@ -1,75 +1,57 @@
-import React from 'react'
+import React from "react";
+import { motion } from "framer-motion";
 
-const timepass = () => {
-    return (
-    <div>
-        <div className="w-full h-screen flex justify-center relative overflow-hidden">
-        <AnimatePresence>
-          {step === "logoAndText" && (
-          <div className="w-full h-full relative flex flex-col items-center">
-            <motion.div
-            className="h-[98px] w-[95px] absolute p-[15px]"
-            initial={{ top: "50%", left: "50%", x: "-50%", y: "-50%", scale: 2 }}
-            animate={{ top: "80px", left: "50%", x: "-50%", y: "0%", scale:1.4 }}
-            transition={{ duration: 1.5 }}
-            >
-              <img src="/Checkmark.png" alt="" />
-              <div className='font-semibold text-[16px] w-[350px] absolute left-[-25px] top-[88px]'>Attendance Marked</div>
-            </motion.div>
-            <motion.div
-            className="markedD flex flex-col items-center pt-[180px]" 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 2, duration: 0.8 }}
-            >
-            <div className="marked flex flex-col justify-center items-center h-[100px] w-[350px] gap-[10px]">
-              <div className="text flex flex-col justify-center items-center">
-              <span className='text-gray-400'>Your entry has been marked</span>
-            </div>
-          </div>
+const TimePass = () => {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-purple-100 to-blue-100 p-4">
+      <motion.div
+        initial={{ opacity: 0, y: 50 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.8 }}
+        className="text-center"
+      >
+        <motion.h1
+          className="text-[24px] sm:text-[32px] lg:text-[40px] xl:text-[48px] font-bold text-gray-800 mb-4 sm:mb-6"
+          animate={{ scale: [1, 1.05, 1] }}
+          transition={{ duration: 2, repeat: Infinity }}
+        >
+          Loading...
+        </motion.h1>
 
-      <div className="detail h-[450px] w-[350px] flex flex-col gap-[15px]">
-        <span className='font-semibold'>Details:</span>
-        <div className="info flex flex-col justify-center items-center h-[auto] border-slate-300 border-[1px] rounded-2xl">
-          <div className="info1 h-[64px] w-[310px] flex flex-col gap-[12px]">
-            <span className='text-sm font-semibold '>Name</span>
-            <span className='text-xs text-gray-500'>John Smith</span>
-          </div>
-          <div className="info1 h-[64px] w-[310px] flex flex-col gap-[12px]">
-            <span className='text-sm font-semibold '>Employee ID</span>
-            <span className='text-xs text-gray-500'>EMP0234</span>
-          </div>
-          <div className="info1 h-[64px] w-[310px] flex flex-col gap-[12px]">
-            <span className='text-sm font-semibold '>Department</span>
-            <span className='text-xs text-gray-500'>EXTC</span>
-          </div>
-          <div className="info1 h-[64px] w-[310px] flex flex-col gap-[12px]">
-            <span className='text-sm font-semibold '>Date</span>
-            <span className='text-xs text-gray-500'>05/07/2025</span>
-          </div>
-          <div className="info1 h-[64px] w-[310px] flex justify-between">
-            <div className="checkIn flex flex-col gap-[12px]">
-              <span className='text-sm font-semibold '>Check-in time</span>
-              <span className='text-xs text-gray-500'>08:45</span>
-            </div>
-            <div className="checkOut flex flex-col gap-[12px]">
-              <span className='text-sm font-semibold '>Check-out time</span>
-              <span className='text-xs text-gray-500'>--</span>
-            </div>
-          </div>
-        </div>
-        <button className='flex justify-center items-center mt-[20px] rounded-lg text-sm gap-3 bg-[#1D61E7] text-white w-[350px] h-[48px] shadow-xl/15'>
-          Go to Dashboard
-        </button>
-      </div>
+        <motion.div
+          className="flex justify-center space-x-2 sm:space-x-3"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+        >
+          {[0, 1, 2].map((i) => (
+            <motion.div
+              key={i}
+              className="w-3 h-3 sm:w-4 sm:h-4 lg:w-5 lg:h-5 bg-blue-500 rounded-full"
+              animate={{
+                scale: [1, 1.5, 1],
+                opacity: [0.3, 1, 0.3],
+              }}
+              transition={{
+                duration: 1.5,
+                repeat: Infinity,
+                delay: i * 0.2,
+              }}
+            />
+          ))}
+        </motion.div>
+
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1 }}
+          className="text-[14px] sm:text-[16px] lg:text-[18px] text-gray-600 mt-6 sm:mt-8"
+        >
+          Please wait while we prepare everything...
+        </motion.p>
       </motion.div>
-      </div>
-      )}
-
-      </AnimatePresence>
     </div>
-    </div>
-    )
-}
+  );
+};
 
-export default timepass
+export default TimePass;
