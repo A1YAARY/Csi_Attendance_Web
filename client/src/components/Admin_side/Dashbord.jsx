@@ -38,7 +38,7 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
   }, [records, todaysdata, allusers]);
 
   const calculateStats = () => {
-    console.log("Calculating stats with data:", { records, todaysdata, allusers });
+    // console.log("Calculating stats with data:", { records, todaysdata, allusers });
 
     // Get all users data
     let allUsersData = [];
@@ -54,7 +54,10 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
     let todaysAttendanceData = [];
     if (Array.isArray(todaysdata)) {
       todaysAttendanceData = todaysdata;
-    } else if (todaysdata?.attendanceRecords && Array.isArray(todaysdata.attendanceRecords)) {
+    } else if (
+      todaysdata?.attendanceRecords &&
+      Array.isArray(todaysdata.attendanceRecords)
+    ) {
       todaysAttendanceData = todaysdata.attendanceRecords;
     } else if (todaysdata?.data && Array.isArray(todaysdata.data)) {
       todaysAttendanceData = todaysdata.data;
@@ -64,31 +67,36 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
     let recordsData = [];
     if (Array.isArray(records)) {
       recordsData = records;
-    } else if (records?.attendanceRecords && Array.isArray(records.attendanceRecords)) {
+    } else if (
+      records?.attendanceRecords &&
+      Array.isArray(records.attendanceRecords)
+    ) {
       recordsData = records.attendanceRecords;
     } else if (records?.data && Array.isArray(records.data)) {
       recordsData = records.data;
     }
 
-    console.log("Processed data:", { allUsersData, todaysAttendanceData, recordsData });
+    // console.log("Processed data:", { allUsersData, todaysAttendanceData, recordsData });
 
     const totalEmployees = allUsersData.length;
 
     // Get today's date in YYYY-MM-DD format
-    const today = new Date().toISOString().split('T')[0];
+    const today = new Date().toISOString().split("T")[0];
     const currentTime = new Date();
     const currentHour = currentTime.getHours();
     const currentMinute = currentTime.getMinutes();
     const currentTimeInMinutes = currentHour * 60 + currentMinute;
 
     // Filter today's attendance records
-    const todaysRecords = [...todaysAttendanceData, ...recordsData].filter(record => {
-      if (!record.date) return false;
-      const recordDate = new Date(record.date).toISOString().split('T')[0];
-      return recordDate === today;
-    });
+    const todaysRecords = [...todaysAttendanceData, ...recordsData].filter(
+      (record) => {
+        if (!record.date) return false;
+        const recordDate = new Date(record.date).toISOString().split("T")[0];
+        return recordDate === today;
+      }
+    );
 
-    console.log("Today's records:", todaysRecords);
+    // console.log("Today's records:", todaysRecords);
 
     let onTimeCount = 0;
     let lateArrivalCount = 0;
@@ -100,7 +108,7 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
     const userAttendanceMap = new Map();
 
     // Process today's attendance records
-    todaysRecords.forEach(record => {
+    todaysRecords.forEach((record) => {
       const userId = record.userId || record._id || record.organizationId;
       if (!userId) return;
 
@@ -109,12 +117,12 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
           checkIn: null,
           checkOut: null,
           workingHours: null,
-          status: record.status
+          status: record.status,
         });
       }
 
       const userRecord = userAttendanceMap.get(userId);
-      
+
       // Update check in/out times
       if (record.checkInTime) {
         userRecord.checkIn = record.checkInTime;
@@ -128,17 +136,20 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
     });
 
     // Process each user to determine their status
-    allUsersData.forEach(user => {
+    allUsersData.forEach((user) => {
       const userId = user._id || user.id;
-      const userWorkingHours = user.workingHours || { start: "09:00", end: "17:00" };
-      
+      const userWorkingHours = user.workingHours || {
+        start: "09:00",
+        end: "17:00",
+      };
+
       // Convert working hours to minutes for comparison
       const startTime = userWorkingHours.start || "09:00";
       const endTime = userWorkingHours.end || "17:00";
-      
-      const [startHour, startMin] = startTime.split(':').map(Number);
-      const [endHour, endMin] = endTime.split(':').map(Number);
-      
+
+      const [startHour, startMin] = startTime.split(":").map(Number);
+      const [endHour, endMin] = endTime.split(":").map(Number);
+
       const workStartInMinutes = startHour * 60 + startMin;
       const workEndInMinutes = endHour * 60 + endMin;
 
@@ -153,23 +164,29 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
           // Parse check-in time
           let checkInMinutes = 0;
           try {
-            if (checkInTime.includes(':')) {
-              const [hour, min] = checkInTime.split(':').map(s => parseInt(s.replace(/[^0-9]/g, '')));
+            if (checkInTime.includes(":")) {
+              const [hour, min] = checkInTime
+                .split(":")
+                .map((s) => parseInt(s.replace(/[^0-9]/g, "")));
               checkInMinutes = hour * 60 + (min || 0);
-              
+
               // Handle AM/PM format
-              if (checkInTime.toLowerCase().includes('pm') && hour !== 12) {
+              if (checkInTime.toLowerCase().includes("pm") && hour !== 12) {
                 checkInMinutes += 12 * 60;
-              } else if (checkInTime.toLowerCase().includes('am') && hour === 12) {
+              } else if (
+                checkInTime.toLowerCase().includes("am") &&
+                hour === 12
+              ) {
                 checkInMinutes -= 12 * 60;
               }
             }
           } catch (error) {
-            console.error('Error parsing check-in time:', checkInTime);
+            console.error("Error parsing check-in time:", checkInTime);
           }
 
           // Determine if on time or late
-          if (checkInMinutes <= workStartInMinutes + 15) { // 15 minutes grace period
+          if (checkInMinutes <= workStartInMinutes + 15) {
+            // 15 minutes grace period
             onTimeCount++;
           } else {
             lateArrivalCount++;
@@ -182,43 +199,50 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
             // Check for early departure
             try {
               let checkOutMinutes = 0;
-              if (checkOutTime.includes(':')) {
-                const [hour, min] = checkOutTime.split(':').map(s => parseInt(s.replace(/[^0-9]/g, '')));
+              if (checkOutTime.includes(":")) {
+                const [hour, min] = checkOutTime
+                  .split(":")
+                  .map((s) => parseInt(s.replace(/[^0-9]/g, "")));
                 checkOutMinutes = hour * 60 + (min || 0);
-                
+
                 // Handle AM/PM format
-                if (checkOutTime.toLowerCase().includes('pm') && hour !== 12) {
+                if (checkOutTime.toLowerCase().includes("pm") && hour !== 12) {
                   checkOutMinutes += 12 * 60;
-                } else if (checkOutTime.toLowerCase().includes('am') && hour === 12) {
+                } else if (
+                  checkOutTime.toLowerCase().includes("am") &&
+                  hour === 12
+                ) {
                   checkOutMinutes -= 12 * 60;
                 }
               }
 
-              if (checkOutMinutes < workEndInMinutes - 30) { // 30 minutes before end time
+              if (checkOutMinutes < workEndInMinutes - 30) {
+                // 30 minutes before end time
                 earlyDeparturesCount++;
               }
             } catch (error) {
-              console.error('Error parsing check-out time:', checkOutTime);
+              console.error("Error parsing check-out time:", checkOutTime);
             }
           }
         }
       } else {
         // User has no attendance record for today
         // Check if work time has passed to mark as absent
-        if (currentTimeInMinutes > workStartInMinutes + 60) { // 1 hour after start time
+        if (currentTimeInMinutes > workStartInMinutes + 60) {
+          // 1 hour after start time
           absentCount++;
         }
       }
     });
 
-    console.log("Calculated stats:", {
-      totalEmployees,
-      onTimeCount,
-      lateArrivalCount,
-      activeSessionsCount,
-      earlyDeparturesCount,
-      absentCount
-    });
+    // console.log("Calculated stats:", {
+    //   totalEmployees,
+    //   onTimeCount,
+    //   lateArrivalCount,
+    //   activeSessionsCount,
+    //   earlyDeparturesCount,
+    //   absentCount
+    // });
 
     setStats({
       totalEmployees,
@@ -232,22 +256,22 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
 
   // Format current time for display
   const formatCurrentTime = (date) => {
-    return date.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
+    return date.toLocaleTimeString("en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
       hour12: true,
-      timeZone: 'Asia/Kolkata'
+      timeZone: "Asia/Kolkata",
     });
   };
 
   // Format current date for display
   const formatCurrentDate = (date) => {
-    return date.toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      timeZone: 'Asia/Kolkata'
+    return date.toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      timeZone: "Asia/Kolkata",
     });
   };
 
@@ -290,7 +314,9 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
                 <div className="flex justify-between w-full">
                   <div className="flex flex-col">
                     <div className="justify-between h-full flex flex-col">
-                      <p className="text-[32px] font-bold">{stats.totalEmployees}</p>
+                      <p className="text-[32px] font-bold">
+                        {stats.totalEmployees}
+                      </p>
                       <p className="text-[16px] font-semibold text-[#1A1C1E]">
                         Total Employees
                       </p>
@@ -298,7 +324,7 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
                     <div className="flex gap-[8px]">
                       <img className="h-[24px]" src="/add_green.svg" alt="" />
                       <p className="text-[14px] text-[#01AB06] font-medium">
-                        {stats.totalEmployees > 0 ? 'Active' : 'No'} Employees
+                        {stats.totalEmployees > 0 ? "Active" : "No"} Employees
                       </p>
                     </div>
                   </div>
@@ -322,7 +348,12 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
                     <div className="flex gap-[8px]">
                       <img className="h-[24px]" src="/grow_green.svg" alt="" />
                       <p className="text-[14px] text-[#01AB06] font-medium">
-                        {stats.onTime > 0 ? `${Math.round((stats.onTime/stats.totalEmployees)*100)}%` : '0%'} on time today
+                        {stats.onTime > 0
+                          ? `${Math.round(
+                              (stats.onTime / stats.totalEmployees) * 100
+                            )}%`
+                          : "0%"}{" "}
+                        on time today
                       </p>
                     </div>
                   </div>
@@ -344,9 +375,21 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
                       </p>
                     </div>
                     <div className="flex gap-[8px]">
-                      <img className="h-[24px]" src={stats.absent > 0 ? "/fall_red.svg" : "/grow_green.svg"} alt="" />
-                      <p className={`text-[14px] font-medium ${stats.absent > 0 ? 'text-[#AB0101]' : 'text-[#01AB06]'}`}>
-                        {stats.absent > 0 ? `${stats.absent} absent today` : 'All present today'}
+                      <img
+                        className="h-[24px]"
+                        src={
+                          stats.absent > 0 ? "/fall_red.svg" : "/grow_green.svg"
+                        }
+                        alt=""
+                      />
+                      <p
+                        className={`text-[14px] font-medium ${
+                          stats.absent > 0 ? "text-[#AB0101]" : "text-[#01AB06]"
+                        }`}
+                      >
+                        {stats.absent > 0
+                          ? `${stats.absent} absent today`
+                          : "All present today"}
                       </p>
                     </div>
                   </div>
@@ -359,15 +402,33 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
                 <div className="flex justify-between w-full">
                   <div className="flex flex-col">
                     <div className="justify-between h-full flex flex-col">
-                      <p className="text-[32px] font-bold">{stats.lateArrival}</p>
+                      <p className="text-[32px] font-bold">
+                        {stats.lateArrival}
+                      </p>
                       <p className="text-[16px] font-semibold text-[#1A1C1E]">
                         Late Arrival
                       </p>
                     </div>
                     <div className="flex gap-[8px]">
-                      <img className="h-[24px]" src={stats.lateArrival === 0 ? "/grow_green.svg" : "/fall_red.svg"} alt="" />
-                      <p className={`text-[14px] font-medium ${stats.lateArrival === 0 ? 'text-[#01AB06]' : 'text-[#AB0101]'}`}>
-                        {stats.lateArrival === 0 ? 'No late arrivals' : `${stats.lateArrival} late today`}
+                      <img
+                        className="h-[24px]"
+                        src={
+                          stats.lateArrival === 0
+                            ? "/grow_green.svg"
+                            : "/fall_red.svg"
+                        }
+                        alt=""
+                      />
+                      <p
+                        className={`text-[14px] font-medium ${
+                          stats.lateArrival === 0
+                            ? "text-[#01AB06]"
+                            : "text-[#AB0101]"
+                        }`}
+                      >
+                        {stats.lateArrival === 0
+                          ? "No late arrivals"
+                          : `${stats.lateArrival} late today`}
                       </p>
                     </div>
                   </div>
@@ -383,15 +444,33 @@ const Dashbord = ({ records, todaysdata, allusers }) => {
                 <div className="flex justify-between w-full">
                   <div className="flex flex-col">
                     <div className="justify-between h-full flex flex-col">
-                      <p className="text-[32px] font-bold">{stats.earlyDepartures}</p>
+                      <p className="text-[32px] font-bold">
+                        {stats.earlyDepartures}
+                      </p>
                       <p className="text-[16px] font-semibold text-[#1A1C1E]">
                         Early Departures
                       </p>
                     </div>
                     <div className="flex gap-[8px]">
-                      <img className="h-[24px]" src={stats.earlyDepartures === 0 ? "/grow_green.svg" : "/fall_red.svg"} alt="" />
-                      <p className={`text-[14px] font-medium ${stats.earlyDepartures === 0 ? 'text-[#01AB06]' : 'text-[#AB0101]'}`}>
-                        {stats.earlyDepartures === 0 ? 'No early departures' : `${stats.earlyDepartures} left early`}
+                      <img
+                        className="h-[24px]"
+                        src={
+                          stats.earlyDepartures === 0
+                            ? "/grow_green.svg"
+                            : "/fall_red.svg"
+                        }
+                        alt=""
+                      />
+                      <p
+                        className={`text-[14px] font-medium ${
+                          stats.earlyDepartures === 0
+                            ? "text-[#01AB06]"
+                            : "text-[#AB0101]"
+                        }`}
+                      >
+                        {stats.earlyDepartures === 0
+                          ? "No early departures"
+                          : `${stats.earlyDepartures} left early`}
                       </p>
                     </div>
                   </div>

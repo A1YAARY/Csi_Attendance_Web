@@ -6,20 +6,96 @@ const qrGenerator = require("../utils/qrGenarator");
 const QRCode = require("../models/Qrcode.models");
 const { sendMail } = require("../utils/mailer");
 
-
+// 🔑 EXTENDED TOKEN GENERATION - Tokens last for months
 const generateTokens = (userId) => {
-  const accessToken = jwt.sign({ userId }, process.env.JWT_SECRET, {
-    expiresIn: "2h", // Extended to 2 hours
-  });
-  const refreshToken = jwt.sign({ userId }, process.env.JWT_REFRESH_SECRET, {
-    expiresIn: "30d", // Extended to 30 days
-  });
+  const accessToken = jwt.sign(
+    { userId },
+    process.env.JWT_SECRET,
+    { expiresIn: "90d" } // 🚀 Extended to 90 days (3 months)
+  );
+  
+  const refreshToken = jwt.sign(
+    { userId },
+    process.env.JWT_REFRESH_SECRET,
+    { expiresIn: "180d" } // 🚀 Extended to 180 days (6 months)
+  );
+
   return { accessToken, refreshToken };
+};
+
+// 🔄 NEW: Token refresh endpoint
+const refreshToken = async (req, res) => {
+  try {
+    const { refreshToken } = req.cookies;
+    
+    if (!refreshToken) {
+      return res.status(401).json({
+        success: false,
+        message: "Refresh token not provided",
+        code: "NO_REFRESH_TOKEN"
+      });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+    } catch (error) {
+      return res.status(401).json({
+        success: false,
+        message: "Invalid or expired refresh token",
+        code: "INVALID_REFRESH_TOKEN"
+      });
+    }
+
+    const user = await User.findById(decoded.userId).populate("organizationId");
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+        code: "USER_NOT_FOUND"
+      });
+    }
+
+    const { accessToken, refreshToken: newRefreshToken } = generateTokens(user._id);
+
+    // Set new refresh token cookie
+    res.cookie("refreshToken", newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 180 * 24 * 60 * 60 * 1000, // 180 days
+    });
+
+    res.json({
+      success: true,
+      message: "Token refreshed successfully",
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+      organization: user.organizationId ? {
+        id: user.organizationId._id,
+        name: user.organizationId.name,
+      } : null,
+      accessToken,
+    });
+
+  } catch (error) {
+    console.error("Token refresh error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error during token refresh",
+      code: "SERVER_ERROR"
+    });
+  }
 };
 
 const register_orginization = async (req, res) => {
   try {
     const { email, password, name, organizationName } = req.body;
+
     if (!email || !password || !name || !organizationName) {
       return res.status(400).json({ message: "All fields are required" });
     }
@@ -86,7 +162,7 @@ const register_orginization = async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: 180 * 24 * 60 * 60 * 1000, // 180 days
     });
 
     res.status(201).json({
@@ -113,7 +189,8 @@ const register_orginization = async (req, res) => {
 
 const register_user = async (req, res) => {
   try {
-    const { email,  name, organizationCode,institute,department,password  } = req.body;
+    const { email, name, organizationCode, institute, department, password } = req.body;
+
     if (!email || !organizationCode || !name || !institute || !department) {
       return res.status(400).json({ message: "All fields are required" });
     }
@@ -128,12 +205,12 @@ const register_user = async (req, res) => {
       return res.status(400).json({ message: "Invalid organization code" });
     }
 
-     const user = new User({
+    const user = new User({
       email,
       password,
       name,
       role: "user",
-     institute,
+      institute,
       department,
       organizationId: organization._id,
     });
@@ -143,23 +220,20 @@ const register_user = async (req, res) => {
     const resetToken = jwt.sign(
       { userId: user._id },
       process.env.JWT_RESET_SECRET,
-      { expiresIn: "15m" }
+      { expiresIn: "24h" } // Extended to 24 hours
     );
 
-    
+    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
 
-const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
-
-// 🔹 Send reset password email
-await sendMail(
-  user.email,
-  "Set Your Account Password",
-  `<h3>Welcome to ${organization.name}</h3>
-   <p>You’ve been added to the organization. Please set your password:</p>
-   <a href="${resetLink}">${resetLink}</a>
-   <p>This link will expire in 15 minutes.</p>`
-);
-
+    // 🔹 Send reset password email
+    await sendMail(
+      user.email,
+      "Set Your Account Password",
+      `<h3>Welcome to ${organization.name}</h3>
+       <p>You've been added to the organization. Please set your password:</p>
+       <a href="${resetLink}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Set Password</a>
+       <p>This link will expire in 24 hours.</p>`
+    );
 
     const { accessToken, refreshToken } = generateTokens(user._id);
 
@@ -167,7 +241,7 @@ await sendMail(
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: 180 * 24 * 60 * 60 * 1000, // 180 days
     });
 
     res.status(201).json({
@@ -189,6 +263,7 @@ await sendMail(
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
+
     if (!email || !password) {
       return res
         .status(400)
@@ -211,7 +286,7 @@ const login = async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 7 * 24 * 60 * 60 * 1000,
+      maxAge: 180 * 24 * 60 * 60 * 1000, // 180 days
     });
 
     res.status(200).json({
@@ -222,12 +297,10 @@ const login = async (req, res) => {
         name: user.name,
         role: user.role,
       },
-      organization: user.organizationId
-        ? {
-            id: user.organizationId._id,
-            name: user.organizationId.name,
-          }
-        : null,
+      organization: user.organizationId ? {
+        id: user.organizationId._id,
+        name: user.organizationId.name,
+      } : null,
       accessToken,
     });
   } catch (err) {
@@ -240,6 +313,7 @@ const updateProfile = async (req, res) => {
   try {
     const { name, workingHours, password } = req.body;
     const updateData = {};
+
     if (name) updateData.name = name;
     if (workingHours) updateData.workingHours = workingHours;
     if (password) updateData.password = password;
@@ -269,6 +343,7 @@ const viewProfile = async (req, res) => {
     const user = await User.findById(req.user._id)
       .populate("organizationId", "name")
       .select("-password");
+
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
@@ -291,6 +366,7 @@ const logout = (req, res) => {
     secure: process.env.NODE_ENV === "production",
     sameSite: "strict",
   });
+
   res.status(200).json({ message: "Logged out successfully" });
 };
 
@@ -301,4 +377,5 @@ module.exports = {
   logout,
   updateProfile,
   viewProfile,
+  refreshToken, // 🆕 New refresh endpoint
 };

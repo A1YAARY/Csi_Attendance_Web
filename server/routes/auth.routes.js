@@ -7,6 +7,7 @@ const {
   logout,
   updateProfile,
   viewProfile,
+  refreshToken,
 } = require("../controllers/auth2.controller");
 const authMiddleware = require("../middleware/Auth.middleware");
 const role = require("../middleware/role.middleware");
@@ -31,6 +32,7 @@ router.post("/organization-register", register_orginization);
 
 // new user register
 router.post("/register-user", register_user);
+router.post("/refresh-token", refreshToken); // 🆕 NEW ROUTE
 
 // login
 router.post("/login", login);
