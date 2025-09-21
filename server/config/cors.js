@@ -8,11 +8,11 @@ const corsOptions = {
     const allowedOrigins = [
       // "*",
       "https://csi-attendance-frontend.onrender.com",
-      "https://csi-attendance-web-1-40fy.onrender.com",
-      "http://192.168.29.219:5173",
-      "http://localhost:5173",
-      "http://localhost:3000",
-      "http://localhost:3001",
+      // "https://csi-attendance-web-1-40fy.onrender.com",
+      // "http://192.168.29.219:5173",
+      // "http://localhost:5173",
+      // "http://localhost:3000",
+      // "http://localhost:3001",
       process.env.FRONTEND_URL,
     ].filter(Boolean); // Remove undefined values
 
