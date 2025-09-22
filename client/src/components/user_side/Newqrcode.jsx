@@ -5,227 +5,610 @@ import axios from "axios";
 
 const NewQrcode = () => {
   const navigate = useNavigate();
-  const scannerRef = useRef(null);
-  const busyRef = useRef(false);
+  const html5QrCodeRef = useRef(null);
+  const [scannerRunning, setScannerRunning] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [currentStatus, setCurrentStatus] = useState(null); // null, 'checked-in', 'checked-out'
 
-  const [ui, setUi] = useState({ ready: false, running: false, error: "" });
-  const [status, setStatus] = useState("checked-out");
-  const [cams, setCams] = useState([]);
-  const [selCam, setSelCam] = useState("");
-
-  const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL || "https://csi-attendance-web.onrender.com";
+  const BASE_URL =
+    import.meta.env.VITE_BACKEND_BASE_URL ||
+    "https://csi-attendance-web.onrender.com";
   const token = localStorage.getItem("accessToken");
 
-  const containerStyle = {
-    minHeight: "100vh",
-    backgroundColor: "#fff",
-    color: "#111",
-    fontFamily: "system-ui, -apple-system, Roboto, Segoe UI, Arial, sans-serif",
-    padding: 16,
-    display: "flex",
-    flexDirection: "column",
-    gap: 12,
-  };
-
-  const cardStyle = {
-    background: "#fff",
-    border: "1px solid #eee",
-    borderRadius: 12,
-    padding: 16,
-    boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-  };
-
-  const buttonStyle = {
-    width: "100%",
-    padding: 14,
-    borderRadius: 12,
-    border: "none",
-    background: "#111",
-    color: "#fff",
-    fontSize: 16,
-  };
-
-  const subtitle = { color: "#666", fontSize: 13 };
-
-  const parseQr = (text) => {
+  // Get user's current attendance status
+  const getUserStatus = async () => {
     try {
-      const obj = JSON.parse(text);
-      return {
-        code: obj.code ?? text,
-        qrType: obj.qrType || obj.type,
-      };
-    } catch {
-      return { code: text, qrType: undefined };
-    }
-  };
-
-  const getGeo = () =>
-    new Promise((resolve) => {
-      if (!navigator.geolocation) return resolve(null);
-      navigator.geolocation.getCurrentPosition(
-        (p) => resolve({ latitude: p.coords.latitude, longitude: p.coords.longitude, accuracy: p.coords.accuracy }),
-        () => resolve(null),
-        { enableHighAccuracy: true, timeout: 5000 }
-      );
-    });
-
-  const loadStatus = async () => {
-    try {
-      const r = await axios.get(`${BASE_URL}/attend/past?limit=1`, {
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      const response = await axios.get(`${BASE_URL}/attend/past?limit=1`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
       });
-      const arr = r.data?.data || r.data?.attendance || [];
-      setStatus(arr[0]?.type === "check-in" ? "checked-in" : "checked-out");
-    } catch {
-      setStatus("checked-out");
-    } finally {
-      setUi((s) => ({ ...s, ready: true }));
+
+      if (response.data.attendance && response.data.attendance.length > 0) {
+        const lastEntry = response.data.attendance[0];
+        setCurrentStatus(
+          lastEntry.type === "check-in" ? "checked-in" : "checked-out"
+        );
+      } else {
+        setCurrentStatus("checked-out"); // First time user
+      }
+    } catch (error) {
+      console.log("Could not fetch user status, defaulting to check-in");
+      setCurrentStatus("checked-out"); // Default to allow check-in
     }
   };
 
-  const nextActionByStatus = () => (status === "checked-in" ? "check-out" : "check-in");
-
-  const stopCamera = async () => {
-    try {
-      if (scannerRef.current && ui.running) {
-        await scannerRef.current.stop();
-        scannerRef.current.clear();
-      }
-    } catch {}
-    setUi((s) => ({ ...s, running: false }));
+  const getNextActionType = () => {
+    return currentStatus === "checked-in" ? "check-out" : "check-in";
   };
 
-  const handleDecode = async (text) => {
-    if (busyRef.current) return;
-    busyRef.current = true;
+  const getNextActionText = () => {
+    return currentStatus === "checked-in" ? "Check Out" : "Check In";
+  };
 
-    // 1) Stop camera immediately to prevent repeated decodes
-    await stopCamera();
+  const getStatusIcon = () => {
+    return currentStatus === "checked-in" ? "🔓" : "🔒";
+  };
 
-    // 2) Show interim page while posting (you mentioned “login screen” – navigate there first)
-    navigate("/login", { replace: true }); // change to your verification route if different
+  // Handle QR scan result
+  const handleScanning = async (decodedText) => {
+    if (isProcessing) return;
+    setIsProcessing(true);
 
     try {
-      const { code, qrType } = parseQr(text);
-      const type = qrType && (qrType === "check-in" || qrType === "check-out") ? qrType : nextActionByStatus();
-      const geo = await getGeo();
+      // Extract the QR code value from your format
+      let qrCode = decodedText;
 
-      const body = {
-        code,
-        type,
-        ...(geo ? { location: geo } : {}),
+      // If it's JSON, extract the code
+      try {
+        const parsed = JSON.parse(decodedText);
+        qrCode = parsed.code || decodedText;
+      } catch {
+        // Use as plain text
+        qrCode = decodedText;
+      }
+
+      console.log("🔍 Scanned QR Code:", qrCode);
+
+      const nextAction = getNextActionType();
+      console.log("📋 Next Action:", nextAction);
+
+      // Get location if available
+      let location = null;
+      if (navigator.geolocation) {
+        try {
+          const position = await new Promise((resolve, reject) => {
+            navigator.geolocation.getCurrentPosition(resolve, reject, {
+              timeout: 5000,
+              enableHighAccuracy: true,
+            });
+          });
+
+          location = {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+          };
+        } catch (locationError) {
+          console.log("Location not available:", locationError);
+        }
+      }
+
+      // Prepare request body according to API documentation
+      const requestBody = {
+        code: qrCode,
+        type: nextAction,
+        ...(location && { location }),
         deviceInfo: {
-          platform: "Android",
+          platform: navigator.platform || "Unknown",
           userAgent: navigator.userAgent,
         },
       };
 
-      const resp = await axios.post(`${BASE_URL}/attend/scan`, body, {
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        withCredentials: true,
-      });
+      console.log("📤 Sending request to /attend/scan:", requestBody);
 
-      // 3) Navigate to the respective page after success
-      if (type === "check-in") navigate("/checked-in", { replace: true });
-      else navigate("/checked-out", { replace: true });
-    } catch (e) {
-      const msg = e?.response?.data?.message || e?.message || "Scan failed";
-      setUi((s) => ({ ...s, error: msg }));
-      navigate("/scan-error", { replace: true });
+      const response = await axios.post(
+        `${BASE_URL}/attend/scan`,
+        requestBody,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          withCredentials: true,
+        }
+      );
+
+      console.log("✅ Scan successful:", response.data);
+
+      // Update status
+      setCurrentStatus(
+        nextAction === "check-in" ? "checked-in" : "checked-out"
+      );
+
+      // Navigate to success animation
+      setTimeout(() => {
+        navigate("/animation");
+      }, 500);
+    } catch (error) {
+      console.error("❌ Scan failed:", error);
+      const errorMsg =
+        error.response?.data?.message || error.message || "Scan failed";
+      setErrorMessage(errorMsg);
+
+      // Navigate back after showing error
+      setTimeout(() => {
+        navigate("/dashboard");
+      }, 3000);
     } finally {
-      busyRef.current = false;
+      setIsProcessing(false);
     }
   };
 
   useEffect(() => {
-    loadStatus();
-  }, []);
+    // Get user status first
+    getUserStatus();
 
-  useEffect(() => {
-    if (!ui.ready) return;
+    const elementId = "qr-reader";
+    let scanner = null;
 
-    let scanner;
-    const start = async () => {
+    const startScanner = async () => {
       try {
-        scanner = new Html5Qrcode("qr-box");
-        scannerRef.current = scanner;
+        scanner = new Html5Qrcode(elementId);
+        html5QrCodeRef.current = scanner;
 
         const devices = await Html5Qrcode.getCameras();
-        setCams(devices || []);
+        if (!devices || devices.length === 0) {
+          setErrorMessage("📷 No camera found on this device");
+          return;
+        }
 
-        const rear =
-          devices?.find((d) => (d.label || "").toLowerCase().includes("back") || (d.label || "").toLowerCase().includes("environment")) ||
-          devices?.[devices.length - 1] ||
-          devices?.[0];
+        // Prioritize rear camera for mobile
+        const rearCamera = devices.find(
+          (camera) =>
+            camera.label.toLowerCase().includes("back") ||
+            camera.label.toLowerCase().includes("rear") ||
+            camera.label.toLowerCase().includes("environment")
+        );
 
-        const id = selCam || rear?.id;
-        if (!id) throw new Error("No camera available");
+        const selectedCamera =
+          rearCamera || devices[devices.length - 1] || devices[0];
+        console.log("📱 Selected camera:", selectedCamera.label);
 
         await scanner.start(
-          id,
-          { fps: 15, qrbox: { width: 280, height: 280 }, aspectRatio: 1.0, disableFlip: false },
-          (txt) => handleDecode(txt),
-          () => {}
+          selectedCamera.id,
+          {
+            fps: 15,
+            qrbox: { width: 280, height: 280 },
+            aspectRatio: 1.0,
+            disableFlip: false,
+          },
+          (decodedText) => {
+            if (isProcessing) return;
+
+            console.log("📷 QR Detected:", decodedText);
+
+            // Stop scanner immediately
+            if (scanner && scannerRunning) {
+              scanner
+                .stop()
+                .then(() => {
+                  scanner.clear();
+                  setScannerRunning(false);
+                  handleScanning(decodedText);
+                })
+                .catch(() => {
+                  handleScanning(decodedText);
+                });
+            } else {
+              handleScanning(decodedText);
+            }
+          },
+          (error) => {
+            // Ignore frequent scan errors
+            if (error && !error.includes("NotFoundException")) {
+              console.warn("Scanner error:", error);
+            }
+          }
         );
-        setUi((s) => ({ ...s, running: true }));
+
+        setScannerRunning(true);
       } catch (err) {
-        setUi((s) => ({ ...s, error: err?.message || "Failed to start camera" }));
+        console.error("Scanner initialization failed:", err);
+
+        if (err.name === "NotAllowedError") {
+          setErrorMessage(
+            "📷 Camera permission denied. Please allow camera access."
+          );
+        } else if (err.name === "NotFoundError") {
+          setErrorMessage("📷 No camera found on this device.");
+        } else if (err.name === "NotSupportedError") {
+          setErrorMessage("📷 Camera not supported in this browser.");
+        } else {
+          setErrorMessage("📷 Failed to start camera: " + err.message);
+        }
       }
     };
 
-    start();
+    // Start scanner after a small delay to ensure DOM is ready
+    const timer = setTimeout(startScanner, 100);
+
+    // Cleanup
     return () => {
-      stopCamera();
+      clearTimeout(timer);
+      if (scanner && scannerRunning) {
+        scanner
+          .stop()
+          .then(() => {
+            scanner.clear();
+          })
+          .catch(console.warn);
+      }
     };
-  }, [ui.ready, selCam]);
+  }, []); // Remove dependencies to prevent re-initialization
+
+  const handleCancel = () => {
+    if (html5QrCodeRef.current && scannerRunning) {
+      html5QrCodeRef.current.stop().catch(console.warn);
+    }
+    navigate("/dashboard");
+  };
 
   return (
-    <div style={containerStyle}>
-      <div style={{ ...cardStyle }}>
-        <h2 style={{ margin: 0 }}>Scan QR</h2>
-        <p style={subtitle}>
-          {status === "checked-in" ? "Currently checked in — next scan will check out." : "Currently checked out — next scan will check in."}
-        </p>
-      </div>
-
-      <div style={{ ...cardStyle, display: "flex", flexDirection: "column", gap: 8 }}>
-        <label htmlFor="cam" style={{ fontSize: 13, color: "#444" }}>
-          Camera
-        </label>
-        <select
-          id="cam"
-          value={selCam}
-          onChange={(e) => setSelCam(e.target.value)}
-          style={{ padding: 12, borderRadius: 10, border: "1px solid #ddd", background: "#fff" }}
+    <div className="qr-scanner-container">
+      {/* Header */}
+      <div className="scanner-header">
+        <button
+          onClick={handleCancel}
+          className="back-button"
+          disabled={isProcessing}
         >
-          <option value="">Auto</option>
-          {cams.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.label || c.id}
-            </option>
-          ))}
-        </select>
+          ← Back
+        </button>
+        <h1 className="scanner-title">QR Scanner</h1>
+        <div className="spacer"></div>
       </div>
 
-      <div id="qr-box" style={{ width: "100%", maxWidth: 360, height: 360, margin: "0 auto", borderRadius: 12, background: "#fafafa", border: "1px solid #eee" }} />
+      {/* Status Card */}
+      <div className="status-card">
+        <div className="status-icon">{getStatusIcon()}</div>
+        <div className="status-text">
+          <h2>Ready to {getNextActionText()}</h2>
+          <p>
+            {currentStatus === "checked-in"
+              ? "You are currently checked in"
+              : "You are currently checked out"}
+          </p>
+        </div>
+      </div>
 
-      {ui.error && (
-        <div style={{ ...cardStyle, color: "#b00020" }}>
-          <strong>{ui.error}</strong>
+      {/* Error Message */}
+      {errorMessage && (
+        <div className="error-card">
+          <div className="error-icon">⚠️</div>
+          <p>{errorMessage}</p>
         </div>
       )}
 
-      <button
-        style={buttonStyle}
-        onClick={async () => {
-          if (ui.running) await stopCamera();
-          else setUi((s) => ({ ...s, ready: true }));
-        }}
-      >
-        {ui.running ? "Stop camera" : "Start camera"}
-      </button>
+      {/* Scanner Container */}
+      <div className="scanner-wrapper">
+        <div className="scanner-frame">
+          <div id="qr-reader" className="qr-reader"></div>
 
-      <p style={{ ...subtitle, textAlign: "center" }}>Android optimized • Single‑scan flow • Camera stops after decode</p>
+          {/* Scanner Overlay */}
+          <div className="scanner-overlay">
+            <div className="scan-frame">
+              <div className="corner top-left"></div>
+              <div className="corner top-right"></div>
+              <div className="corner bottom-left"></div>
+              <div className="corner bottom-right"></div>
+            </div>
+          </div>
+
+          {/* Processing Overlay */}
+          {isProcessing && (
+            <div className="processing-overlay">
+              <div className="spinner"></div>
+              <p>Processing scan...</p>
+            </div>
+          )}
+        </div>
+
+        <div className="scan-instruction">
+          <p>📱 Point your camera at the QR code</p>
+          <p>Scanning will happen automatically</p>
+        </div>
+      </div>
+
+      <style jsx>{`
+        .qr-scanner-container {
+          min-height: 100vh;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          padding: 20px;
+          display: flex;
+          flex-direction: column;
+          color: white;
+        }
+
+        .scanner-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 20px;
+          padding-top: env(safe-area-inset-top, 20px);
+        }
+
+        .back-button {
+          background: rgba(255, 255, 255, 0.2);
+          border: none;
+          color: white;
+          padding: 12px 16px;
+          border-radius: 12px;
+          font-size: 16px;
+          cursor: pointer;
+          backdrop-filter: blur(10px);
+          transition: all 0.2s ease;
+        }
+
+        .back-button:hover {
+          background: rgba(255, 255, 255, 0.3);
+          transform: translateY(-1px);
+        }
+
+        .back-button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .scanner-title {
+          font-size: 24px;
+          font-weight: bold;
+          text-align: center;
+          margin: 0;
+        }
+
+        .spacer {
+          width: 80px;
+        }
+
+        .status-card {
+          background: rgba(255, 255, 255, 0.15);
+          backdrop-filter: blur(20px);
+          border-radius: 20px;
+          padding: 20px;
+          margin-bottom: 20px;
+          display: flex;
+          align-items: center;
+          gap: 15px;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .status-icon {
+          font-size: 40px;
+          background: rgba(255, 255, 255, 0.2);
+          border-radius: 50%;
+          width: 60px;
+          height: 60px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .status-text h2 {
+          margin: 0 0 5px 0;
+          font-size: 20px;
+          font-weight: 600;
+        }
+
+        .status-text p {
+          margin: 0;
+          opacity: 0.8;
+          font-size: 14px;
+        }
+
+        .error-card {
+          background: rgba(255, 107, 107, 0.2);
+          backdrop-filter: blur(20px);
+          border-radius: 16px;
+          padding: 16px;
+          margin-bottom: 20px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          border: 1px solid rgba(255, 107, 107, 0.3);
+        }
+
+        .error-icon {
+          font-size: 24px;
+        }
+
+        .error-card p {
+          margin: 0;
+          font-size: 14px;
+        }
+
+        .scanner-wrapper {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 20px;
+        }
+
+        .scanner-frame {
+          position: relative;
+          width: 100%;
+          max-width: 350px;
+          aspect-ratio: 1;
+          background: rgba(0, 0, 0, 0.8);
+          border-radius: 20px;
+          overflow: hidden;
+          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .qr-reader {
+          width: 100%;
+          height: 100%;
+        }
+
+        .scanner-overlay {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          pointer-events: none;
+        }
+
+        .scan-frame {
+          width: 250px;
+          height: 250px;
+          position: relative;
+        }
+
+        .corner {
+          position: absolute;
+          width: 25px;
+          height: 25px;
+          border: 3px solid #00ff88;
+        }
+
+        .corner.top-left {
+          top: 0;
+          left: 0;
+          border-right: none;
+          border-bottom: none;
+          border-top-left-radius: 8px;
+        }
+
+        .corner.top-right {
+          top: 0;
+          right: 0;
+          border-left: none;
+          border-bottom: none;
+          border-top-right-radius: 8px;
+        }
+
+        .corner.bottom-left {
+          bottom: 0;
+          left: 0;
+          border-right: none;
+          border-top: none;
+          border-bottom-left-radius: 8px;
+        }
+
+        .corner.bottom-right {
+          bottom: 0;
+          right: 0;
+          border-left: none;
+          border-top: none;
+          border-bottom-right-radius: 8px;
+        }
+
+        .processing-overlay {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.8);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 15px;
+        }
+
+        .spinner {
+          width: 40px;
+          height: 40px;
+          border: 3px solid rgba(255, 255, 255, 0.3);
+          border-top: 3px solid #00ff88;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          0% {
+            transform: rotate(0deg);
+          }
+          100% {
+            transform: rotate(360deg);
+          }
+        }
+
+        .processing-overlay p {
+          margin: 0;
+          font-size: 16px;
+          font-weight: 500;
+        }
+
+        .scan-instruction {
+          text-align: center;
+          margin-bottom: env(safe-area-inset-bottom, 20px);
+        }
+
+        .scan-instruction p {
+          margin: 5px 0;
+          opacity: 0.8;
+          font-size: 14px;
+        }
+
+        /* Mobile optimizations */
+        @media (max-width: 480px) {
+          .qr-scanner-container {
+            padding: 15px;
+          }
+
+          .scanner-title {
+            font-size: 20px;
+          }
+
+          .status-card {
+            padding: 15px;
+          }
+
+          .status-icon {
+            width: 50px;
+            height: 50px;
+            font-size: 30px;
+          }
+
+          .status-text h2 {
+            font-size: 18px;
+          }
+
+          .scanner-frame {
+            max-width: 300px;
+          }
+
+          .scan-frame {
+            width: 200px;
+            height: 200px;
+          }
+        }
+
+        /* Landscape mobile optimization */
+        @media (orientation: landscape) and (max-height: 500px) {
+          .status-card {
+            padding: 10px 15px;
+          }
+
+          .scanner-frame {
+            max-width: 250px;
+          }
+
+          .scan-frame {
+            width: 180px;
+            height: 180px;
+          }
+        }
+      `}</style>
     </div>
   );
 };
