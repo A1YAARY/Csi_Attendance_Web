@@ -5,12 +5,22 @@ import axios from "axios";
 import { useAuth } from "../../context/AuthContext";
 import "react-toastify/dist/ReactToastify.css";
 import Magnet from "../../reactbitscomponents/Magnet";
+import {AiOutlineEye, AiOutlineEyeInvisible} from 'react-icons/ai';
 
 export const LoginPage = () => {
   const navigate = useNavigate();
   const { login, BASE_URL, setorginization } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [show, setshow] = useState(false);
+  const [loginadmin, setloginadmin] = useState(true);
+
+  const handleClick = () => {
+    setshow(!show)
+  }
+  const handleAdminLogin = () => {
+    setloginadmin(!loginadmin);
+  }
 
   const handleEmailLogin = async (e) => {
     const BASE_URL =
@@ -34,7 +44,7 @@ export const LoginPage = () => {
         localStorage.setItem("orginizationcode", res.data.organization.name);
         login(res.data.user, res.data.accessToken);
         toast.success("Login successful!");
-        navigate("/Teacherinfo");
+        loginadmin ? navigate("/Teacherinfo") : navigate("/admin");
       }
     } catch (error) {
       toast.error(error.response?.data?.message || "Login error");
@@ -75,7 +85,7 @@ export const LoginPage = () => {
               <h1 className="text-[24px] sm:text-[28px] lg:text-[36px] xl:text-[40px] font-bold tracking-tighter mb-2 lg:mb-6">
                 Sign in to your Account
                 <p className="text-[14px] sm:text-[16px] lg:text-[18px] text-[#404142] font-semibold tracking-normal mt-1">
-                  Staff Login
+                  {loginadmin ? "Staff" : "Admin"} Login
                 </p>
               </h1>
 
@@ -87,7 +97,7 @@ export const LoginPage = () => {
             </div>
 
             {/* Right side: Form */}
-            <div className="px-6 sm:px-8 lg:px-0 pb-8 lg:pb-0">
+            <div className="px-6 sm:px-8 lg:px-0 pb-8 lg:pb-0 flex flex-col items-center">
               <form
                 onSubmit={handleEmailLogin}
                 className="flex flex-col gap-4 lg:gap-6"
@@ -100,14 +110,15 @@ export const LoginPage = () => {
                   required
                   className="p-3 lg:p-4 rounded-lg border border-gray-300 focus:border-[#1D61E7] focus:outline-none focus:ring-2 focus:ring-[#1D61E7]/20 transition-all text-sm sm:text-base"
                 />
-                <input
-                  type="password"
-                  placeholder="Password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="p-3 lg:p-4 rounded-lg border border-gray-300 focus:border-[#1D61E7] focus:outline-none focus:ring-2 focus:ring-[#1D61E7]/20 transition-all text-sm sm:text-base"
-                />
+                <div className="flex items-center justify-between w-[95%]">
+          <input
+            type={show ? "text":"password"}
+            placeholder="Password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            className="p-3 rounded-lg border w-[348px]"
+          /><p onClick={handleClick}className="ml-[-30px] h-[20px]">{show ? <AiOutlineEyeInvisible></AiOutlineEyeInvisible>:<AiOutlineEye></AiOutlineEye>}</p></div>
                 <Magnet padding={90} disabled={false} magnetStrength={90}>
                   <div className="w-full flex gap-3 lg:gap-4">
                     <button
@@ -133,12 +144,12 @@ export const LoginPage = () => {
               </form>
 
               {/* Uncomment if needed */}
-              {/* <h3 className="text-[#6C7278] text-[12px] mt-4 text-center lg:text-left">
-                Don't have an account?{" "}
-                <a className="text-[#4D81E7] hover:underline" href="/register">
-                  Sign Up
-                </a>
-              </h3> */}
+              <h3 className="text-[#6C7278] text-[12px] mt-4 text-center lg:text-left flex ">
+                Or Login as {loginadmin ?"Admin/Oraganizer" : "Staff"}?{"  "}
+                <p className="text-[#4D81E7] hover:underline cursor-pointer" onClick={handleAdminLogin}>
+                  Login
+                </p>
+              </h3>
             </div>
           </div>
         </div>

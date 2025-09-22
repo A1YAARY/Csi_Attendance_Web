@@ -19,6 +19,7 @@ import { useAdminProtection } from "./hooks/useAdminProtection";
 import "cally";
 import AdminProtected from "./components/AdminProtected";
 import ClickSpark from "./reactbitscomponents/ClickSpark";
+import ResetPass from "./components/Admin_side/ResetPass";
 
 function App() {
   const location = useLocation();
@@ -149,6 +150,14 @@ function App() {
                 </ProtectedRoute>
               }
             />
+             <Route
+              path="/ResetPass"
+              element={
+                <ProtectedRoute>
+                  <ResetPass />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Admin Routes */}
             <Route
@@ -197,6 +206,8 @@ function App() {
           </Routes>
         </AnimatePresence>
       </ClickSpark>
+                        {/* <Navigate to="/login" replace /> */}
+
     </>
   );
 }

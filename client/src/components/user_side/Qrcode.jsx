@@ -279,7 +279,7 @@ const NewQrcode = () => {
           },
           (decodedText) => {
             if (!mountedRef.current || isProcessing) return;
-
+            navigate("/dashboard");
             console.log("QR Detected:", decodedText);
 
             // Stop scanner and handle result
