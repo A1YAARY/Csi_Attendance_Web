@@ -12,10 +12,14 @@ export const LoginPage = () => {
   const { login, BASE_URL, setorginization } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [show, setshow] = useState(false)
+  const [show, setshow] = useState(false);
+  const [loginadmin, setloginadmin] = useState(true);
 
   const handleClick = () => {
     setshow(!show)
+  }
+  const handleAdminLogin = () => {
+    setloginadmin(!loginadmin);
   }
 
   const handleEmailLogin = async (e) => {
@@ -40,7 +44,7 @@ export const LoginPage = () => {
         localStorage.setItem("orginizationcode", res.data.organization.name);
         login(res.data.user, res.data.accessToken);
         toast.success("Login successful!");
-        navigate("/Teacherinfo");
+        loginadmin ? navigate("/Teacherinfo") : navigate("/admin");
       }
     } catch (error) {
       toast.error(error.response?.data?.message || "Login error");
@@ -81,7 +85,7 @@ export const LoginPage = () => {
               <h1 className="text-[24px] sm:text-[28px] lg:text-[36px] xl:text-[40px] font-bold tracking-tighter mb-2 lg:mb-6">
                 Sign in to your Account
                 <p className="text-[14px] sm:text-[16px] lg:text-[18px] text-[#404142] font-semibold tracking-normal mt-1">
-                  Staff Login
+                  {loginadmin ? "Staff" : "Admin"} Login
                 </p>
               </h1>
 
@@ -140,11 +144,11 @@ export const LoginPage = () => {
               </form>
 
               {/* Uncomment if needed */}
-              <h3 className="text-[#6C7278] text-[12px] mt-4 text-center lg:text-left">
-                Login as Admin/Oraganizer?{"  "}
-                <a className="text-[#4D81E7] hover:underline" href="/register">
+              <h3 className="text-[#6C7278] text-[12px] mt-4 text-center lg:text-left flex ">
+                Or Login as {loginadmin ?"Admin/Oraganizer" : "Staff"}?{"  "}
+                <p className="text-[#4D81E7] hover:underline cursor-pointer" onClick={handleAdminLogin}>
                   Login
-                </a>
+                </p>
               </h3>
             </div>
           </div>
