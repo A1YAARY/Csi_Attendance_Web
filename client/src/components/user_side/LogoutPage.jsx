@@ -12,7 +12,7 @@ const Logout = () => {
     navigate("/");
   };
 
-  const cancel = () => navigate("/Dashboard");
+  const cancel = () => navigate("/TeacherInfo");
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-red-50 to-white p-4">
