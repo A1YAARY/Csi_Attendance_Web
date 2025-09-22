@@ -2,7 +2,7 @@ const express = require("express");
 const User = require("../models/user.models");
 const Organization = require("../models/organization.models");
 const jwt = require("jsonwebtoken");
-const qrGenerator = require("../utils/qrGenarator");
+const qrGenerator = require("../utils/qrGenerator");
 const QRCode = require("../models/Qrcode.models");
 const { sendMail } = require("../utils/mailer");
 
