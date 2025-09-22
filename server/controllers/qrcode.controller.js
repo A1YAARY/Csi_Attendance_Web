@@ -1,5 +1,5 @@
 const QRCode = require("../models/Qrcode.models");
-const qrGenerator = require("../utils/qrGenarator");
+const qrGenerator = require("../utils/qrGenerator");
 const Organization = require("../models/organization.models");
 
 exports.generateNewQRCode = async (req, res) => {

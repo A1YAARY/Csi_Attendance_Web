@@ -98,7 +98,6 @@ exports.scanQRCode = async (req, res) => {
 
     // Basic validation
     if (!code || !type) {
-      console.log("❌ Missing required fields");
       return res.status(400).json({
         success: false,
         message: "Missing required fields: code and type",
@@ -107,7 +106,6 @@ exports.scanQRCode = async (req, res) => {
     }
 
     if (!["check-in", "check-out"].includes(type)) {
-      console.log("❌ Invalid type:", type);
       return res.status(400).json({
         success: false,
         message: "Invalid type. Must be 'check-in' or 'check-out'",
@@ -124,7 +122,6 @@ exports.scanQRCode = async (req, res) => {
 
     // Prevent duplicate check-ins/check-outs
     if (lastAttendance && lastAttendance.type === type) {
-      console.log("❌ Duplicate scan attempt");
       return res.status(400).json({
         success: false,
         message: `You are already ${
@@ -134,7 +131,6 @@ exports.scanQRCode = async (req, res) => {
     }
 
     if (!lastAttendance && type === "check-out") {
-      console.log("❌ Checkout without checkin");
       return res.status(400).json({
         success: false,
         message: "Cannot check-out without checking in first today.",
@@ -144,38 +140,40 @@ exports.scanQRCode = async (req, res) => {
     // Verify QR code
     const qr = await QRCode.findOne({ code, active: true });
     if (!qr) {
-      console.log("❌ Invalid QR code:", code);
-      return res.status(400).json({
-        success: false,
-        message: "Invalid or expired QR code",
-      });
+      return res.status(400).json({ success: false, message: "Invalid or expired QR code" });
     }
 
     // Verify organization
     if (String(user.organizationId) !== String(qr.organizationId)) {
-      console.log("❌ Organization mismatch");
-      return res.status(403).json({
-        success: false,
-        message: "QR code doesn't belong to your organization",
-      });
+      return res.status(403).json({ success: false, message: "QR code doesn't belong to your organization" });
     }
 
     // Verify QR type matches request type
     if (qr.qrType !== type) {
-      console.log("❌ QR type mismatch");
-      return res.status(400).json({
-        success: false,
-        message: `This is a ${qr.qrType} QR code, but you're trying to ${type}`,
-      });
+      return res.status(400).json({ success: false, message: `This is a ${qr.qrType} QR code, but you're trying to ${type}` });
     }
 
-    // Use safe location
+    // ✅ Use safe location including radius
     const safeLocation =
       location && location.latitude && location.longitude
-        ? location
-        : { latitude: 0, longitude: 0, accuracy: 0 };
+        ? {
+            latitude: Number(location.latitude),
+            longitude: Number(location.longitude),
+            radius: Number(location.radius) || 100,
+          }
+        : { latitude: 0, longitude: 0, radius: 100 };
 
-    console.log("✅ Creating attendance record");
+    // ✅ Optional: check if user is within QR radius
+    const distance = require("geolib").getDistance(
+      { latitude: safeLocation.latitude, longitude: safeLocation.longitude },
+      { latitude: qr.location.latitude, longitude: qr.location.longitude }
+    );
+    if (distance > qr.location.radius) {
+      return res.status(400).json({
+        success: false,
+        message: "You are outside the allowed QR code radius",
+      });
+    }
 
     // Create attendance record
     const record = await Attendance.create({
@@ -185,6 +183,7 @@ exports.scanQRCode = async (req, res) => {
       type,
       location: safeLocation,
       deviceInfo: deviceInfo || {},
+      qrTimestamp: qr.timestamp, // ✅ store QR timestamp
       verified: true,
       verificationDetails: {
         locationMatch: true,
@@ -195,14 +194,8 @@ exports.scanQRCode = async (req, res) => {
       },
     });
 
-    console.log("✅ Attendance record created:", record._id);
-
     // Update daily timesheet
-    const timeSheet = await updateDailyTimeSheet(
-      user._id,
-      qr.organizationId,
-      record
-    );
+    const timeSheet = await updateDailyTimeSheet(user._id, qr.organizationId, record);
 
     // Update user activity
     user.lastActivity = type === "check-in";
@@ -217,13 +210,9 @@ exports.scanQRCode = async (req, res) => {
     const recordObj = record.toObject();
     recordObj.createdAtIST = new Date(record.createdAt.getTime() + istOffset);
 
-    console.log("✅ Sending success response");
-
     return res.status(200).json({
       success: true,
-      message: `${
-        type === "check-in" ? "Checked in" : "Checked out"
-      } successfully`,
+      message: `${type === "check-in" ? "Checked in" : "Checked out"} successfully`,
       attendance: recordObj,
       dailyStatus: {
         totalWorkingTime:
@@ -241,14 +230,177 @@ exports.scanQRCode = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to process attendance scan",
-      error:
-        process.env.NODE_ENV === "development"
-          ? error.message
-          : "Internal server error",
+      error: process.env.NODE_ENV === "development" ? error.message : "Internal server error",
       timestamp: new Date().toISOString(),
     });
   }
 };
+
+
+// exports.scanQRCode = async (req, res) => {
+//   try {
+//     console.log("📍 Scan request received:", {
+//       body: req.body,
+//       user: req.user?.email,
+//       timestamp: new Date().toISOString(),
+//     });
+
+//     const { code, location, type, deviceInfo } = req.body;
+//     const user = req.user;
+
+//     // Basic validation
+//     if (!code || !type) {
+//       console.log("❌ Missing required fields");
+//       return res.status(400).json({
+//         success: false,
+//         message: "Missing required fields: code and type",
+//         required: ["code", "type"],
+//       });
+//     }
+
+//     if (!["check-in", "check-out"].includes(type)) {
+//       console.log("❌ Invalid type:", type);
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid type. Must be 'check-in' or 'check-out'",
+//       });
+//     }
+
+//     // Check last attendance for the day
+//     const todayStart = new Date();
+//     todayStart.setHours(0, 0, 0, 0);
+//     const lastAttendance = await Attendance.findOne({
+//       userId: user._id,
+//       createdAt: { $gte: todayStart },
+//     }).sort({ createdAt: -1 });
+
+//     // Prevent duplicate check-ins/check-outs
+//     if (lastAttendance && lastAttendance.type === type) {
+//       console.log("❌ Duplicate scan attempt");
+//       return res.status(400).json({
+//         success: false,
+//         message: `You are already ${
+//           type === "check-in" ? "checked in" : "checked out"
+//         }. Please ${type === "check-in" ? "check out" : "check in"} first.`,
+//       });
+//     }
+
+//     if (!lastAttendance && type === "check-out") {
+//       console.log("❌ Checkout without checkin");
+//       return res.status(400).json({
+//         success: false,
+//         message: "Cannot check-out without checking in first today.",
+//       });
+//     }
+
+//     // Verify QR code
+//     const qr = await QRCode.findOne({ code, active: true });
+//     if (!qr) {
+//       console.log("❌ Invalid QR code:", code);
+//       return res.status(400).json({
+//         success: false,
+//         message: "Invalid or expired QR code",
+//       });
+//     }
+
+//     // Verify organization
+//     if (String(user.organizationId) !== String(qr.organizationId)) {
+//       console.log("❌ Organization mismatch");
+//       return res.status(403).json({
+//         success: false,
+//         message: "QR code doesn't belong to your organization",
+//       });
+//     }
+
+//     // Verify QR type matches request type
+//     if (qr.qrType !== type) {
+//       console.log("❌ QR type mismatch");
+//       return res.status(400).json({
+//         success: false,
+//         message: `This is a ${qr.qrType} QR code, but you're trying to ${type}`,
+//       });
+//     }
+
+//     // Use safe location
+//     const safeLocation =
+//       location && location.latitude && location.longitude
+//         ? location
+//         : { latitude: 0, longitude: 0, accuracy: 0 };
+
+//     console.log("✅ Creating attendance record");
+
+//     // Create attendance record
+//     const record = await Attendance.create({
+//       userId: user._id,
+//       organizationId: qr.organizationId,
+//       qrCodeId: qr._id,
+//       type,
+//       location: safeLocation,
+//       deviceInfo: deviceInfo || {},
+//       verified: true,
+//       verificationDetails: {
+//         locationMatch: true,
+//         qrCodeValid: true,
+//         timeValid: true,
+//         deviceTrusted: true,
+//         spoofingDetected: false,
+//       },
+//     });
+
+//     console.log("✅ Attendance record created:", record._id);
+
+//     // Update daily timesheet
+//     const timeSheet = await updateDailyTimeSheet(
+//       user._id,
+//       qr.organizationId,
+//       record
+//     );
+
+//     // Update user activity
+//     user.lastActivity = type === "check-in";
+//     await user.save();
+
+//     // Update QR usage count
+//     qr.usageCount += 1;
+//     await qr.save();
+
+//     // Format response
+//     const istOffset = 5.5 * 60 * 60 * 1000;
+//     const recordObj = record.toObject();
+//     recordObj.createdAtIST = new Date(record.createdAt.getTime() + istOffset);
+
+//     console.log("✅ Sending success response");
+
+//     return res.status(200).json({
+//       success: true,
+//       message: `${
+//         type === "check-in" ? "Checked in" : "Checked out"
+//       } successfully`,
+//       attendance: recordObj,
+//       dailyStatus: {
+//         totalWorkingTime:
+//           Math.floor(timeSheet.totalWorkingTime / 60) +
+//           "h " +
+//           (timeSheet.totalWorkingTime % 60) +
+//           "m",
+//         status: timeSheet.status,
+//         sessions: timeSheet.sessions.length,
+//       },
+//       timestamp: new Date().toISOString(),
+//     });
+//   } catch (error) {
+//     console.error("❌ Error in scanQRCode:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to process attendance scan",
+//       error:
+//         process.env.NODE_ENV === "development"
+//           ? error.message
+//           : "Internal server error",
+//       timestamp: new Date().toISOString(),
+//     });
+//   }
+// };
 
 // 🔥 Get User Past Attendance
 exports.getUserPastAttendance = async (req, res) => {

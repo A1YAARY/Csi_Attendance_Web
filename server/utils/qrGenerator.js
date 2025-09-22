@@ -4,22 +4,28 @@ const crypto = require("crypto");
 const QrGenerator = {
   generateQRCode: async (organizationId, location) => {
     try {
-      const timestamp = Date.now();
-      const randomBytes = crypto.randomBytes(16).toString("hex");
-      const code = `${organizationId}_${timestamp}_${randomBytes}`;
+      // Use fewer random bytes for a shorter payload
+      const timestamp = Math.floor(Date.now() / 1000); // Unix seconds – compact
+      const randomBytes = crypto.randomBytes(8).toString("hex"); // Not too long
 
+      // Keep location concise and rounded
       const qrData = {
-        code,
         organizationId,
-        location,
-        timestamp
+        location: {
+          latitude: Number(location.latitude).toFixed(5),
+          longitude: Number(location.longitude).toFixed(5),
+          radius: Number(location.radius) || 100,
+        },
+        timestamp, // seconds since epoch
+        code: randomBytes // unique token for server lookup
       };
 
+      // QR options optimized for scan reliability
       const qrCodeImage = await QRCode.toDataURL(JSON.stringify(qrData), {
-        errorCorrectionLevel: "H",
+        errorCorrectionLevel: "M", // Medium (recommended for this payload size)
         type: "image/png",
-        quality: 0.98,
-        margin: 1,
+        margin: 2,
+        width: 300,
         color: {
           dark: "#000000",
           light: "#ffffff",
@@ -27,7 +33,7 @@ const QrGenerator = {
       });
 
       return {
-        code,
+        code: randomBytes,
         qrData,
         qrCodeImage,
       };
@@ -38,7 +44,53 @@ const QrGenerator = {
   }
 };
 
-module.exports = QrGenerator;
+module.exports = QrGenerator;  
+
+
+
+
+
+// const QRCode = require("qrcode");
+// const crypto = require("crypto");
+
+// const QrGenerator = {
+//   generateQRCode: async (organizationId, location) => {
+//     try {
+//       const timestamp = Date.now();
+//       const randomBytes = crypto.randomBytes(16).toString("hex");
+//       const code = `${organizationId}_${timestamp}_${randomBytes}`;
+
+//       const qrData = {
+//         code,
+//         organizationId,
+//         location,
+//         timestamp
+//       };
+
+//       const qrCodeImage = await QRCode.toDataURL(JSON.stringify(qrData), {
+//         errorCorrectionLevel: "H",
+//         type: "image/png",
+//         quality: 0.98,
+//         margin: 1,
+//         color: {
+//           dark: "#000000",
+//           light: "#ffffff",
+//         },
+//       });
+
+//       return {
+//         code,
+//         qrData,
+//         qrCodeImage,
+//       };
+//     } catch (error) {
+//       console.error("QR code generation error:", error);
+//       throw error;
+//     }
+//   }
+// };
+
+// module.exports = QrGenerator;
 
 
 // // Enhanced qrGenerator.js
