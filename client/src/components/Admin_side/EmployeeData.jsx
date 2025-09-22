@@ -1,8 +1,60 @@
-import React, { useEffect } from "react";
+import React, { useEffect , useState , useRef} from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../context/AuthContext";
 
 export const EmployeeData = ({ allusers }) => {
   const navigate = useNavigate();
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+  const [openDropdownUserId, setOpenDropdownUserId] = useState(null);
+  const { deleteUser } = useAuth();
+  const [users, setUsers] = useState(allusers); // Local state
+  useEffect(() => {
+  setUsers(allusers);
+}, [allusers]);
+
+
+
+
+  const toggleDropdown = (userId) => {
+  setOpenDropdownUserId((prev) => (prev === userId ? null : userId));
+};
+
+
+  const handleReset = () => {
+    // alert('Reset clicked');
+    setIsOpen(false);
+  };
+
+  // const handleDelete = (userId) => {
+  //   // alert('Delete clicked');
+  //   setIsOpen(false);
+  //   deleteUser(userId);
+  // };
+  const handleDelete = async (userId) => {
+  try {
+    await deleteUser(userId); // API call
+    setUsers((prev) => prev.filter((user) => (user._id || user.id) !== userId)); // Remove from local state
+    setOpenDropdownUserId(null); // Close dropdown
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    alert("Failed to delete user.");
+  }
+};
+
+
+  // Close dropdown if clicked outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // useEffect(() => {
   //   console.log("EmployeeData received allusers:", allusers);
@@ -77,7 +129,7 @@ export const EmployeeData = ({ allusers }) => {
   return (
     <div className="bg-white rounded-b-lg lg:rounded-t-none shadow-sm overflow-hidden">
       <div className="divide-y divide-gray-200">
-        {allusers.map((record, index) => {
+        {users.map((record, index) => {
           const userId = record._id || record.id || `user-${index}`;
           const userName = record.name || record.fullName || "Unknown User";
           const userEmail = record.email || "No email provided";
@@ -131,18 +183,53 @@ export const EmployeeData = ({ allusers }) => {
                   <span className="text-sm text-gray-600">
                     {formatWorkingHours(record.workingHours)}
                   </span>
-                  <button
-                    onClick={(e) => handleMenuClick(e, userId)}
-                    className="ml-2 text-gray-400 hover:text-gray-600"
-                  >
-                    <svg
+                    {/* <svg
                       className="w-4 h-4"
                       fill="currentColor"
                       viewBox="0 0 20 20"
                     >
                       <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                    </svg>
-                  </button>
+                    </svg> */}
+          
+                  <div className="relative inline-block">
+  <button
+    onClick={(e) => {
+      e.stopPropagation();
+      toggleDropdown(userId);
+    }}
+    className="px-2 py-1 text-xl text-gray-700 hover:text-black focus:outline-none"
+  >
+    ⋮
+  </button>
+
+  {openDropdownUserId === userId && (
+    <div className="absolute right-0 mt-2 w-36 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
+      <div className="py-1">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleReset(userId);
+            setOpenDropdownUserId(null);
+          }}
+          className="block w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 text-left"
+        >
+          Reset
+        </button>
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDelete(userId);
+            setOpenDropdownUserId(null);
+          }}
+          className="block w-full px-4 py-2 text-sm text-red-600 hover:bg-red-100 text-left border-t border-black"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  )}
+</div>
+
                 </div>
               </div>
 
