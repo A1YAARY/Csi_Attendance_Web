@@ -13,9 +13,7 @@ const NewQrcode = () => {
   const [cams, setCams] = useState([]);
   const [selCam, setSelCam] = useState("");
 
-  const BASE_URL =
-    import.meta.env.VITE_BACKEND_BASE_URL ||
-    "https://csi-attendance-web.onrender.com";
+  const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL || "https://csi-attendance-web.onrender.com";
   const token = localStorage.getItem("accessToken");
 
   const containerStyle = {
@@ -65,12 +63,7 @@ const NewQrcode = () => {
     new Promise((resolve) => {
       if (!navigator.geolocation) return resolve(null);
       navigator.geolocation.getCurrentPosition(
-        (p) =>
-          resolve({
-            latitude: p.coords.latitude,
-            longitude: p.coords.longitude,
-            accuracy: p.coords.accuracy,
-          }),
+        (p) => resolve({ latitude: p.coords.latitude, longitude: p.coords.longitude, accuracy: p.coords.accuracy }),
         () => resolve(null),
         { enableHighAccuracy: true, timeout: 5000 }
       );
@@ -79,10 +72,7 @@ const NewQrcode = () => {
   const loadStatus = async () => {
     try {
       const r = await axios.get(`${BASE_URL}/attend/past?limit=1`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       });
       const arr = r.data?.data || r.data?.attendance || [];
       setStatus(arr[0]?.type === "check-in" ? "checked-in" : "checked-out");
@@ -93,8 +83,7 @@ const NewQrcode = () => {
     }
   };
 
-  const nextActionByStatus = () =>
-    status === "checked-in" ? "check-out" : "check-in";
+  const nextActionByStatus = () => (status === "checked-in" ? "check-out" : "check-in");
 
   const stopCamera = async () => {
     try {
@@ -118,10 +107,7 @@ const NewQrcode = () => {
 
     try {
       const { code, qrType } = parseQr(text);
-      const type =
-        qrType && (qrType === "check-in" || qrType === "check-out")
-          ? qrType
-          : nextActionByStatus();
+      const type = qrType && (qrType === "check-in" || qrType === "check-out") ? qrType : nextActionByStatus();
       const geo = await getGeo();
 
       const body = {
@@ -135,10 +121,7 @@ const NewQrcode = () => {
       };
 
       const resp = await axios.post(`${BASE_URL}/attend/scan`, body, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         withCredentials: true,
       });
 
@@ -171,11 +154,7 @@ const NewQrcode = () => {
         setCams(devices || []);
 
         const rear =
-          devices?.find(
-            (d) =>
-              (d.label || "").toLowerCase().includes("back") ||
-              (d.label || "").toLowerCase().includes("environment")
-          ) ||
+          devices?.find((d) => (d.label || "").toLowerCase().includes("back") || (d.label || "").toLowerCase().includes("environment")) ||
           devices?.[devices.length - 1] ||
           devices?.[0];
 
@@ -184,21 +163,13 @@ const NewQrcode = () => {
 
         await scanner.start(
           id,
-          {
-            fps: 15,
-            qrbox: { width: 280, height: 280 },
-            aspectRatio: 1.0,
-            disableFlip: false,
-          },
+          { fps: 15, qrbox: { width: 280, height: 280 }, aspectRatio: 1.0, disableFlip: false },
           (txt) => handleDecode(txt),
           () => {}
         );
         setUi((s) => ({ ...s, running: true }));
       } catch (err) {
-        setUi((s) => ({
-          ...s,
-          error: err?.message || "Failed to start camera",
-        }));
+        setUi((s) => ({ ...s, error: err?.message || "Failed to start camera" }));
       }
     };
 
@@ -213,20 +184,11 @@ const NewQrcode = () => {
       <div style={{ ...cardStyle }}>
         <h2 style={{ margin: 0 }}>Scan QR</h2>
         <p style={subtitle}>
-          {status === "checked-in"
-            ? "Currently checked in — next scan will check out."
-            : "Currently checked out — next scan will check in."}
+          {status === "checked-in" ? "Currently checked in — next scan will check out." : "Currently checked out — next scan will check in."}
         </p>
       </div>
 
-      <div
-        style={{
-          ...cardStyle,
-          display: "flex",
-          flexDirection: "column",
-          gap: 8,
-        }}
-      >
+      <div style={{ ...cardStyle, display: "flex", flexDirection: "column", gap: 8 }}>
         <label htmlFor="cam" style={{ fontSize: 13, color: "#444" }}>
           Camera
         </label>
@@ -234,12 +196,7 @@ const NewQrcode = () => {
           id="cam"
           value={selCam}
           onChange={(e) => setSelCam(e.target.value)}
-          style={{
-            padding: 12,
-            borderRadius: 10,
-            border: "1px solid #ddd",
-            background: "#fff",
-          }}
+          style={{ padding: 12, borderRadius: 10, border: "1px solid #ddd", background: "#fff" }}
         >
           <option value="">Auto</option>
           {cams.map((c) => (
@@ -250,18 +207,7 @@ const NewQrcode = () => {
         </select>
       </div>
 
-      <div
-        id="qr-box"
-        style={{
-          width: "100%",
-          maxWidth: 360,
-          height: 360,
-          margin: "0 auto",
-          borderRadius: 12,
-          background: "#fafafa",
-          border: "1px solid #eee",
-        }}
-      />
+      <div id="qr-box" style={{ width: "100%", maxWidth: 360, height: 360, margin: "0 auto", borderRadius: 12, background: "#fafafa", border: "1px solid #eee" }} />
 
       {ui.error && (
         <div style={{ ...cardStyle, color: "#b00020" }}>
@@ -279,9 +225,7 @@ const NewQrcode = () => {
         {ui.running ? "Stop camera" : "Start camera"}
       </button>
 
-      <p style={{ ...subtitle, textAlign: "center" }}>
-        Android optimized • Single‑scan flow • Camera stops after decode
-      </p>
+      <p style={{ ...subtitle, textAlign: "center" }}>Android optimized • Single‑scan flow • Camera stops after decode</p>
     </div>
   );
 };
