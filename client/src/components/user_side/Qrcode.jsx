@@ -1,819 +1,704 @@
-// import React, { useEffect, useRef, useState } from "react";
-// import { Html5Qrcode } from "html5-qrcode";
-// import { useNavigate } from "react-router-dom";
-// import axios from "axios";
-// import { useAuth } from "../../context/AuthContext";
-// import "react-toastify/dist/ReactToastify.css";
-
-// const Qrcode = () => {
-//   const navigate = useNavigate();
-//   const html5QrCodeRef = useRef(null);
-//   const [isCheckedIn, setIsCheckedIn] = useState(() => {
-//     const inT = localStorage.getItem("checkInTime");
-//     const outT = localStorage.getItem("checkOutTime");
-//     return !!inT && !outT;
-//   });
-
-//   const [data, setData] = useState("No result");
-//   const [scannerRunning, setScannerRunning] = useState(false);
-//   const token = localStorage.getItem("accessToken");
-//   // console.log(token)
-
-//   const cancel = () => navigate("/");
-
-//   const isValidURL = (str) => {
-//     try {
-//       new URL(str);
-//       return true;
-//     } catch {
-//       return false;
-//     }
-//   };
-//   const handleScanning = async (decodedText) => {
-//     const BASE_URL = "https://csi-attendance-web-s1yf.onrender.com"; // or your real backend URL
-
-//     try {
-//       const res = await axios.post(
-//         `${BASE_URL}/attend/scan`,
-//         { code: decodedText, qrType: isCheckedIn ? "check-Out" : "check-in" },
-//         { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
-//       );
-//       const qrData = JSON.parse(decodedText);
-//       // const res = await axios.post(
-//       //   `${BASE_URL}/attend/scan`,
-//       //   // { code : decodedText },
-//       //   qrData,
-//       //   {header:{Authorization : `Bearer ${token}`,},
-//       //   withCredentials: true ,}
-//       // );
-
-//       if (res.data) {
-//         console.log("Response:", res.data);
-//         navigate("/Complete");
-//       }
-//     } catch (error) {
-//       // console.error("Scan failed:", error.response?.data || error.message);
-//     }
-//   };
-
-//   // ✅ Send scanned data to backend
-//   // const handleScanning = async (e) => {
-//   //   try {
-//   //     const res = await axios.post(`${BASE_URL}/attend/scan`,
-//   //     {data: decodedText}, // or str: decodedText if backend expects "str"
-//   //     {withCredentials: true,}
-//   //   );
-//   //   if (res.data) {
-//   //     // login(res.data.user, res.data.accessToken);
-//   //     // toast.success("Login successful!");
-//   //     navigate("/Complete");
-//   //   }
-//   // } catch (error) {
-//   //   // toast.error(error.response?.data?.message || "Login error");
-//   // }
-//   //     e?.preventDefault();
-
-//   // .then((res) => {
-//   //   console.log("Data sent to backend:", res.data.code);
-//   //   // Handle success, navigate or show message if needed
-//   //   toast.success("QR processed!");
-//   // })
-//   // .catch((error) => {
-//   //   console.error("Error sending to backend:", error.response?.data || error.message);
-//   //   // Optional: show toast or alert
-//   //   toast.error("Failed to process QR code");
-
-//   // });
-//   // }
-
-//   const handleCheckIn = () => {
-//     const now = new Date();
-//     localStorage.setItem("checkInTime", now.toISOString());
-//     localStorage.removeItem("checkOutTime");
-//     setIsCheckedIn(true);
-//     // localStorage.setItem("token", res.data.token);
-//     navigate("/Complete");
-//   };
-
-//   const handleCheckOut = () => {
-//     const now = new Date();
-//     localStorage.setItem("checkOutTime", now.toISOString());
-//     setIsCheckedIn(false);
-//     navigate("/Dashboard");
-//   };
-
-//   const handleToggle = () => {
-//     handleScanning();
-//     if (isCheckedIn) handleCheckOut();
-//     else handleCheckIn();
-//     navigate("/complete");
-//   };
-
-//   useEffect(() => {
-//     const saved = localStorage.getItem("scannedData");
-//     if (saved) setData(saved);
-
-//     const elementId = "qr-reader";
-//     html5QrCodeRef.current = new Html5Qrcode(elementId);
-
-//     Html5Qrcode.getCameras().then((devices) => {
-//       if (!devices || devices.length === 0) {
-//         alert("No camera found");
-//         return;
-//       }
-
-//       const cameraId = devices[0].id;
-//       html5QrCodeRef.current
-//         .start(
-//           cameraId,
-//           {
-//             fps: 10,
-//             qrbox: { width: 300, height: 300 },
-//             aspectRatio: 0.7,
-//             disableFlip: true,
-//           },
-//           (decodedText) => {
-//             console.log(decodedText);
-//             setData(decodedText);
-//             localStorage.setItem("scannedData", decodedText);
-//             handleScanning(decodedText);
-
-//             // Stop scanner safely
-//             if (html5QrCodeRef.current && scannerRunning) {
-//               html5QrCodeRef.current
-//                 .stop()
-//                 .then(() => {
-//                   html5QrCodeRef.current.clear();
-//                   setScannerRunning(false);
-
-//                   // Open URL if scanned QR is a valid link
-//                   if (isValidURL(decodedText)) {
-//                     window.location.href = decodedText;
-//                   }
-//                 })
-//                 .catch(() => console.warn("Scanner stop failed"));
-//             }
-//           }
-//         )
-//         .then(() => setScannerRunning(true))
-//         .catch(() => alert("Failed to start scanner"));
-//     });
-//     // .catch(() => alert("Camera access denied"));
-
-//     return () => {
-//       if (html5QrCodeRef.current && scannerRunning) {
-//         html5QrCodeRef.current
-//           .stop()
-//           .then(() => html5QrCodeRef.current.clear())
-//           .catch(() => console.warn("Cleanup stop failed"));
-//       }
-//     };
-//   }, []);
-
-//   return (
-//     <div className="flex flex-col items-center justify-center w-screen h-[100dvh] gap-4 pt-[70px] pb-[30px]">
-//       {/* Close Button */}
-//       <img
-//         onClick={cancel}
-//         src="/src/assets/cross.png"
-//         className="h-[12px] absolute right-[15px] top-[25px] cursor-pointer"
-//         alt="Cancel"
-//       />
-
-//       {/* Title */}
-//       <div className="text flex flex-col items-center justify-center gap-0.5">
-//         <span className="font-bold text-lg">Scan Code</span>
-//         <span className="font-medium text-gray-400 text-xs">
-//           Scan QR Code to check securely
-//         </span>
-//       </div>
-
-//       {/* Scanner */}
-//       <div
-//         id="qr-reader"
-//         className="w-[350px] rounded-[22px] m-auto flex overflow-hidden"
-//       />
-
-//       {/* Toggle Button */}
-//       <button
-//         onClick={handleToggle}
-//         className={`flex justify-center items-center rounded-lg text-sm font-medium gap-3
-//           ${isCheckedIn ? "bg-red-500" : "bg-[#1D61E7]"}
-//           text-white w-[350px] h-[48px] shadow-[0px_4px_4px_0px_#00000040]
-//           active:shadow-[0px_2px_1px_0px_#00000040] transition-all duration-100`}
-//       >
-//         {isCheckedIn ? "Check Out" : "Check In"}
-//         <img
-//           src="/src/assets/check.png"
-//           className="h-[15px] invert-100"
-//           alt="Check"
-//         />
-//       </button>
-//     </div>
-//   );
-// };
-
-// export default Qrcode;
-// // import React, { useEffect, useRef, useState } from "react";
-// // import { Html5Qrcode } from "html5-qrcode";
-// // import { useNavigate } from "react-router-dom";
-// // import { useAuth } from "../../context/AuthContext";
-
-// // const Qrcode = () => {
-// //   const navigate = useNavigate();
-// //   const { BASE_URL } = useAuth();
-
-// //   // DOM and scanner refs
-// //   const readerRef = useRef(null);
-// //   const html5QrCodeRef = useRef(null);
-// //   const [isCheckedIn, setIsCheckedIn] = useState(() => {
-// //     const inT = localStorage.getItem("checkInTime");
-// //     const outT = localStorage.getItem("checkOutTime");
-// //     return !!inT && !outT;
-// //   });
-
-// //   const [data, setData] = useState("No result");
-// //   const [scannerRunning, setScannerRunning] = useState(false);
-
-// //   const cancel = () => navigate("/");
-
-// //   const isValidURL = (str) => {
-// //     try {
-// //       new URL(str);
-// //       return true;
-// //     } catch {
-// //       return false;
-// //     }
-// //   };
-
-// //   const handleCheckIn = () => {
-// //     const now = new Date();
-// //     localStorage.setItem("checkInTime", now.toISOString());
-// //     localStorage.removeItem("checkOutTime");
-// //     setIsCheckedIn(true);
-// //     navigate("/Complete");
-// //   };
-
-// //   const handleCheckOut = () => {
-// //     const now = new Date();
-// //     localStorage.setItem("checkOutTime", now.toISOString());
-// //     setIsCheckedIn(false);
-// //     navigate("/Dashboard");
-// //   };
-
-// //   const handleToggle = () => {
-// //     if (isCheckedIn) handleCheckOut();
-// //     else handleCheckIn();
-// //   };
-
-// //   useEffect(() => {
-// //     const saved = localStorage.getItem("scannedData");
-// //     if (saved) setData(saved);
-
-// //     const elementId = "qr-reader";
-// //     html5QrCodeRef.current = new Html5Qrcode(elementId);
-
-// //     Html5Qrcode.getCameras()
-// //       .then((devices) => {
-// //         if (!devices || devices.length === 0) {
-// //           alert("No camera found");
-// //           return;
-// //         }
-
-// //         const cameraId = devices[0].id;
-// //         html5QrCodeRef.current
-// //           .start(
-// //             cameraId,
-// //             { fps: 10, qrbox: { width: 300, height: 300 },aspectRatio: 0.7, disableFlip: true },
-// //             (decodedText) => {
-// //               setData(decodedText);
-// //               localStorage.setItem("scannedData", decodedText);
-
-// //               // Stop scanner safely
-// //               if (html5QrCodeRef.current && scannerRunning) {
-// //                 html5QrCodeRef.current
-// //                   .stop()
-// //                   .then(() => {
-// //                     html5QrCodeRef.current.clear();
-// //                     setScannerRunning(false);
-
-// //                     // Open URL if scanned QR is a valid link
-// //                     if (isValidURL(decodedText)) {
-// //                       window.location.href = decodedText;
-// //                     }
-// //                   })
-// //                   .catch(() => console.warn("Scanner stop failed"));
-// //               }
-// //             }
-// //           )
-// //           .then(() => setScannerRunning(true))
-// //           .catch(() => alert("Failed to start scanner"));
-// //       })
-// //       // .catch(() => alert("Camera access denied"));
-
-// //     return () => {
-// //       mountedRef.current = false;
-// //       stopScanner();
-// //     };
-// //   }, []);
-
-// //   return (
-// //     <div className="flex flex-col items-center justify-center w-screen h-[100dvh] gap-4 pt-[70px] pb-[30px] px-4">
-// //       {/* Close/Back Button */}
-// //       <img
-// //         // onClick={goBack}
-// //         src="/cross.png"
-// //         className="h-[12px] absolute right-[15px] top-[25px] cursor-pointer"
-// //         alt="Back"
-// //       />
-
-// //       {/* Title */}
-// //       <div className="text flex flex-col items-center justify-center gap-0.5">
-// //         <span className="font-bold text-lg">
-// //           {showTypeSelector ? "Select Attendance Type" : "Scan QR Code"}
-// //         </span>
-// //         <span className="font-medium text-gray-400 text-xs">
-// //           {showTypeSelector
-// //             ? "Choose check-in or check-out"
-// //             : `Scanning for ${selectedType}...`}
-// //         </span>
-// //       </div>
-
-// //       {/* Main Content */}
-// //       {showTypeSelector ? (
-// //         /* Type Selection Buttons */
-// //         <div className="flex flex-col gap-4 w-[350px] max-w-[90vw]">
-// //           <button
-// //             onClick={() => handleTypeSelection("check-in")}
-// //             className="flex justify-center items-center rounded-lg text-sm font-medium gap-3
-// //               bg-green-500 hover:bg-green-600 text-white w-full h-[48px] shadow-[0px_4px_4px_0px_#00000040]
-// //               active:shadow-[0px_2px_1px_0px_#00000040] transition-all duration-200"
-// //           >
-// //             Check In
-// //             <img src="/check.png" className="h-[15px] invert" alt="Check In" />
-// //           </button>
-
-// //           <button
-// //             onClick={() => handleTypeSelection("check-out")}
-// //             className="flex justify-center items-center rounded-lg text-sm font-medium gap-3
-// //               bg-red-500 hover:bg-red-600 text-white w-full h-[48px] shadow-[0px_4px_4px_0px_#00000040]
-// //               active:shadow-[0px_2px_1px_0px_#00000040] transition-all duration-200"
-// //           >
-// //             Check Out
-// //             <img
-// //               src="/check.png"
-// //               className="h-[15px] invert"
-// //               alt="Check Out"
-// //             />
-// //           </button>
-// //         </div>
-// //       ) : (
-// //         /* QR Scanner Section */
-// //         <div className="w-full max-w-md">
-// //           <div
-// //             ref={readerRef}
-// //             id="qr-reader"
-// //             className="mb-4 rounded-lg overflow-hidden border-2 border-gray-200"
-// //             style={{ width: "100%" }}
-// //           />
-
-// //           {isLoading && (
-// //             <div className="text-center mb-4">
-// //               <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mb-2" />
-// //               <p className="text-sm text-gray-600">Processing...</p>
-// //             </div>
-// //           )}
-
-// //           {message && (
-// //             <div
-// //               className={`text-center mb-4 p-3 rounded-lg font-medium ${
-// //                 message.includes("✅") || qrDetected
-// //                   ? "bg-green-100 text-green-700 border border-green-200"
-// //                   : message.includes("❌")
-// //                   ? "bg-red-100 text-red-700 border border-red-200"
-// //                   : message.includes("⚠️")
-// //                   ? "bg-yellow-100 text-yellow-700 border border-yellow-200"
-// //                   : "bg-blue-100 text-blue-700 border border-blue-200"
-// //               }`}
-// //             >
-// //               {message}
-// //               {qrDetected && detectedQrCode && (
-// //                 <div className="mt-2 text-sm bg-gray-50 p-2 rounded border">
-// //                   <strong>Detected Code:</strong> {detectedQrCode}
-// //                 </div>
-// //               )}
-// //             </div>
-// //           )}
-
-// //           {!scannerInitialized && !isLoading && !message.includes("❌") && (
-// //             <div className="text-center mb-4">
-// //               <button
-// //                 onClick={startScanner}
-// //                 className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-3 px-4 rounded-lg mb-2 transition duration-200"
-// //               >
-// //                 📷 Start Camera
-// //               </button>
-// //               <p className="text-xs text-gray-500">
-// //                 Make sure to allow camera permissions when prompted
-// //               </p>
-// //             </div>
-// //           )}
-
-// //           {message.includes("❌") && !isLoading && (
-// //             <div className="text-center mb-4">
-// //               <button
-// //                 onClick={() => {
-// //                   setScannerInitialized(false);
-// //                   setMessage("");
-// //                   setQrDetected(false);
-// //                   setDetectedQrCode("");
-// //                   // ADDED: reset processing guard on retry
-// //                   processingRef.current = false;
-// //                 }}
-// //                 className="w-full bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-4 rounded-lg transition duration-200"
-// //               >
-// //                 🔄 Try Again
-// //               </button>
-// //             </div>
-// //           )}
-// //         </div>
-// //       )}
-
-// //       {/* Back Button */}
-// //       <button
-// //         onClick={handleToggle}
-// //         className={`flex justify-center items-center rounded-lg text-sm font-medium gap-3
-// //           ${isCheckedIn ? "bg-red-500" : "bg-[#1D61E7]"}
-// //           text-white w-[350px] h-[48px] shadow-[0px_4px_4px_0px_#00000040]
-// //           active:shadow-[0px_2px_1px_0px_#00000040] transition-all duration-100`}
-// //       >
-// //         {showTypeSelector ? "🏠 Back to Dashboard" : "⬅️ Back"}
-// //       </button>
-// //     </div>
-// //   );
-// // };
-
-// // export default Qrcode;
-// // Qrcode.jsx
-
-// // import React, { useEffect, useRef, useState } from "react";
-// // import { Html5Qrcode } from "html5-qrcode";
-// // import { useNavigate } from "react-router-dom";
-// // import axios from "axios";
-
-// // const Qrcode = () => {
-// //   const navigate = useNavigate();
-// //   const html5QrCodeRef = useRef(null);
-
-// //   const [scannerRunning, setScannerRunning] = useState(false);
-// //   const [errorMessage, setErrorMessage] = useState("");
-// //   const [data, setData] = useState("No result");
-
-// //   const BASE_URL = "https://csi-attendance-web-s1yf.onrender.com"; // your backend
-
-// //   const cancel = () => {
-// //     navigate("/");
-// //   };
-
-// //   const isValidURL = (str) => {
-// //     try {
-// //       new URL(str);
-// //       return true;
-// //     } catch {
-// //       return false;
-// //     }
-// //   };
-
-// //   const handleScanning = async (decodedText) => {
-// //     // decodedText might be JSON string or plain string depending on QR
-// //     let parsedData = null;
-// //     try {
-// //       parsedData = JSON.parse(decodedText);
-// //     } catch(e) {
-// //       // If it's not JSON, wrap it
-// //       parsedData = { codeData: decodedText };
-// //     }
-
-// //     const token = localStorage.getItem("token");
-// //     if (!token) {
-// //       console.error("Scan failed: No token found in localStorage.");
-// //       setErrorMessage("You must login first.");
-// //       navigate("/login");  // redirect to login if needed
-// //       return;
-// //     }
-
-// //     try {
-// //       const res = await axios.post(
-// //         `${BASE_URL}/attend/scan`,
-// //         parsedData,
-// //         {
-// //           headers: {
-// //             Authorization: `Bearer ${token}`,
-// //             "Content-Type": "application/json"
-// //           },
-// //           withCredentials: true,
-// //         }
-// //       );
-// //       console.log("Scan successful:", res.data);
-// //       // navigate to success page
-// //       navigate("/Complete");
-// //     } catch (error) {
-// //       console.error("Scan failed:", error.response?.data || error.message);
-// //       setErrorMessage(
-// //         error.response?.data?.message || "Scan request failed."
-// //       );
-// //     }
-// //   };
-
-// //   useEffect(() => {
-// //     const elementId = "qr-reader";
-// //     html5QrCodeRef.current = new Html5Qrcode(elementId);
-
-// //     Html5Qrcode.getCameras()
-// //       .then((devices) => {
-// //         if (!devices || devices.length === 0) {
-// //           setErrorMessage("No camera found");
-// //           return;
-// //         }
-// //         const cameraId = devices[0].id;
-
-// //         html5QrCodeRef.current
-// //           .start(
-// //             cameraId,
-// //             { fps: 10, qrbox: { width: 300, height: 300 }, aspectRatio: 1.0, disableFlip: true },
-// //             (decodedText) => {
-// //               console.log("Decoded:", decodedText);
-// //               setData(decodedText);
-// //               localStorage.setItem("scannedData", decodedText);
-
-// //               handleScanning(decodedText);
-
-// //               // stop scanner
-// //               if (html5QrCodeRef.current && scannerRunning) {
-// //                 html5QrCodeRef.current
-// //                   .stop()
-// //                   .then(() => {
-// //                     html5QrCodeRef.current.clear();
-// //                     setScannerRunning(false);
-
-// //                     if (isValidURL(decodedText)) {
-// //                       window.location.href = decodedText;
-// //                     }
-// //                   })
-// //                   .catch((err) => {
-// //                     console.warn("Scanner stop failed", err);
-// //                   });
-// //               }
-// //             }
-// //           )
-// //           .then(() => {
-// //             setScannerRunning(true);
-// //           })
-// //           .catch((err) => {
-// //             console.error("Failed to start scanner", err);
-// //             setErrorMessage("Failed to start scanner");
-// //           });
-// //       })
-// //       .catch((err) => {
-// //         console.error("Error getting cameras", err);
-// //         setErrorMessage("Error accessing camera");
-// //       });
-
-// //     return () => {
-// //       if (html5QrCodeRef.current && scannerRunning) {
-// //         html5QrCodeRef.current
-// //           .stop()
-// //           .then(() => {
-// //             html5QrCodeRef.current.clear();
-// //           })
-// //           .catch((err) => console.warn("Cleanup stop failed", err));
-// //       }
-// //     };
-// //   }, [scannerRunning]);
-
-// //   return (
-// //     <div style={{ padding: 20 }}>
-// //       <h2>Scan QR Code</h2>
-// //       {errorMessage && <div style={{ color: "red" }}>{errorMessage}</div>}
-// //       <div id="qr-reader" style={{ width: 350, height: 350, border: "1px solid #ccc" }}></div>
-// //       <div>Scanned data: {data}</div>
-// //       <button onClick={cancel}>Cancel</button>
-// //     </div>
-// //   );
-// // };
-
-// // export default Qrcode;
-
 import React, { useEffect, useRef, useState, useCallback } from "react";
-import { Html5Qrcode, Html5QrcodeScanner } from "html5-qrcode";
+import { Html5Qrcode } from "html5-qrcode";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
+import axios from "axios";
 
-const Qrcode = () => {
+const NewQrcode = () => {
   const navigate = useNavigate();
-  const { BASEURL, getAuthHeaders } = useAuth();
   const html5QrCodeRef = useRef(null);
-  const scannerRef = useRef(null);
-  const processingRef = useRef(false);
-
+  const mountedRef = useRef(true);
   const [scannerRunning, setScannerRunning] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [message, setMessage] = useState("");
-  const [selectedType, setSelectedType] = useState("check-in");
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [currentStatus, setCurrentStatus] = useState(null);
 
-  const handleScanSuccess = useCallback(
-    async (decodedText) => {
-      // Prevent multiple simultaneous scans
-      if (processingRef.current) return;
-      processingRef.current = true;
+  const BASE_URL =
+    import.meta.env.VITE_BACKEND_BASE_URL ||
+    "https://csi-attendance-web.onrender.com";
+  const token = localStorage.getItem("accessToken");
 
-      setIsLoading(true);
-      setMessage("Processing QR code...");
+  // Cleanup function to prevent memory leaks
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
-      try {
-        const response = await fetch(`${BASEURL}/attend/scan`, {
-          method: "POST",
-          headers: getAuthHeaders(),
-          body: JSON.stringify({
-            code: decodedText,
-            type: selectedType,
-          }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP ${response.status}`);
-        }
-
-        const result = await response.json();
-        console.log("Scan successful:", result);
-
-        // Stop scanner before navigation
-        if (scannerRef.current) {
-          await scannerRef.current.clear();
-        }
-
-        navigate("/animation");
-      } catch (error) {
-        console.error("Scan failed:", error);
-        setMessage(`❌ ${error.message || "Scan failed. Please try again."}`);
-        processingRef.current = false;
-      } finally {
-        setIsLoading(false);
-      }
-    },
-    [BASEURL, getAuthHeaders, selectedType, navigate]
-  );
-
-  const initializeScanner = useCallback(() => {
-    if (scannerRef.current) {
-      scannerRef.current.clear();
+  const getUserStatus = useCallback(async () => {
+    if (!token) {
+      setErrorMessage("Authentication required. Please login again.");
+      setTimeout(() => navigate("/login"), 2000);
+      return;
     }
 
-    const config = {
-      fps: 30, // Higher FPS for faster detection
-      qrbox: { width: 280, height: 280 },
-      aspectRatio: 1.0,
-      disableFlip: false,
-      videoConstraints: {
-        facingMode: "environment", // Use back camera on mobile
-        width: { min: 640, ideal: 1280, max: 1920 },
-        height: { min: 480, ideal: 720, max: 1080 },
-      },
-    };
+    try {
+      const response = await axios.get(`${BASE_URL}/attend/past?limit=1`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 10000,
+      });
 
-    scannerRef.current = new Html5QrcodeScanner("qr-reader", config, false);
+      if (!mountedRef.current) return;
 
-    scannerRef.current.render(handleScanSuccess, (error) => {
-      // Only log actual errors, not "No QR code found" messages
-      if (!error.includes("No QR code found")) {
-        console.warn("QR scan error:", error);
+      if (response.data.attendance?.length > 0) {
+        const lastEntry = response.data.attendance[0];
+        setCurrentStatus(
+          lastEntry.type === "check-in" ? "checked-in" : "checked-out"
+        );
+      } else {
+        setCurrentStatus("checked-out");
       }
-    });
+    } catch (error) {
+      if (!mountedRef.current) return;
 
-    setScannerRunning(true);
-  }, [handleScanSuccess]);
+      if (error.response?.status === 401) {
+        setErrorMessage("Session expired. Please login again.");
+        setTimeout(() => navigate("/login"), 2000);
+        return;
+      }
 
-  const stopScanner = useCallback(() => {
-    if (scannerRef.current && scannerRunning) {
-      scannerRef.current.clear();
-      setScannerRunning(false);
+      console.log("Could not fetch user status:", error.message);
+      setCurrentStatus("checked-out");
+    }
+  }, [BASE_URL, token, navigate]);
+
+  const getNextActionType = () => {
+    return currentStatus === "checked-in" ? "check-out" : "check-in";
+  };
+
+  const getNextActionText = () => {
+    return currentStatus === "checked-in" ? "Check Out" : "Check In";
+  };
+
+  const getStatusIcon = () => {
+    return currentStatus === "checked-in" ? "🔓" : "🔒";
+  };
+
+  const stopScanner = useCallback(async () => {
+    if (html5QrCodeRef.current && scannerRunning) {
+      try {
+        await html5QrCodeRef.current.stop();
+        html5QrCodeRef.current.clear();
+        if (mountedRef.current) {
+          setScannerRunning(false);
+        }
+      } catch (error) {
+        console.warn("Error stopping scanner:", error);
+      }
     }
   }, [scannerRunning]);
 
-  const handleTypeChange = (type) => {
-    setSelectedType(type);
-    setMessage("");
-    processingRef.current = false;
-  };
+  const handleScanning = useCallback(
+    async (decodedText) => {
+      if (isProcessing || !mountedRef.current) return;
+
+      setIsProcessing(true);
+
+      try {
+        let qrCode = decodedText;
+
+        // Handle JSON format QR codes
+        try {
+          const parsed = JSON.parse(decodedText);
+          qrCode = parsed.code || decodedText;
+        } catch {
+          // Use as plain text if not JSON
+        }
+
+        console.log("Scanned QR Code:", qrCode);
+
+        const nextAction = getNextActionType();
+        console.log("Next Action:", nextAction);
+
+        // Get location with timeout
+        let location = null;
+        if (navigator.geolocation) {
+          try {
+            const position = await new Promise((resolve, reject) => {
+              const timeoutId = setTimeout(() => {
+                reject(new Error("Location timeout"));
+              }, 5000);
+
+              navigator.geolocation.getCurrentPosition(
+                (pos) => {
+                  clearTimeout(timeoutId);
+                  resolve(pos);
+                },
+                (err) => {
+                  clearTimeout(timeoutId);
+                  reject(err);
+                },
+                {
+                  timeout: 5000,
+                  enableHighAccuracy: true,
+                  maximumAge: 60000,
+                }
+              );
+            });
+
+            location = {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+            };
+          } catch (locationError) {
+            console.log("Location not available:", locationError.message);
+          }
+        }
+
+        const requestBody = {
+          code: qrCode,
+          type: nextAction,
+          ...(location && { location }),
+          deviceInfo: {
+            platform: navigator.platform || "Unknown",
+            userAgent: navigator.userAgent,
+          },
+        };
+
+        console.log("Sending request to /attend/scan:", requestBody);
+
+        const response = await axios.post(
+          `${BASE_URL}/attend/scan`,
+          requestBody,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            withCredentials: true,
+            timeout: 15000,
+          }
+        );
+
+        console.log("Scan successful:", response.data);
+
+        if (!mountedRef.current) return;
+
+        // Update status
+        setCurrentStatus(
+          nextAction === "check-in" ? "checked-in" : "checked-out"
+        );
+
+        // Stop scanner before navigation
+        await stopScanner();
+
+        // Navigate to success animation
+        setTimeout(() => {
+          if (mountedRef.current) {
+            navigate("/animation");
+          }
+        }, 500);
+      } catch (error) {
+        console.error("Scan failed:", error);
+
+        if (!mountedRef.current) return;
+
+        let errorMsg = "Scan failed. Please try again.";
+
+        if (error.response) {
+          if (error.response.status === 401) {
+            errorMsg = "Session expired. Please login again.";
+            setTimeout(() => navigate("/login"), 2000);
+            return;
+          } else if (error.response.status === 400) {
+            errorMsg =
+              error.response.data?.message || "Invalid QR code or request.";
+          } else if (error.response.status === 403) {
+            errorMsg = "You don't have permission to perform this action.";
+          } else {
+            errorMsg = error.response.data?.message || errorMsg;
+          }
+        } else if (error.code === "ECONNABORTED") {
+          errorMsg =
+            "Request timeout. Please check your connection and try again.";
+        } else {
+          errorMsg = error.message || errorMsg;
+        }
+
+        setErrorMessage(errorMsg);
+
+        // Navigate back after showing error
+        setTimeout(() => {
+          if (mountedRef.current) {
+            navigate("/dashboard");
+          }
+        }, 3000);
+      } finally {
+        if (mountedRef.current) {
+          setIsProcessing(false);
+        }
+      }
+    },
+    [isProcessing, getNextActionType, BASE_URL, token, navigate, stopScanner]
+  );
 
   useEffect(() => {
-    initializeScanner();
+    getUserStatus();
+
+    const elementId = "qr-reader";
+    let scanner = null;
+
+    const startScanner = async () => {
+      if (!mountedRef.current) return;
+
+      try {
+        scanner = new Html5Qrcode(elementId);
+        html5QrCodeRef.current = scanner;
+
+        const devices = await Html5Qrcode.getCameras();
+        if (!devices || devices.length === 0) {
+          if (mountedRef.current) {
+            setErrorMessage("No camera found on this device");
+          }
+          return;
+        }
+
+        // Prioritize rear camera
+        const rearCamera = devices.find(
+          (camera) =>
+            camera.label.toLowerCase().includes("back") ||
+            camera.label.toLowerCase().includes("rear") ||
+            camera.label.toLowerCase().includes("environment")
+        );
+
+        const selectedCamera =
+          rearCamera || devices[devices.length - 1] || devices[0];
+        console.log("Selected camera:", selectedCamera.label);
+
+        await scanner.start(
+          selectedCamera.id,
+          {
+            fps: 15,
+            qrbox: { width: 280, height: 280 },
+            aspectRatio: 1.0,
+            disableFlip: false,
+          },
+          (decodedText) => {
+            if (!mountedRef.current || isProcessing) return;
+
+            console.log("QR Detected:", decodedText);
+
+            // Stop scanner and handle result
+            stopScanner().then(() => {
+              handleScanning(decodedText);
+            });
+          },
+          (error) => {
+            // Ignore frequent scan errors (NotFoundException is normal)
+            if (error && !error.includes("NotFoundException")) {
+              console.warn("Scanner error:", error);
+            }
+          }
+        );
+
+        if (mountedRef.current) {
+          setScannerRunning(true);
+        }
+      } catch (err) {
+        console.error("Scanner initialization failed:", err);
+
+        if (!mountedRef.current) return;
+
+        let errorMsg = "Failed to start camera. ";
+
+        if (err.name === "NotAllowedError") {
+          errorMsg += "Please allow camera access and refresh the page.";
+        } else if (err.name === "NotFoundError") {
+          errorMsg += "No camera found on this device.";
+        } else if (err.name === "NotSupportedError") {
+          errorMsg += "Camera not supported in this browser.";
+        } else {
+          errorMsg += err.message;
+        }
+
+        setErrorMessage(errorMsg);
+      }
+    };
+
+    const timer = setTimeout(startScanner, 100);
 
     return () => {
+      clearTimeout(timer);
       stopScanner();
-      processingRef.current = false;
     };
-  }, [selectedType]); // Reinitialize when type changes
+  }, [getUserStatus, handleScanning, stopScanner, isProcessing]);
+
+  const handleCancel = useCallback(() => {
+    stopScanner().then(() => {
+      navigate("/dashboard");
+    });
+  }, [stopScanner, navigate]);
+
+  // Redirect if no token
+  useEffect(() => {
+    if (!token) {
+      navigate("/login");
+    }
+  }, [token, navigate]);
+
+  if (!token) {
+    return null; // Prevent flash of content before redirect
+  }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      {/* Close Button */}
-      <button
-        onClick={() => navigate("/")}
-        className="absolute top-6 right-6 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-gray-100 transition-colors z-10"
-        aria-label="Close"
-      >
-        <svg
-          className="w-6 h-6 text-gray-600"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
+    <div className="qr-scanner-container">
+      {/* Header */}
+      <div className="scanner-header">
+        <button
+          onClick={handleCancel}
+          className="back-button"
+          disabled={isProcessing}
         >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M6 18L18 6M6 6l12 12"
-          />
-        </svg>
-      </button>
+          ← Back
+        </button>
+        <h1 className="scanner-title">QR Scanner</h1>
+        <div className="spacer"></div>
+      </div>
 
-      <div className="w-full max-w-md mx-auto bg-white rounded-2xl shadow-xl p-6 space-y-6">
-        {/* Header */}
-        <div className="text-center space-y-2">
-          <h1 className="text-2xl font-bold text-gray-800">Scan QR Code</h1>
-          <p className="text-gray-600 text-sm">
-            Select attendance type and scan the QR code
-          </p>
+      {/* Status Card */}
+      {currentStatus && (
+        <div className="status-card">
+          <div className="status-icon">{getStatusIcon()}</div>
+          <div className="status-text">
+            <h2>Ready to {getNextActionText()}</h2>
+            <p>
+              {currentStatus === "checked-in"
+                ? "You are currently checked in"
+                : "You are currently checked out"}
+            </p>
+          </div>
         </div>
+      )}
 
-        {/* Type Selection */}
-        <div className="flex space-x-2 bg-gray-100 p-1 rounded-lg">
-          <button
-            onClick={() => handleTypeChange("check-in")}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
-              selectedType === "check-in"
-                ? "bg-green-500 text-white shadow-sm"
-                : "text-gray-600 hover:text-gray-800"
-            }`}
-          >
-            Check In
-          </button>
-          <button
-            onClick={() => handleTypeChange("check-out")}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-all ${
-              selectedType === "check-out"
-                ? "bg-red-500 text-white shadow-sm"
-                : "text-gray-600 hover:text-gray-800"
-            }`}
-          >
-            Check Out
-          </button>
+      {/* Error Message */}
+      {errorMessage && (
+        <div className="error-card">
+          <div className="error-icon">⚠️</div>
+          <p>{errorMessage}</p>
         </div>
+      )}
 
-        {/* Scanner Container */}
-        <div className="relative">
-          <div
-            id="qr-reader"
-            className="w-full rounded-lg overflow-hidden"
-            style={{ minHeight: "300px" }}
-          />
+      {/* Scanner Container */}
+      <div className="scanner-wrapper">
+        <div className="scanner-frame">
+          <div id="qr-reader" className="qr-reader"></div>
 
-          {/* Overlay for loading */}
-          {isLoading && (
-            <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg">
-              <div className="bg-white rounded-lg p-4 flex items-center space-x-3">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-500" />
-                <span className="text-sm font-medium">Processing...</span>
-              </div>
+          {/* Scanner Overlay */}
+          <div className="scanner-overlay">
+            <div className="scan-frame">
+              <div className="corner top-left"></div>
+              <div className="corner top-right"></div>
+              <div className="corner bottom-left"></div>
+              <div className="corner bottom-right"></div>
+            </div>
+          </div>
+
+          {/* Processing Overlay */}
+          {isProcessing && (
+            <div className="processing-overlay">
+              <div className="spinner"></div>
+              <p>Processing scan...</p>
             </div>
           )}
         </div>
 
-        {/* Status Message */}
-        {message && (
-          <div
-            className={`text-center p-3 rounded-lg text-sm font-medium ${
-              message.includes("✅")
-                ? "bg-green-100 text-green-700"
-                : message.includes("❌")
-                ? "bg-red-100 text-red-700"
-                : "bg-blue-100 text-blue-700"
-            }`}
-          >
-            {message}
-          </div>
-        )}
-
-        {/* Instructions */}
-        <div className="text-center space-y-2 text-xs text-gray-500">
-          <p>• Position the QR code within the scanning area</p>
-          <p>• Make sure there's adequate lighting</p>
-          <p>• Hold your device steady for best results</p>
+        <div className="scan-instruction">
+          <p>Point your camera at the QR code</p>
+          <p>Scanning will happen automatically</p>
         </div>
       </div>
+
+      <style jsx>{`
+        .qr-scanner-container {
+          min-height: 100vh;
+          background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+          padding: 20px;
+          display: flex;
+          flex-direction: column;
+          color: white;
+        }
+
+        .scanner-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          margin-bottom: 20px;
+          padding-top: env(safe-area-inset-top, 20px);
+        }
+
+        .back-button {
+          background: rgba(255, 255, 255, 0.2);
+          border: none;
+          color: white;
+          padding: 12px 16px;
+          border-radius: 12px;
+          font-size: 16px;
+          cursor: pointer;
+          backdrop-filter: blur(10px);
+          transition: all 0.2s ease;
+        }
+
+        .back-button:hover:not(:disabled) {
+          background: rgba(255, 255, 255, 0.3);
+          transform: translateY(-1px);
+        }
+
+        .back-button:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
+        .scanner-title {
+          font-size: 24px;
+          font-weight: bold;
+          text-align: center;
+          margin: 0;
+        }
+
+        .spacer {
+          width: 80px;
+        }
+
+        .status-card {
+          background: rgba(255, 255, 255, 0.15);
+          backdrop-filter: blur(20px);
+          border-radius: 20px;
+          padding: 20px;
+          margin-bottom: 20px;
+          display: flex;
+          align-items: center;
+          gap: 15px;
+          border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .status-icon {
+          font-size: 40px;
+          background: rgba(255, 255, 255, 0.2);
+          border-radius: 50%;
+          width: 60px;
+          height: 60px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+
+        .status-text h2 {
+          margin: 0 0 5px 0;
+          font-size: 20px;
+          font-weight: 600;
+        }
+
+        .status-text p {
+          margin: 0;
+          opacity: 0.8;
+          font-size: 14px;
+        }
+
+        .error-card {
+          background: rgba(255, 107, 107, 0.2);
+          backdrop-filter: blur(20px);
+          border-radius: 16px;
+          padding: 16px;
+          margin-bottom: 20px;
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          border: 1px solid rgba(255, 107, 107, 0.3);
+        }
+
+        .error-icon {
+          font-size: 24px;
+        }
+
+        .error-card p {
+          margin: 0;
+          font-size: 14px;
+        }
+
+        .scanner-wrapper {
+          flex: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 20px;
+        }
+
+        .scanner-frame {
+          position: relative;
+          width: 100%;
+          max-width: 350px;
+          aspect-ratio: 1;
+          background: rgba(0, 0, 0, 0.8);
+          border-radius: 20px;
+          overflow: hidden;
+          box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .qr-reader {
+          width: 100%;
+          height: 100%;
+        }
+
+        .scanner-overlay {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          pointer-events: none;
+        }
+
+        .scan-frame {
+          width: 250px;
+          height: 250px;
+          position: relative;
+        }
+
+        .corner {
+          position: absolute;
+          width: 25px;
+          height: 25px;
+          border: 3px solid #00ff88;
+        }
+
+        .corner.top-left {
+          top: 0;
+          left: 0;
+          border-right: none;
+          border-bottom: none;
+          border-top-left-radius: 8px;
+        }
+
+        .corner.top-right {
+          top: 0;
+          right: 0;
+          border-left: none;
+          border-bottom: none;
+          border-top-right-radius: 8px;
+        }
+
+        .corner.bottom-left {
+          bottom: 0;
+          left: 0;
+          border-right: none;
+          border-top: none;
+          border-bottom-left-radius: 8px;
+        }
+
+        .corner.bottom-right {
+          bottom: 0;
+          right: 0;
+          border-left: none;
+          border-top: none;
+          border-bottom-right-radius: 8px;
+        }
+
+        .processing-overlay {
+          position: absolute;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.8);
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          justify-content: center;
+          gap: 15px;
+        }
+
+        .spinner {
+          width: 40px;
+          height: 40px;
+          border: 3px solid rgba(255, 255, 255, 0.3);
+          border-top: 3px solid #00ff88;
+          border-radius: 50%;
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          0% {
+            transform: rotate(0deg);
+          }
+          100% {
+            transform: rotate(360deg);
+          }
+        }
+
+        .processing-overlay p {
+          margin: 0;
+          font-size: 16px;
+          font-weight: 500;
+        }
+
+        .scan-instruction {
+          text-align: center;
+          margin-bottom: env(safe-area-inset-bottom, 20px);
+        }
+
+        .scan-instruction p {
+          margin: 5px 0;
+          opacity: 0.8;
+          font-size: 14px;
+        }
+
+        @media (max-width: 480px) {
+          .qr-scanner-container {
+            padding: 15px;
+          }
+
+          .scanner-title {
+            font-size: 20px;
+          }
+
+          .status-card {
+            padding: 15px;
+          }
+
+          .status-icon {
+            width: 50px;
+            height: 50px;
+            font-size: 30px;
+          }
+
+          .status-text h2 {
+            font-size: 18px;
+          }
+
+          .scanner-frame {
+            max-width: 300px;
+          }
+
+          .scan-frame {
+            width: 200px;
+            height: 200px;
+          }
+        }
+
+        @media (orientation: landscape) and (max-height: 500px) {
+          .status-card {
+            padding: 10px 15px;
+          }
+
+          .scanner-frame {
+            max-width: 250px;
+          }
+
+          .scan-frame {
+            width: 180px;
+            height: 180px;
+          }
+        }
+      `}</style>
     </div>
   );
 };
 
-export default Qrcode;
+export default NewQrcode;

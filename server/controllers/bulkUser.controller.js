@@ -1,3 +1,4 @@
+// controllers/bulkUser.controller.js
 const xlsx = require("xlsx");
 const User = require("../models/user.models");
 const Organization = require("../models/organization.models");
@@ -5,35 +6,47 @@ const { sendMail } = require("../utils/mailer");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
 
-// Enhanced bulk register with better error handling
+// Helper: resolve organization by a provided code (name) or fallback to admin org
+const resolveOrganization = async (fallbackOrgId, codeMaybe) => {
+  if (codeMaybe && typeof codeMaybe === "string" && codeMaybe.trim()) {
+    const org = await Organization.findOne({ name: codeMaybe.trim() });
+    if (!org) return { error: `Invalid organization code: ${codeMaybe}` };
+    return { org };
+  }
+  if (fallbackOrgId) {
+    const org = await Organization.findById(fallbackOrgId);
+    if (!org) return { error: "Organization not found for current user" };
+    return { org };
+  }
+  return { error: "No organization context available" };
+};
+
 const bulkRegisterUsers = async (req, res) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ 
-        success: false,
-        message: "No Excel file uploaded" 
-      });
+      return res
+        .status(400)
+        .json({ success: false, message: "No Excel file uploaded" });
     }
 
-    // Get organization
-    const orgId = req.user.organizationId;
-    const organization = await Organization.findById(orgId);
-    if (!organization) {
-      return res.status(404).json({ 
-        success: false,
-        message: "Organization not found" 
-      });
+    // Organization context from JWT user and optional form field
+    const adminOrgId = req.user?.organizationId;
+    const requestOrgCode = req.body?.organizationCode; // from multipart form field
+    const orgContext = await resolveOrganization(adminOrgId, requestOrgCode);
+    if (orgContext.error) {
+      return res
+        .status(400)
+        .json({ success: false, message: orgContext.error });
     }
 
+    // Load Excel from the uploaded path (cloud URL or buffer)
     let jsonData;
     try {
-      // Read Excel file from Cloudinary URL with timeout
       const response = await axios.get(req.file.path, {
         responseType: "arraybuffer",
-        timeout: 30000, // 30 second timeout
-        maxContentLength: 10 * 1024 * 1024, // 10MB limit
+        timeout: 30000,
+        maxContentLength: 10 * 1024 * 1024,
       });
-
       const buffer = Buffer.from(response.data);
       const workbook = xlsx.read(buffer, { type: "array" });
       const worksheet = workbook.Sheets[workbook.SheetNames[0]];
@@ -42,22 +55,22 @@ const bulkRegisterUsers = async (req, res) => {
       console.error("File processing error:", fileError);
       return res.status(400).json({
         success: false,
-        message: "Failed to process Excel file. Please check file format and size."
+        message:
+          "Failed to process Excel file. Please check file format and size.",
       });
     }
 
     if (!jsonData || jsonData.length === 0) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "Excel file is empty or has no valid data" 
+        message: "Excel file is empty or has no valid data",
       });
     }
 
-    // Limit batch size to prevent memory issues
     if (jsonData.length > 1000) {
       return res.status(400).json({
         success: false,
-        message: "Too many users. Please process in batches of 1000 or fewer."
+        message: "Too many users. Please process in batches of 1000 or fewer.",
       });
     }
 
@@ -67,47 +80,49 @@ const bulkRegisterUsers = async (req, res) => {
       duplicates: [],
       total: jsonData.length,
     };
+    const emailsInFile = jsonData
+      .map((row) => row.email?.toLowerCase())
+      .filter(Boolean);
+    const existingUsers = await User.find({
+      email: { $in: emailsInFile },
+    }).select("email");
+    const existingEmails = new Set(existingUsers.map((u) => u.email));
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    // Pre-check for existing emails to avoid duplicates
-    const emailsInFile = jsonData.map(row => row.email?.toLowerCase()).filter(Boolean);
-    const existingUsers = await User.find({ 
-      email: { $in: emailsInFile } 
-    }).select('email');
-    
-    const existingEmails = new Set(existingUsers.map(u => u.email));
-
-    // Process each row
     for (let i = 0; i < jsonData.length; i++) {
       const row = jsonData[i];
-      const rowNumber = i + 2; // Excel row number (starting from 2)
+      const rowNumber = i + 2;
 
       try {
-        // Validate required fields
-        const { email, name, institute, department, password } = row;
+        const {
+          email,
+          name,
+          institute,
+          department,
+          password,
+          organizationCode: rowOrgCode,
+        } = row;
 
         if (!email || !name || !institute || !department || !password) {
           results.errors.push({
             row: rowNumber,
             email: email || "N/A",
-            error: "Missing required fields (email, name, institute, department, password)",
+            error:
+              "Missing required fields (email, name, institute, department, password)",
           });
           continue;
         }
 
-        // Email format validation
-        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
         if (!emailRegex.test(email)) {
           results.errors.push({
             row: rowNumber,
-            email: email,
+            email,
             error: "Invalid email format",
           });
           continue;
         }
 
         const normalizedEmail = email.toLowerCase();
-
-        // Check for duplicates
         if (existingEmails.has(normalizedEmail)) {
           results.duplicates.push({
             row: rowNumber,
@@ -117,53 +132,57 @@ const bulkRegisterUsers = async (req, res) => {
           continue;
         }
 
-        // Create user
+        // Resolve org for this row (row code > request code > admin org)
+        const rowOrgContext = await resolveOrganization(
+          orgContext.org?._id,
+          rowOrgCode || requestOrgCode
+        );
+        if (rowOrgContext.error) {
+          results.errors.push({
+            row: rowNumber,
+            email: normalizedEmail,
+            error: rowOrgContext.error,
+          });
+          continue;
+        }
+
         const user = new User({
           email: normalizedEmail,
           password: password,
-          name: name.trim(),
+          name: String(name).trim(),
           role: "user",
-          institute: institute.trim(),
-          department: department.trim(),
-          organizationId: organization._id,
+          institute: String(institute).trim(),
+          department: String(department).trim(),
+          organizationId: rowOrgContext.org._id,
         });
 
         await user.save();
-        
-        // Add to existing emails set to prevent duplicates within the file
         existingEmails.add(normalizedEmail);
 
-        // Generate reset token for setting password
+        // Send set-password email
         const resetToken = jwt.sign(
           { userId: user._id },
           process.env.JWT_RESET_SECRET,
           { expiresIn: "24h" }
         );
-
         const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
 
-        // Send welcome email (with error handling)
         try {
           await sendMail(
             user.email,
             "Welcome - Set Your Account Password",
-            `<h2>Welcome to ${organization.name}</h2>
-             <p>Your account has been created. Please set your password:</p>
-             <a href="${resetLink}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Set Password</a>
-             <p>This link will expire in 24 hours.</p>`
+            `Your account has been created. Please set your password: ${resetLink}\n\nThis link will expire in 24 hours.`
           );
         } catch (emailError) {
           console.error("Email sending failed for:", user.email, emailError);
-          // Don't fail the user creation, just log it
         }
 
         results.success.push({
           row: rowNumber,
           email: normalizedEmail,
-          name: name.trim(),
+          name: String(name).trim(),
           message: "User created successfully",
         });
-
       } catch (error) {
         console.error(`Error processing row ${rowNumber}:`, error);
         results.errors.push({
@@ -174,8 +193,7 @@ const bulkRegisterUsers = async (req, res) => {
       }
     }
 
-    // Return comprehensive results
-    res.json({
+    return res.json({
       success: true,
       message: `Bulk registration completed. ${results.success.length} users created, ${results.errors.length} errors, ${results.duplicates.length} duplicates.`,
       summary: {
@@ -184,20 +202,22 @@ const bulkRegisterUsers = async (req, res) => {
         errors: results.errors.length,
         duplicates: results.duplicates.length,
       },
-      results: results,
+      results,
     });
-
   } catch (error) {
     console.error("Bulk registration error:", error);
-    res.status(500).json({ 
+    return res.status(500).json({
       success: false,
       message: "Failed to process bulk registration",
-      error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      error:
+        process.env.NODE_ENV === "development"
+          ? error.message
+          : "Internal server error",
     });
   }
 };
 
-// Enhanced template with better structure
+// Template now includes organizationCode as optional column
 const downloadTemplate = async (req, res) => {
   try {
     const templateData = [
@@ -207,6 +227,7 @@ const downloadTemplate = async (req, res) => {
         institute: "Computer Science Institute",
         department: "Software Engineering",
         password: "TempPass123!",
+        organizationCode: "YourOrgName", // optional per-row override
       },
       {
         email: "jane.smith@example.com",
@@ -214,33 +235,22 @@ const downloadTemplate = async (req, res) => {
         institute: "Information Technology Institute",
         department: "Data Science",
         password: "TempPass456!",
+        organizationCode: "YourOrgName",
       },
-      {
-        email: "mike.wilson@example.com",
-        name: "Mike Wilson",
-        institute: "Engineering Institute",
-        department: "Web Development",
-        password: "TempPass789!",
-      }
     ];
 
-    // Create workbook and worksheet
     const ws = xlsx.utils.json_to_sheet(templateData);
-    
-    // Set column widths
-    const colWidths = [
-      { wch: 25 }, // email
-      { wch: 20 }, // name
-      { wch: 30 }, // institute
-      { wch: 20 }, // department
-      { wch: 15 }, // password
+    ws["!cols"] = [
+      { wch: 28 }, // email
+      { wch: 22 }, // name
+      { wch: 28 }, // institute
+      { wch: 22 }, // department
+      { wch: 16 }, // password
+      { wch: 22 }, // organizationCode
     ];
-    ws['!cols'] = colWidths;
 
     const wb = xlsx.utils.book_new();
     xlsx.utils.book_append_sheet(wb, ws, "Users");
-
-    // Generate buffer
     const buffer = xlsx.write(wb, { type: "buffer", bookType: "xlsx" });
 
     res.setHeader(
@@ -251,18 +261,13 @@ const downloadTemplate = async (req, res) => {
       "Content-Type",
       "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     );
-    res.send(buffer);
-
+    return res.send(buffer);
   } catch (error) {
     console.error("Template download error:", error);
-    res.status(500).json({ 
-      success: false,
-      message: "Failed to generate template" 
-    });
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to generate template" });
   }
 };
 
-module.exports = {
-  bulkRegisterUsers,
-  downloadTemplate,
-};
+module.exports = { bulkRegisterUsers, downloadTemplate };

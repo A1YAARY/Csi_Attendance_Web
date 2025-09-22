@@ -11,7 +11,6 @@ const Reports = () => {
   const getOrganizationCode = () => {
     // Try localStorage first, then fall back to user object
     const storedOrgCode = localStorage.getItem("orginizationcode");
-
     if (storedOrgCode) return storedOrgCode;
 
     // Fall back to user's organization information
@@ -38,6 +37,8 @@ const Reports = () => {
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploadResults, setUploadResults] = useState(null);
   const [dragActive, setDragActive] = useState(false);
+  const baseurl =
+    import.meta.env.VITE_BACKEND_BASE_URL || "http://localhost:3000";
 
   // Register user using the admin's organization automatically
   const registerUserInOrganization = async (userData) => {
@@ -48,23 +49,19 @@ const Reports = () => {
           "Organization code not found. Please ensure you're properly logged in as an admin."
         );
       }
-      const baseurl = import.meta.env.VITE_BACKEND_BASE_URL
 
-      const response = await fetch(
-        `${baseurl}/auth2/register-user`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
-          },
-          body: JSON.stringify({
-            ...userData,
-            organizationCode: organizationCode,
-            role: "user",
-          }),
-        }
-      );
+      const response = await fetch(`${baseurl}/auth2/register-user`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        },
+        body: JSON.stringify({
+          ...userData,
+          organizationCode: organizationCode,
+          role: "user",
+        }),
+      });
 
       const data = await response.json();
       return data;
@@ -169,21 +166,17 @@ const Reports = () => {
 
     setLoading(true);
     const formData = new FormData();
-    formData.append("excel", selectedFile);
-    // Add organization code to form data if your backend expects it
-    formData.append("organizationCode", organizationCode);
+    formData.append("excel", selectedFile); // must be 'excel' to match multer.single('excel')
+    formData.append("organizationCode", organizationCode); // optional, backend may fallback to admin org
 
     try {
-      const response = await fetch(
-        `${baseurl}/api/bulk-users/upload-users`,
-        {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
-          },
-          body: formData,
-        }
-      );
+      const response = await fetch(`${baseurl}/bulk/upload-users`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        },
+        body: formData,
+      });
 
       const data = await response.json();
 
@@ -205,17 +198,14 @@ const Reports = () => {
     }
   };
 
-  // Download template
+  // Download template (fixed endpoint)
   const downloadTemplate = async () => {
     try {
-      const response = await fetch(
-        `${baseurl}/api/bulk-users/template`,
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
-          },
-        }
-      );
+      const response = await fetch(`${baseurl}/bulk/template`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem("accessToken")}`,
+        },
+      });
 
       if (response.ok) {
         const blob = await response.blob();
@@ -252,8 +242,6 @@ const Reports = () => {
             </span>
           </p>
         </div>
-
-     
 
         {/* Show warning if no organization code */}
         {!organizationCode && (
