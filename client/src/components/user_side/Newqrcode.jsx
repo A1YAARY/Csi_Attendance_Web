@@ -12,6 +12,9 @@ const NewQrcode = () => {
   const [errorMessage, setErrorMessage] = useState("");
   const [currentStatus, setCurrentStatus] = useState(null); // 'checked-in' | 'checked-out'
   const [ready, setReady] = useState(false); // wait for status before starting
+  const [showActionModal, setShowActionModal] = useState(false); // NEW: popup modal
+  const [selectedAction, setSelectedAction] = useState(null); // NEW: user choice
+  const [scannerStarted, setScannerStarted] = useState(false); // NEW: track scanner state
 
   const BASE_URL =
     import.meta.env.VITE_BACKEND_BASE_URL ||
@@ -43,6 +46,7 @@ const NewQrcode = () => {
       setCurrentStatus("checked-out");
     } finally {
       setReady(true); // Allow scanner to start
+      setShowActionModal(true); // NEW: Show action selection popup
     }
   };
 
@@ -109,11 +113,11 @@ const NewQrcode = () => {
     try {
       const { code, qrType } = parseQr(decodedText);
 
-      // Use QR's declared type if present, otherwise infer from current status
-      const nextAction =
-        qrType && (qrType === "check-in" || qrType === "check-out")
+      // NEW: Use selected action from popup instead of inferring
+      const nextAction = selectedAction || 
+        (qrType && (qrType === "check-in" || qrType === "check-out")
           ? qrType
-          : getNextActionType();
+          : getNextActionType());
 
       console.log("🔍 Scanned QR Code:", code);
       console.log("📋 Action:", nextAction);
@@ -173,13 +177,21 @@ const NewQrcode = () => {
     }
   };
 
+  // NEW: Handle action selection and start scanner
+  const handleActionSelect = (action) => {
+    setSelectedAction(action);
+    setShowActionModal(false);
+    setScannerStarted(true);
+  };
+
   useEffect(() => {
-    // Get user status first, then allow scanning
+    // Get user status first, then show popup
     getUserStatus();
   }, []);
 
   useEffect(() => {
-    if (!ready) return; // Wait for status
+    // NEW: Only start scanner after action is selected
+    if (!ready || !scannerStarted || showActionModal) return;
 
     const elementId = "qr-reader";
     let scanner = null;
@@ -261,7 +273,7 @@ const NewQrcode = () => {
       clearTimeout(timer);
       stopCamera(); // Safe cleanup using ref
     };
-  }, [ready]); // Only depend on ready flag
+  }, [ready, scannerStarted, showActionModal]); // NEW: depend on scanner started flag
 
   const handleCancel = () => {
     stopCamera();
@@ -270,6 +282,32 @@ const NewQrcode = () => {
 
   return (
     <div className="qr-scanner-container">
+      {/* NEW: Action Selection Modal */}
+      {showActionModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h2>Select Action</h2>
+            <p>What would you like to do?</p>
+            <div className="action-buttons">
+              <button
+                className="action-button check-in"
+                onClick={() => handleActionSelect("check-in")}
+              >
+                <span className="action-icon">🔒</span>
+                Check In
+              </button>
+              <button
+                className="action-button check-out"
+                onClick={() => handleActionSelect("check-out")}
+              >
+                <span className="action-icon">🔓</span>
+                Check Out
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="scanner-header">
         <button
@@ -285,9 +323,16 @@ const NewQrcode = () => {
 
       {/* Status Card */}
       <div className="status-card">
-        <div className="status-icon">{getStatusIcon()}</div>
+        <div className="status-icon">
+          {selectedAction === "check-in" ? "🔒" : selectedAction === "check-out" ? "🔓" : getStatusIcon()}
+        </div>
         <div className="status-text">
-          <h2>Ready to {getNextActionText()}</h2>
+          <h2>
+            {selectedAction 
+              ? `Ready to ${selectedAction === "check-in" ? "Check In" : "Check Out"}`
+              : `Ready to ${getNextActionText()}`
+            }
+          </h2>
           <p>
             {currentStatus === "checked-in"
               ? "You are currently checked in"
@@ -324,7 +369,7 @@ const NewQrcode = () => {
         </div>
       </div>
 
-      {/* Clean white Android-optimized styles */}
+      {/* Clean white Android-optimized styles + Modal styles */}
       <style jsx>{`
         .qr-scanner-container {
           min-height: 100vh;
@@ -335,6 +380,88 @@ const NewQrcode = () => {
           flex-direction: column;
           font-family: system-ui, -apple-system, Roboto, "Segoe UI", Arial,
             sans-serif;
+        }
+
+        /* NEW: Modal Styles */
+        .modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+        }
+
+        .modal-content {
+          background: #ffffff;
+          border-radius: 20px;
+          padding: 30px;
+          margin: 20px;
+          max-width: 320px;
+          width: 100%;
+          text-align: center;
+          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        .modal-content h2 {
+          margin: 0 0 10px 0;
+          font-size: 24px;
+          font-weight: 700;
+          color: #111111;
+        }
+
+        .modal-content p {
+          margin: 0 0 25px 0;
+          color: #6b7280;
+          font-size: 16px;
+        }
+
+        .action-buttons {
+          display: flex;
+          flex-direction: column;
+          gap: 15px;
+        }
+
+        .action-button {
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          gap: 12px;
+          padding: 18px 24px;
+          border: none;
+          border-radius: 16px;
+          font-size: 18px;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .action-button.check-in {
+          background: #10b981;
+          color: #ffffff;
+        }
+
+        .action-button.check-in:hover {
+          background: #059669;
+          transform: translateY(-2px);
+        }
+
+        .action-button.check-out {
+          background: #f59e0b;
+          color: #ffffff;
+        }
+
+        .action-button.check-out:hover {
+          background: #d97706;
+          transform: translateY(-2px);
+        }
+
+        .action-icon {
+          font-size: 20px;
         }
 
         .scanner-header {
@@ -535,6 +662,11 @@ const NewQrcode = () => {
 
           .scanner-frame {
             max-width: 300px;
+          }
+
+          .modal-content {
+            margin: 15px;
+            padding: 25px;
           }
         }
 
