@@ -18,7 +18,7 @@ async function connectDB() {
       readConcern: { level: "local" },
     });
 
-    // Optional health ping
+    // Health check
     await mongoose.connection.db.admin().command({ ping: 1 });
 
     console.log("📡 MongoDB connection established");
@@ -32,8 +32,17 @@ async function connectDB() {
     });
   } catch (error) {
     console.error("❌ Error connecting to MongoDB:", error);
-    process.exit(1); // stop server if DB connection fails
+    process.exit(1); // Exit if DB connection fails
   }
 }
 
-module.exports = connectDB;
+async function closeDB() {
+  try {
+    await mongoose.connection.close();
+    console.log("✅ Database connection closed");
+  } catch (err) {
+    console.error("❌ Error closing database connection:", err);
+  }
+}
+
+module.exports = { connectDB, closeDB };
