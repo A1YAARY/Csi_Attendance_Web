@@ -3,132 +3,166 @@ const DailyTimeSheet = require("../models/DailyTimeSheet.models");
 const QRCode = require("../models/Qrcode.models");
 const Organization = require("../models/organization.models");
 const User = require("../models/user.models");
+const geolib = require("geolib");
 
-// 🔥 Helper function to calculate working time
-const calculateWorkingTime = (checkIn, checkOut) => {
-  if (!checkIn || !checkOut) return 0;
-  return Math.floor((new Date(checkOut) - new Date(checkIn)) / 60000); // minutes
-};
-
-// 🔥 Helper function to get IST date
 const getISTDate = (date = new Date()) => {
   const istOffset = 5.5 * 60 * 60 * 1000;
   const utc = date.getTime() + date.getTimezoneOffset() * 60000;
   return new Date(utc + istOffset);
 };
 
-// 🔥 Update or create daily timesheet
-const updateDailyTimeSheet = async (userId, organizationId, attendance) => {
-  const todayIST = getISTDate();
-  const startOfDay = new Date(
-    todayIST.getFullYear(),
-    todayIST.getMonth(),
-    todayIST.getDate(),
-    todayIST.getDay()
-  );
+const startOfISTDay = (date = new Date()) => {
+  const d = getISTDate(date);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+};
 
-  let timeSheet = await DailyTimeSheet.findOne({
+const calculateWorkingTime = (checkIn, checkOut) => {
+  if (!checkIn || !checkOut) return 0;
+  return Math.floor((new Date(checkOut) - new Date(checkIn)) / 60000);
+};
+
+const updateDailyTimeSheet = async (userId, organizationId, attendance) => {
+  const dayStart = startOfISTDay();
+
+  let sheet = await DailyTimeSheet.findOne({
     userId,
     organizationId,
-    date: startOfDay,
+    date: dayStart,
   });
-
-  if (!timeSheet) {
-    timeSheet = new DailyTimeSheet({
+  if (!sheet) {
+    sheet = new DailyTimeSheet({
       userId,
       organizationId,
-      date: startOfDay,
+      date: dayStart,
       sessions: [],
+      totalWorkingTime: 0,
+      status: "absent",
     });
   }
 
   if (attendance.type === "check-in") {
-    // Start new session
-    timeSheet.sessions.push({
-      checkIn: {
-        time: attendance.createdAt,
-        attendanceId: attendance._id,
-      },
+    sheet.sessions.push({
+      checkIn: { time: attendance.createdAt, attendanceId: attendance._id },
     });
   } else if (attendance.type === "check-out") {
-    // Complete the last incomplete session
-    const lastSession = timeSheet.sessions[timeSheet.sessions.length - 1];
-    if (lastSession && !lastSession.checkOut.time) {
-      lastSession.checkOut = {
+    const last = sheet.sessions[sheet.sessions.length - 1];
+    if (last && !last.checkOut?.time) {
+      last.checkOut = {
         time: attendance.createdAt,
         attendanceId: attendance._id,
       };
-      lastSession.duration = calculateWorkingTime(
-        lastSession.checkIn.time,
-        lastSession.checkOut.time
+      last.duration = Math.floor(
+        (new Date(last.checkOut.time) - new Date(last.checkIn.time)) / 60000
       );
     }
   }
 
-  // Calculate total working time
-  timeSheet.totalWorkingTime = timeSheet.sessions.reduce((total, session) => {
-    return total + (session.duration || 0);
-  }, 0);
+  sheet.totalWorkingTime = (sheet.sessions || []).reduce(
+    (sum, s) => sum + (s.duration || 0),
+    0
+  );
 
-  // Determine status
-  const requiredHours = timeSheet.requiredWorkingHours || 480; // 8 hours
-  if (timeSheet.totalWorkingTime === 0) {
-    timeSheet.status = "absent";
-  } else if (timeSheet.totalWorkingTime < requiredHours / 2) {
-    timeSheet.status = "half-day";
-  } else {
-    timeSheet.status = "full-day";
-  }
+  const requiredMinutes = sheet.requiredWorkingHours || 480;
+  sheet.status =
+    sheet.totalWorkingTime === 0
+      ? "absent"
+      : sheet.totalWorkingTime < requiredMinutes / 2
+      ? "half-day"
+      : "full-day";
 
-  await timeSheet.save();
-  return timeSheet;
+  await sheet.save();
+  return sheet;
 };
 exports.scanQRCode = async (req, res) => {
   try {
-    // 1) Normalize org id regardless of populate()
-    const userOrgId = (req.user.organizationId?._id ?? req.user.organizationId)?.toString();
-
-    // 2) Accept type or qrType; accept code, qrCode, or token
+    const userOrgId = (
+      req.user.organizationId?._id ?? req.user.organizationId
+    )?.toString();
     const body = req.body || {};
     const code = body.code || body.qrCode || body.token;
     const reqType = body.type || body.qrType;
 
     if (!code) {
-      return res.status(400).json({ success: false, message: "Missing required field: code" });
+      return res
+        .status(400)
+        .json({ success: false, message: "Missing required field: code" });
     }
 
-    // 3) Ensure org exists
     const org = await Organization.findById(userOrgId);
-    if (!org) return res.status(404).json({ success: false, message: "Organization not found" });
+    if (!org)
+      return res
+        .status(404)
+        .json({ success: false, message: "Organization not found" });
 
-    // 4) Primary lookup: org + type + code + active (when type provided)
+    // Resolve QR (primary by org+type+code, fallback by code only with org enforcement)
     let qr = null;
-    if (reqType && ['check-in', 'check-out'].includes(reqType)) {
-      qr = await QRCode.findOne({ organizationId: userOrgId, code, qrType: reqType, active: true });
+    if (reqType && ["check-in", "check-out"].includes(reqType)) {
+      qr = await QRCode.findOne({
+        organizationId: userOrgId,
+        code,
+        qrType: reqType,
+        active: true,
+      });
     }
-
-    // 5) Fallback lookup: code + active only; then enforce org and infer type
     if (!qr) {
       qr = await QRCode.findOne({ code, active: true });
-      if (!qr) {
-        return res.status(404).json({ success: false, message: "QR not found or inactive" });
-      }
+      if (!qr)
+        return res
+          .status(404)
+          .json({ success: false, message: "QR not found or inactive" });
       if (qr.organizationId?.toString() !== userOrgId) {
-        return res.status(403).json({ success: false, message: "QR belongs to another organization" });
+        return res
+          .status(403)
+          .json({
+            success: false,
+            message: "QR belongs to another organization",
+          });
       }
     }
+    const type = qr.qrType; // authoritative type from QR
 
-    // Use the actual stored type to avoid client/type drift
-    const type = qr.qrType;
+    // Business rule: one open session at a time
+    const dayStart = startOfISTDay();
+    const sheet = await DailyTimeSheet.findOne({
+      userId: req.user._id,
+      organizationId: userOrgId,
+      date: dayStart,
+    });
+    const hasOpenSession = !!(
+      sheet &&
+      sheet.sessions.length &&
+      !sheet.sessions[sheet.sessions.length - 1]?.checkOut?.time
+    );
 
-    // 6) Expiry by timestamp (lenient if missing)
+    if (type === "check-in" && hasOpenSession) {
+      return res
+        .status(409)
+        .json({
+          success: false,
+          message:
+            "Already checked in. Please check out before checking in again.",
+        });
+    }
+    if (type === "check-out" && !hasOpenSession) {
+      return res
+        .status(409)
+        .json({
+          success: false,
+          message: "No active check-in found. Please check in first.",
+        });
+    }
+
+    // Expiry
     const nowSec = Math.floor(Date.now() / 1000);
     const maxAge = (org.settings?.qrCodeValidityMinutes ?? 30) * 60;
-    const qrCodeValid = typeof qr.timestamp === 'number' ? (nowSec - qr.timestamp) <= maxAge : true;
+    const qrCodeValid =
+      typeof qr.timestamp === "number" ? nowSec - qr.timestamp <= maxAge : true;
 
-    // 7) Safe location: default to QR location if client location omitted
+    // Location (optional)
     const safeLocation =
-      body.location && typeof body.location.latitude === 'number' && typeof body.location.longitude === 'number'
+      body.location &&
+      typeof body.location.latitude === "number" &&
+      typeof body.location.longitude === "number"
         ? {
             latitude: Number(body.location.latitude),
             longitude: Number(body.location.longitude),
@@ -142,21 +176,30 @@ exports.scanQRCode = async (req, res) => {
             radius: Number(qr.location?.radius ?? 100),
           };
 
-    // 8) Optional proximity check (kept permissive if location disabled)
     let locationMatch = true;
-    if (qr.location?.latitude && qr.location?.longitude && safeLocation.latitude && safeLocation.longitude) {
+    if (
+      qr.location?.latitude &&
+      qr.location?.longitude &&
+      safeLocation.latitude &&
+      safeLocation.longitude
+    ) {
       const distance = geolib.getDistance(
-        { latitude: Number(qr.location.latitude), longitude: Number(qr.location.longitude) },
-        { latitude: Number(safeLocation.latitude), longitude: Number(safeLocation.longitude) }
+        {
+          latitude: Number(qr.location.latitude),
+          longitude: Number(qr.location.longitude),
+        },
+        {
+          latitude: Number(safeLocation.latitude),
+          longitude: Number(safeLocation.longitude),
+        }
       );
       const tolerance = org.settings?.locationToleranceMeters ?? 50;
       locationMatch = Number.isFinite(distance) ? distance <= tolerance : true;
     }
-
     const verified = qrCodeValid && locationMatch;
 
-    // 9) Record attendance
-    const record = await Attendance.create({
+    // Persist attendance
+    const attendance = await Attendance.create({
       userId: req.user._id,
       organizationId: userOrgId,
       qrCodeId: qr._id,
@@ -165,7 +208,7 @@ exports.scanQRCode = async (req, res) => {
       deviceInfo: {
         deviceId: body.deviceInfo?.deviceId,
         platform: body.deviceInfo?.platform,
-        userAgent: req.headers['user-agent'],
+        userAgent: req.headers["user-agent"],
         ipAddress: req.ip,
         fingerprint: body.deviceInfo?.fingerprint,
       },
@@ -176,187 +219,39 @@ exports.scanQRCode = async (req, res) => {
         deviceTrusted: true,
         spoofingDetected: false,
       },
-      // qrTimestamp: qr.timestamp, // uncomment if your model includes this field
     });
 
     await QRCode.updateOne({ _id: qr._id }, { $inc: { usageCount: 1 } });
 
-    // 10) Keep your existing timesheet update (unchanged)
-    // await updateDailyTimeSheet(req.user._id, userOrgId, record);
+    const timeSheet = await updateDailyTimeSheet(
+      req.user._id,
+      userOrgId,
+      attendance
+    );
 
-    return res.json({ success: true, message: "Attendance recorded", data: { attendanceId: record._id, verified } });
+    return res.json({
+      success: true,
+      message:
+        type === "check-in"
+          ? "Checked in successfully"
+          : "Checked out successfully",
+      data: {
+        attendanceId: attendance._id,
+        verified,
+        dailySummary: {
+          totalMinutes: timeSheet.totalWorkingTime || 0,
+          status: timeSheet.status,
+          sessions: (timeSheet.sessions || []).length,
+        },
+      },
+    });
   } catch (err) {
-    console.error('scanQRCode error', err);
-    return res.status(500).json({ success: false, message: "Failed to scan QR" });
+    console.error("scanQRCode error", err);
+    return res
+      .status(500)
+      .json({ success: false, message: "Failed to scan QR" });
   }
 };
-
-
-
-// exports.scanQRCode = async (req, res) => {
-//   try {
-//     console.log("📍 Scan request received:", {
-//       body: req.body,
-//       user: req.user?.email,
-//       timestamp: new Date().toISOString(),
-//     });
-
-//     const { code, location, type, deviceInfo } = req.body;
-//     const user = req.user;
-
-//     // Basic validation
-//     if (!code || !type) {
-//       console.log("❌ Missing required fields");
-//       return res.status(400).json({
-//         success: false,
-//         message: "Missing required fields: code and type",
-//         required: ["code", "type"],
-//       });
-//     }
-
-//     if (!["check-in", "check-out"].includes(type)) {
-//       console.log("❌ Invalid type:", type);
-//       return res.status(400).json({
-//         success: false,
-//         message: "Invalid type. Must be 'check-in' or 'check-out'",
-//       });
-//     }
-
-//     // Check last attendance for the day
-//     const todayStart = new Date();
-//     todayStart.setHours(0, 0, 0, 0);
-//     const lastAttendance = await Attendance.findOne({
-//       userId: user._id,
-//       createdAt: { $gte: todayStart },
-//     }).sort({ createdAt: -1 });
-
-//     // Prevent duplicate check-ins/check-outs
-//     if (lastAttendance && lastAttendance.type === type) {
-//       console.log("❌ Duplicate scan attempt");
-//       return res.status(400).json({
-//         success: false,
-//         message: `You are already ${
-//           type === "check-in" ? "checked in" : "checked out"
-//         }. Please ${type === "check-in" ? "check out" : "check in"} first.`,
-//       });
-//     }
-
-//     if (!lastAttendance && type === "check-out") {
-//       console.log("❌ Checkout without checkin");
-//       return res.status(400).json({
-//         success: false,
-//         message: "Cannot check-out without checking in first today.",
-//       });
-//     }
-
-//     // Verify QR code
-//     const qr = await QRCode.findOne({ code, active: true });
-//     if (!qr) {
-//       console.log("❌ Invalid QR code:", code);
-//       return res.status(400).json({
-//         success: false,
-//         message: "Invalid or expired QR code",
-//       });
-//     }
-
-//     // Verify organization
-//     if (String(user.organizationId) !== String(qr.organizationId)) {
-//       console.log("❌ Organization mismatch");
-//       return res.status(403).json({
-//         success: false,
-//         message: "QR code doesn't belong to your organization",
-//       });
-//     }
-
-//     // Verify QR type matches request type
-//     if (qr.qrType !== type) {
-//       console.log("❌ QR type mismatch");
-//       return res.status(400).json({
-//         success: false,
-//         message: `This is a ${qr.qrType} QR code, but you're trying to ${type}`,
-//       });
-//     }
-
-//     // Use safe location
-//     const safeLocation =
-//       location && location.latitude && location.longitude
-//         ? location
-//         : { latitude: 0, longitude: 0, accuracy: 0 };
-
-//     console.log("✅ Creating attendance record");
-
-//     // Create attendance record
-//     const record = await Attendance.create({
-//       userId: user._id,
-//       organizationId: qr.organizationId,
-//       qrCodeId: qr._id,
-//       type,
-//       location: safeLocation,
-//       deviceInfo: deviceInfo || {},
-//       verified: true,
-//       verificationDetails: {
-//         locationMatch: true,
-//         qrCodeValid: true,
-//         timeValid: true,
-//         deviceTrusted: true,
-//         spoofingDetected: false,
-//       },
-//     });
-
-//     console.log("✅ Attendance record created:", record._id);
-
-//     // Update daily timesheet
-//     const timeSheet = await updateDailyTimeSheet(
-//       user._id,
-//       qr.organizationId,
-//       record
-//     );
-
-//     // Update user activity
-//     user.lastActivity = type === "check-in";
-//     await user.save();
-
-//     // Update QR usage count
-//     qr.usageCount += 1;
-//     await qr.save();
-
-//     // Format response
-//     const istOffset = 5.5 * 60 * 60 * 1000;
-//     const recordObj = record.toObject();
-//     recordObj.createdAtIST = new Date(record.createdAt.getTime() + istOffset);
-
-//     console.log("✅ Sending success response");
-
-//     return res.status(200).json({
-//       success: true,
-//       message: `${
-//         type === "check-in" ? "Checked in" : "Checked out"
-//       } successfully`,
-//       attendance: recordObj,
-//       dailyStatus: {
-//         totalWorkingTime:
-//           Math.floor(timeSheet.totalWorkingTime / 60) +
-//           "h " +
-//           (timeSheet.totalWorkingTime % 60) +
-//           "m",
-//         status: timeSheet.status,
-//         sessions: timeSheet.sessions.length,
-//       },
-//       timestamp: new Date().toISOString(),
-//     });
-//   } catch (error) {
-//     console.error("❌ Error in scanQRCode:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Failed to process attendance scan",
-//       error:
-//         process.env.NODE_ENV === "development"
-//           ? error.message
-//           : "Internal server error",
-//       timestamp: new Date().toISOString(),
-//     });
-//   }
-// };
 
 // 🔥 Get User Past Attendance
 exports.getUserPastAttendance = async (req, res) => {
@@ -439,7 +334,7 @@ exports.getDailyReport = async (req, res) => {
       reportDate.getFullYear(),
       reportDate.getMonth(),
       reportDate.getDate(),
-      reportDate.getDay(),
+      reportDate.getDay()
     );
 
     const dailyReports = await DailyTimeSheet.find({
