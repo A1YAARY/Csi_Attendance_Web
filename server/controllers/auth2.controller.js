@@ -6,33 +6,102 @@ const qrGenerator = require("../utils/qrGenerator");
 const QRCode = require("../models/Qrcode.models");
 const { sendMail } = require("../utils/mailer");
 
-// 🔑 EXTENDED TOKEN GENERATION - Tokens last for months
+// Token generation function
 const generateTokens = (userId) => {
-  const accessToken = jwt.sign(
-    { userId },
-    process.env.JWT_SECRET,
-    { expiresIn: "90d" } // 🚀 Extended to 90 days (3 months)
-  );
-  
-  const refreshToken = jwt.sign(
-    { userId },
-    process.env.JWT_REFRESH_SECRET,
-    { expiresIn: "180d" } // 🚀 Extended to 180 days (6 months)
-  );
-
+  const accessToken = jwt.sign({ userId }, process.env.JWT_SECRET, {
+    expiresIn: "90d",
+  });
+  const refreshToken = jwt.sign({ userId }, process.env.JWT_REFRESH_SECRET, {
+    expiresIn: "180d",
+  });
   return { accessToken, refreshToken };
 };
 
-// 🔄 NEW: Token refresh endpoint
+// 🆕 NEW: Token verification endpoint
+const verifyToken = async (req, res) => {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        message: "Token is required",
+        code: "NO_TOKEN_PROVIDED",
+      });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET);
+    } catch (error) {
+      let errorCode = "INVALID_TOKEN";
+      let errorMessage = "Token is invalid";
+
+      if (error.name === "TokenExpiredError") {
+        errorCode = "TOKEN_EXPIRED";
+        errorMessage = "Token has expired";
+      } else if (error.name === "JsonWebTokenError") {
+        errorCode = "MALFORMED_TOKEN";
+        errorMessage = "Token is malformed";
+      }
+
+      return res.status(401).json({
+        success: false,
+        message: errorMessage,
+        code: errorCode,
+        expiredAt: error.expiredAt || null,
+      });
+    }
+
+    // Verify user still exists
+    const user = await User.findById(decoded.userId)
+      .populate("organizationId")
+      .select("-password");
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+        code: "USER_NOT_FOUND",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Token is valid",
+      user: {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        role: user.role,
+      },
+      organization: user.organizationId
+        ? {
+            id: user.organizationId._id,
+            name: user.organizationId.name,
+          }
+        : null,
+    });
+  } catch (error) {
+    console.error("Token verification error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Server error during token verification",
+      code: "SERVER_ERROR",
+    });
+  }
+};
+
+// Token refresh endpoint
 const refreshToken = async (req, res) => {
   try {
     const { refreshToken } = req.cookies;
-    
+
     if (!refreshToken) {
       return res.status(401).json({
         success: false,
         message: "Refresh token not provided",
-        code: "NO_REFRESH_TOKEN"
+        code: "NO_REFRESH_TOKEN",
       });
     }
 
@@ -43,7 +112,7 @@ const refreshToken = async (req, res) => {
       return res.status(401).json({
         success: false,
         message: "Invalid or expired refresh token",
-        code: "INVALID_REFRESH_TOKEN"
+        code: "INVALID_REFRESH_TOKEN",
       });
     }
 
@@ -52,18 +121,19 @@ const refreshToken = async (req, res) => {
       return res.status(404).json({
         success: false,
         message: "User not found",
-        code: "USER_NOT_FOUND"
+        code: "USER_NOT_FOUND",
       });
     }
 
-    const { accessToken, refreshToken: newRefreshToken } = generateTokens(user._id);
+    const { accessToken, refreshToken: newRefreshToken } = generateTokens(
+      user._id
+    );
 
-    // Set new refresh token cookie
     res.cookie("refreshToken", newRefreshToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 180 * 24 * 60 * 60 * 1000, // 180 days
+      maxAge: 180 * 24 * 60 * 60 * 1000,
     });
 
     res.json({
@@ -75,19 +145,20 @@ const refreshToken = async (req, res) => {
         name: user.name,
         role: user.role,
       },
-      organization: user.organizationId ? {
-        id: user.organizationId._id,
-        name: user.organizationId.name,
-      } : null,
+      organization: user.organizationId
+        ? {
+            id: user.organizationId._id,
+            name: user.organizationId.name,
+          }
+        : null,
       accessToken,
     });
-
   } catch (error) {
     console.error("Token refresh error:", error);
     res.status(500).json({
       success: false,
       message: "Server error during token refresh",
-      code: "SERVER_ERROR"
+      code: "SERVER_ERROR",
     });
   }
 };
@@ -125,7 +196,7 @@ const register_orginization = async (req, res) => {
     user.organizationId = organization._id;
     await user.save();
 
-    // Generate check-in QR
+    // Generate QR codes
     const checkInQR = await qrGenerator.generateQRCode(
       organization._id,
       organization.location
@@ -138,7 +209,6 @@ const register_orginization = async (req, res) => {
       active: true,
     });
 
-    // Generate check-out QR
     const checkOutQR = await qrGenerator.generateQRCode(
       organization._id,
       organization.location
@@ -162,7 +232,7 @@ const register_orginization = async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 180 * 24 * 60 * 60 * 1000, // 180 days
+      maxAge: 180 * 24 * 60 * 60 * 1000,
     });
 
     res.status(201).json({
@@ -182,14 +252,15 @@ const register_orginization = async (req, res) => {
       accessToken,
     });
   } catch (err) {
-    console.error(err);
+    console.error("Organization registration error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
 
 const register_user = async (req, res) => {
   try {
-    const { email, name, organizationCode, institute, department, password } = req.body;
+    const { email, name, organizationCode, institute, department, password } =
+      req.body;
 
     if (!email || !organizationCode || !name || !institute || !department) {
       return res.status(400).json({ message: "All fields are required" });
@@ -216,23 +287,20 @@ const register_user = async (req, res) => {
     });
     await user.save();
 
-    // 🔹 Generate reset token immediately after registration
+    // Generate reset token
     const resetToken = jwt.sign(
       { userId: user._id },
       process.env.JWT_RESET_SECRET,
-      { expiresIn: "24h" } // Extended to 24 hours
+      { expiresIn: "24h" }
     );
 
     const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
 
-    // 🔹 Send reset password email
+    // Send reset password email
     await sendMail(
       user.email,
       "Set Your Account Password",
-      `<h3>Welcome to ${organization.name}</h3>
-       <p>You've been added to the organization. Please set your password:</p>
-       <a href="${resetLink}" style="background-color: #007bff; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Set Password</a>
-       <p>This link will expire in 24 hours.</p>`
+      `You've been added to the organization. Please set your password: ${resetLink}. This link will expire in 24 hours.`
     );
 
     const { accessToken, refreshToken } = generateTokens(user._id);
@@ -241,7 +309,7 @@ const register_user = async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 180 * 24 * 60 * 60 * 1000, // 180 days
+      maxAge: 180 * 24 * 60 * 60 * 1000,
     });
 
     res.status(201).json({
@@ -255,7 +323,7 @@ const register_user = async (req, res) => {
       accessToken,
     });
   } catch (err) {
-    console.error(err);
+    console.error("User registration error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -286,7 +354,7 @@ const login = async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 180 * 24 * 60 * 60 * 1000, // 180 days
+      maxAge: 180 * 24 * 60 * 60 * 1000,
     });
 
     res.status(200).json({
@@ -297,14 +365,16 @@ const login = async (req, res) => {
         name: user.name,
         role: user.role,
       },
-      organization: user.organizationId ? {
-        id: user.organizationId._id,
-        name: user.organizationId.name,
-      } : null,
+      organization: user.organizationId
+        ? {
+            id: user.organizationId._id,
+            name: user.organizationId.name,
+          }
+        : null,
       accessToken,
     });
   } catch (err) {
-    console.error(err);
+    console.error("Login error:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
@@ -333,7 +403,7 @@ const updateProfile = async (req, res) => {
 
     res.json(response);
   } catch (error) {
-    console.error("Update user profile error:", error);
+    console.error("Update profile error:", error);
     res.status(500).json({ message: "Failed to update user profile" });
   }
 };
@@ -370,6 +440,7 @@ const logout = (req, res) => {
   res.status(200).json({ message: "Logged out successfully" });
 };
 
+// 🚨 CRITICAL: Export ALL functions including verifyToken
 module.exports = {
   register_orginization,
   register_user,
@@ -377,5 +448,6 @@ module.exports = {
   logout,
   updateProfile,
   viewProfile,
-  refreshToken, // 🆕 New refresh endpoint
+  refreshToken,
+  verifyToken, // ✅ This was missing - causing server crash!
 };

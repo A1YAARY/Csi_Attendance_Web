@@ -1,5 +1,7 @@
 const express = require("express");
 const router = express.Router();
+
+// 🚨 CRITICAL: Import verifyToken (was missing!)
 const {
   register_orginization,
   register_user,
@@ -8,39 +10,31 @@ const {
   updateProfile,
   viewProfile,
   refreshToken,
+  verifyToken, // ✅ Now importing verifyToken
 } = require("../controllers/auth2.controller");
+
 const authMiddleware = require("../middleware/Auth.middleware");
 const role = require("../middleware/role.middleware");
 
-//User SignUp or Login
-// router.post('/oauth/login', );
-
-//For directing to the home page
-// router.get('/home',userControllers.home);
-
-//For scanning QR
-// router.post('/scan_qr',);
-
-//For directing to the dashboard
-// router.get('/dashboard',authController.dashboard);
-
-//For Viewing profile
-// router.get('/view_profile',authController.viewprofile);
-
-// organizationregister
+// Organization register
 router.post("/organization-register", register_orginization);
 
-// new user register
+// New user register
 router.post("/register-user", register_user);
-router.post("/refresh-token", refreshToken); // 🆕 NEW ROUTE
 
-// login
+// Token refresh
+router.post("/refresh-token", refreshToken);
+
+// 🆕 NEW: Token verification endpoint
+router.post("/verify-token", verifyToken);
+
+// Login
 router.post("/login", login);
 
-//For logging out
-router.post("/logout",authMiddleware, logout);
+// Logout (protected route)
+router.post("/logout", authMiddleware, logout);
 
-//For updating profile
+// Update profile (protected route)
 router.put(
   "/updateProfile",
   authMiddleware,
@@ -48,7 +42,7 @@ router.put(
   updateProfile
 );
 
-//For viewprofile profile
+// View profile (protected route)
 router.get("/viewProfile", authMiddleware, viewProfile);
 
 module.exports = router;
