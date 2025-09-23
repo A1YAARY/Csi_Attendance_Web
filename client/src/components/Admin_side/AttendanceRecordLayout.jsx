@@ -11,7 +11,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 
 export const AttendanceRecordLayout = ({ records: propRecords }) => {
-  const { getAdminRecords, getdaily } = useAuth();
+  const { getAdminRecords, getdaily, getWeek } = useAuth();
   const [records, setRecords] = useState([]);
   const [filteredRecords, setFilteredRecords] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -316,7 +316,11 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
                         Daily
                       </li>
 
-                      <li className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
+                      <li 
+                      onClick={() => {
+                          getWeek(accesstoken); // Pass the access token
+                        }}
+                        className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
                         Weekly
                       </li>
                       {/* <li className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">

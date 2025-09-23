@@ -260,6 +260,7 @@ export function AuthProvider({ children }) {
           responseType: "blob", // important: receive Excel file as binary
         }
       );
+    
 
       // Create a URL for the blob and trigger download
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -276,6 +277,37 @@ export function AuthProvider({ children }) {
     } catch (error) {
       console.error("Failed to download daily report:", error);
       alert("Failed to download daily report.");
+    }
+  };
+  const getWeek = async (token) => {
+    try {
+      const todays = new Date()
+      // const formateddate  = todays.toISOString().split("T")[0]
+
+      const response = await axios.get(
+        `${BASE_URL}/getdata/weekly`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+          responseType: "blob", // important: receive Excel file as binary
+        }
+      );
+      // Create a URL for the blob and trigger download
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+
+      // Optional: name the file dynamically based on the date
+      link.setAttribute("download", `Weekly_report_${todays}.xlsx`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      console.log("Download triggered");
+    } catch (error) {
+      console.error("Failed to download weekly report:", error);
+      alert("Failed to download weekly report.");
     }
   };
 
@@ -615,6 +647,7 @@ export function AuthProvider({ children }) {
       // API functions - QR Code
       getActiveQRCode,
       getdaily,
+      getWeek,
       // API functions - Attendance
       scanAttendance,
       getPastAttendance,
