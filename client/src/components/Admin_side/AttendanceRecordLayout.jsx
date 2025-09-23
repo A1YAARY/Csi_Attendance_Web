@@ -11,7 +11,7 @@ import {
 import { useAuth } from "../../context/AuthContext";
 
 export const AttendanceRecordLayout = ({ records: propRecords }) => {
-  const { getAdminRecords } = useAuth();
+  const { getAdminRecords, getdaily, getWeek } = useAuth();
   const [records, setRecords] = useState([]);
   const [filteredRecords, setFilteredRecords] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -33,9 +33,9 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
         setOpen(false);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener("mousedown", handleClickOutside);
     return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener("mousedown", handleClickOutside);
     };
   }, []);
 
@@ -221,6 +221,7 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
       </div>
     );
   }
+  const accesstoken = localStorage.getItem("accessToken")
 
   return (
     <div className="p-4 sm:p-6 bg-gray-50 min-h-[calc(100vh-64px)]">
@@ -286,35 +287,49 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
                 <span className="sm:hidden">Date</span>
               </button> */}
               <div className="relative inline-block text-left" ref={menuRef}>
-              <button className="flex items-center px-3 sm:px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm flex-1 sm:flex-initial justify-center">
-                <Download className="w-4 h-4 mr-2" />
-                <span onClick={toggleDropdown} className="hidden sm:inline">Export</span>
-                <span onClick={toggleDropdown} className="sm:hidden">Export</span>
-              </button>
-              
-      {/* <button
+                <button className="flex items-center px-3 sm:px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm flex-1 sm:flex-initial justify-center">
+                  <Download className="w-4 h-4 mr-2" />
+                  <span onClick={toggleDropdown} className="hidden sm:inline">
+                    Export
+                  </span>
+                  <span onClick={toggleDropdown} className="sm:hidden">
+                    Export
+                  </span>
+                </button>
+
+                {/* <button
         onClick={toggleDropdown}
         className="p-2 text-gray-600 hover:text-black focus:outline-none"
       >
         &#8942; Vertical ellipsis */}
-      {/* </button> */}
+                {/* </button> */}
 
-      {open && (
-        <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded shadow-md z-10">
-          <ul className="py-1">
-            <li className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
-              Daily
-            </li>
-            <li className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
-              Weekly
-            </li>
-            {/* <li className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
+                {open && (
+                  <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded shadow-md z-10">
+                    <ul className="py-1">
+                      <li
+                        onClick={() => {
+                          getdaily(accesstoken); // Pass the access token
+                        }}
+                        className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                      >
+                        Daily
+                      </li>
+
+                      <li 
+                      onClick={() => {
+                          getWeek(accesstoken); // Pass the access token
+                        }}
+                        className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
+                        Weekly
+                      </li>
+                      {/* <li className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
               Share
             </li> */}
-          </ul>
-        </div>
-      )}
-    </div>
+                    </ul>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
