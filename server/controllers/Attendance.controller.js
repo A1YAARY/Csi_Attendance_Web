@@ -197,7 +197,7 @@ exports.scanQRCode = async (req, res) => {
       locationMatch = Number.isFinite(distance) ? distance <= tolerance : true;
     }
     const verified = qrCodeValid && locationMatch;
-
+ 
     // Persist attendance
     const attendance = await Attendance.create({
       userId: req.user._id,
@@ -252,7 +252,7 @@ exports.scanQRCode = async (req, res) => {
       .json({ success: false, message: "Failed to scan QR" });
   }
 };
-
+// get user attendance.  
 // 🔥 Get User Past Attendance
 exports.getUserPastAttendance = async (req, res) => {
   try {
