@@ -17,17 +17,16 @@ const TeacherInfo = () => {
   //     console.log(user);
   //   }
   // }, [user]);
-  // useEffect(() => {
-  //   // Simulate fetching user from localStorage
-  //   const userData = JSON.parse(localStorage.getItem("userData"));
+  useEffect(() => {
+    // Simulate fetching user from localStorage
+    const userData = JSON.parse(localStorage.getItem("userData"));
     
-  //   // Optional: simulate delay
-  //   setTimeout(() => {
-  //     setUserTeacher(userData);
-  //     setLoading(false);
-  //   }, 1000); // adjust delay as needed
-  // }, []);
-  
+    // Optional: simulate delay
+    setTimeout(() => {
+      setUserTeacher(userData);
+      setLoading(false);
+    }, 1000); // adjust delay as needed
+  }, []);
   const Dashboard = () => navigate("/dashboard");
   const navigate = useNavigate();
   const hidden = () => {
