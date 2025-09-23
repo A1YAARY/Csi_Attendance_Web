@@ -44,7 +44,11 @@ export const LoginPage = () => {
         localStorage.setItem("orginizationcode", res.data.organization.name);
         login(res.data.user, res.data.accessToken);
         toast.success("Login successful!");
-        loginadmin ? navigate("/Teacherinfo") : navigate("/admin");
+        if (res.data.user.role === "organization") {
+          navigate("/admin", { replace: true });
+        } else {
+          navigate("/Teacherinfo", { replace: true });
+        }
       }
     } catch (error) {
       toast.error(error.response?.data?.message || "Login error");
