@@ -19,6 +19,7 @@ const qrcodeRoutes = require("./routes/qrcode.routes");
 const attendanceRoutes = require("./routes/Attendance.routes");
 const adminRoutes = require("./routes/admin.routes");
 const passwordResetRoutes = require("./routes/resetPassword.routes");
+const downloadroutes = require('./routes/download.routes')
 
 const app = express();
 
@@ -85,6 +86,7 @@ app.use("/admin", adminRoutes);
 app.use("/password", passwordResetRoutes);
 app.use("/bulk", bulkUserRoutes);
 app.use("/api/ai-analytics", aiAnalyticsRoutes);
+app.use("/getdata", downloadroutes)
 
 // ✅ Health check
 app.get("/", (req, res) => {
