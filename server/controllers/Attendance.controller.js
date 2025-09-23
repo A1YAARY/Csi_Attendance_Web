@@ -177,12 +177,41 @@ exports.scanQRCode = async (req, res) => {
         ? location
         : { latitude: 0, longitude: 0, accuracy: 0 };
 
+<<<<<<< HEAD
     console.log("✅ Creating attendance record");
 
     // Create attendance record
     const record = await Attendance.create({
       userId: user._id,
       organizationId: qr.organizationId,
+=======
+    let locationMatch = true;
+    if (
+      qr.location?.latitude &&
+      qr.location?.longitude &&
+      safeLocation.latitude &&
+      safeLocation.longitude
+    ) {
+      const distance = geolib.getDistance(
+        {
+          latitude: Number(qr.location.latitude),
+          longitude: Number(qr.location.longitude),
+        },
+        {
+          latitude: Number(safeLocation.latitude),
+          longitude: Number(safeLocation.longitude),
+        }
+      );
+      const tolerance = org.settings?.locationToleranceMeters ?? 50;
+      locationMatch = Number.isFinite(distance) ? distance <= tolerance : true;
+    }
+    const verified = qrCodeValid && locationMatch;
+ 
+    // Persist attendance
+    const attendance = await Attendance.create({
+      userId: req.user._id,
+      organizationId: userOrgId,
+>>>>>>> 019be5ea376a10f2999fb46db830a912249107cc
       qrCodeId: qr._id,
       type,
       location: safeLocation,
@@ -256,7 +285,7 @@ exports.scanQRCode = async (req, res) => {
     });
   }
 };
-
+// get user attendance.  
 // 🔥 Get User Past Attendance
 const getUserPastAttendance = async (req, res) => {
   try {
