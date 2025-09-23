@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Calendar,
   Download,
@@ -19,6 +19,25 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [dateFilter, setDateFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef();
+
+  const toggleDropdown = () => {
+    setOpen(!open);
+  };
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (menuRef.current && !menuRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   // Fetch records on component mount or use props
   useEffect(() => {
@@ -252,25 +271,50 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
                 className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
               >
                 <option value="all">All Status</option>
-                <option value="present">Present</option>
-                <option value="absent">Absent</option>
-                <option value="late">Late</option>
+                {/* <option value="present">Present</option>
+                <option value="absent">Absent</option> */}
+                <option value="incomplete">Incomplete</option>
                 <option value="complete">Complete</option>
               </select>
             </div>
 
             {/* Right side - Actions */}
             <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
-              <button className="flex items-center px-3 sm:px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm flex-1 sm:flex-initial justify-center">
+              {/* <button className="flex items-center px-3 sm:px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm flex-1 sm:flex-initial justify-center">
                 <Calendar className="w-4 h-4 mr-2" />
                 <span className="hidden sm:inline">Pick Date</span>
                 <span className="sm:hidden">Date</span>
-              </button>
+              </button> */}
+              <div className="relative inline-block text-left" ref={menuRef}>
               <button className="flex items-center px-3 sm:px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm flex-1 sm:flex-initial justify-center">
                 <Download className="w-4 h-4 mr-2" />
-                <span className="hidden sm:inline">Export</span>
-                <span className="sm:hidden">Export</span>
+                <span onClick={toggleDropdown} className="hidden sm:inline">Export</span>
+                <span onClick={toggleDropdown} className="sm:hidden">Export</span>
               </button>
+              
+      {/* <button
+        onClick={toggleDropdown}
+        className="p-2 text-gray-600 hover:text-black focus:outline-none"
+      >
+        &#8942; Vertical ellipsis */}
+      {/* </button> */}
+
+      {open && (
+        <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded shadow-md z-10">
+          <ul className="py-1">
+            <li className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
+              Daily
+            </li>
+            <li className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
+              Weekly
+            </li>
+            {/* <li className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
+              Share
+            </li> */}
+          </ul>
+        </div>
+      )}
+    </div>
             </div>
           </div>
 

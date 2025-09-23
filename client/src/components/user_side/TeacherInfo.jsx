@@ -25,7 +25,18 @@ const TeacherInfo = () => {
     // >
     <div className="flex flex-col w-full min-h-screen">
       <Navbar />
-
+      {user.role !== "user" ? (
+        <button
+          onClick={() => {
+            navigate("/admin");
+          }}
+          className="btn btn-dash btn-secondary w-[150px] absolute right-30 top-14 text-red-600 hover:bg-red-200"
+        >
+          ADMIN
+        </button>
+      ) : (
+        ""
+      )}
       {/* Main content container with responsive padding and spacing */}
       <div className="flex-1 flex flex-col justify-center items-center px-4 sm:px-6 lg:px-8 pt-16 sm:pt-20 lg:pt-24 pb-8">
         {/* Avatar section with responsive sizing */}
