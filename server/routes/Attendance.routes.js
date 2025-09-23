@@ -15,7 +15,20 @@ router.get("/past", auth, attendanceController.getUserPastAttendance);
 
 
 // POST /attendance/upload
-router.post("/upload", upload.single("file"), attendanceController.uploadAttendanceFile);
+// router.post("/upload", upload.single("file"), attendanceController.uploadAttendanceFile);
+
+//download daily attenadance
+router.get("/download-daily", auth, attendanceController.downloadDailyReport);
+
+//download weekly attenadance
+router.get("/download-weekly", auth, attendanceController.downloadWeeklyReport);
+
+//get daily report 
+router.get("/daily-report", auth, attendanceController.getDailyReport);
+
+//get daily report 
+router.get("/weekly-report", auth, attendanceController.getDailyReport);
+
 
 
 module.exports = router;

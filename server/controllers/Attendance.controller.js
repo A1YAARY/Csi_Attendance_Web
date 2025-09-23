@@ -3,8 +3,14 @@ const DailyTimeSheet = require("../models/DailyTimeSheet.models");
 const QRCode = require("../models/Qrcode.models");
 const Organization = require("../models/organization.models");
 const User = require("../models/user.models");
-const geolib = require("geolib");
 
+// 🔥 Helper function to calculate working time
+const calculateWorkingTime = (checkIn, checkOut) => {
+  if (!checkIn || !checkOut) return 0;
+  return Math.floor((new Date(checkOut) - new Date(checkIn)) / 60000); // minutes
+};
+
+// 🔥 Helper function to get IST date
 const getISTDate = (date = new Date()) => {
   const istOffset = 5.5 * 60 * 60 * 1000;
   const utc = date.getTime() + date.getTimezoneOffset() * 60000;
@@ -16,13 +22,19 @@ const startOfISTDay = (date = new Date()) => {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
 };
 
-const calculateWorkingTime = (checkIn, checkOut) => {
-  if (!checkIn || !checkOut) return 0;
-  return Math.floor((new Date(checkOut) - new Date(checkIn)) / 60000);
-};
+// const calculateWorkingTime = (checkIn, checkOut) => {
+//   if (!checkIn || !checkOut) return 0;
+//   return Math.floor((new Date(checkOut) - new Date(checkIn)) / 60000);
+// };
 
 const updateDailyTimeSheet = async (userId, organizationId, attendance) => {
-  const dayStart = startOfISTDay();
+  const todayIST = getISTDate();
+  const startOfDay = new Date(
+    todayIST.getFullYear(),
+    todayIST.getMonth(),
+    todayIST.getDate(),
+    todayIST.getDay()
+  );
 
   let sheet = await DailyTimeSheet.findOne({
     userId,
@@ -73,135 +85,104 @@ const updateDailyTimeSheet = async (userId, organizationId, attendance) => {
   await sheet.save();
   return sheet;
 };
+
+// 🔥 Scan QR Code (Fixed)
 exports.scanQRCode = async (req, res) => {
   try {
-    const userOrgId = (
-      req.user.organizationId?._id ?? req.user.organizationId
-    )?.toString();
-    const body = req.body || {};
-    const code = body.code || body.qrCode || body.token;
-    const reqType = body.type || body.qrType;
+    console.log("📍 Scan request received:", {
+      body: req.body,
+      user: req.user?.email,
+      timestamp: new Date().toISOString(),
+    });
 
-    if (!code) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Missing required field: code" });
-    }
+    const { code, location, type, deviceInfo } = req.body;
+    const user = req.user;
 
-    const org = await Organization.findById(userOrgId);
-    if (!org)
-      return res
-        .status(404)
-        .json({ success: false, message: "Organization not found" });
-
-    // Resolve QR (primary by org+type+code, fallback by code only with org enforcement)
-    let qr = null;
-    if (reqType && ["check-in", "check-out"].includes(reqType)) {
-      qr = await QRCode.findOne({
-        organizationId: userOrgId,
-        code,
-        qrType: reqType,
-        active: true,
+    // Basic validation
+    if (!code || !type) {
+      console.log("❌ Missing required fields");
+      return res.status(400).json({
+        success: false,
+        message: "Missing required fields: code and type",
+        required: ["code", "type"],
       });
     }
+
+    if (!["check-in", "check-out"].includes(type)) {
+      console.log("❌ Invalid type:", type);
+      return res.status(400).json({
+        success: false,
+        message: "Invalid type. Must be 'check-in' or 'check-out'",
+      });
+    }
+
+    // Check last attendance for the day
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const lastAttendance = await Attendance.findOne({
+      userId: user._id,
+      createdAt: { $gte: todayStart },
+    }).sort({ createdAt: -1 });
+
+    // Prevent duplicate check-ins/check-outs
+    if (lastAttendance && lastAttendance.type === type) {
+      console.log("❌ Duplicate scan attempt");
+      return res.status(400).json({
+        success: false,
+        message: `You are already ${
+          type === "check-in" ? "checked in" : "checked out"
+        }. Please ${type === "check-in" ? "check out" : "check in"} first.`,
+      });
+    }
+
+    if (!lastAttendance && type === "check-out") {
+      console.log("❌ Checkout without checkin");
+      return res.status(400).json({
+        success: false,
+        message: "Cannot check-out without checking in first today.",
+      });
+    }
+
+    // Verify QR code
+    const qr = await QRCode.findOne({ code, active: true });
     if (!qr) {
-      qr = await QRCode.findOne({ code, active: true });
-      if (!qr)
-        return res
-          .status(404)
-          .json({ success: false, message: "QR not found or inactive" });
-      if (qr.organizationId?.toString() !== userOrgId) {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            message: "QR belongs to another organization",
-          });
-      }
-    }
-    const type = qr.qrType; // authoritative type from QR
-
-    // Business rule: one open session at a time
-    const dayStart = startOfISTDay();
-    const sheet = await DailyTimeSheet.findOne({
-      userId: req.user._id,
-      organizationId: userOrgId,
-      date: dayStart,
-    });
-    const hasOpenSession = !!(
-      sheet &&
-      sheet.sessions.length &&
-      !sheet.sessions[sheet.sessions.length - 1]?.checkOut?.time
-    );
-
-    if (type === "check-in" && hasOpenSession) {
-      return res
-        .status(409)
-        .json({
-          success: false,
-          message:
-            "Already checked in. Please check out before checking in again.",
-        });
-    }
-    if (type === "check-out" && !hasOpenSession) {
-      return res
-        .status(409)
-        .json({
-          success: false,
-          message: "No active check-in found. Please check in first.",
-        });
+      console.log("❌ Invalid QR code:", code);
+      return res.status(400).json({
+        success: false,
+        message: "Invalid or expired QR code",
+      });
     }
 
-    // Expiry
-    const nowSec = Math.floor(Date.now() / 1000);
-    const maxAge = (org.settings?.qrCodeValidityMinutes ?? 30) * 60;
-    const qrCodeValid =
-      typeof qr.timestamp === "number" ? nowSec - qr.timestamp <= maxAge : true;
+    // Verify organization
+    if (String(user.organizationId) !== String(qr.organizationId)) {
+      console.log("❌ Organization mismatch");
+      return res.status(403).json({
+        success: false,
+        message: "QR code doesn't belong to your organization",
+      });
+    }
 
-    // Location (optional)
+    // Verify QR type matches request type
+    if (qr.qrType !== type) {
+      console.log("❌ QR type mismatch");
+      return res.status(400).json({
+        success: false,
+        message: `This is a ${qr.qrType} QR code, but you're trying to ${type}`,
+      });
+    }
+
+    // Use safe location
     const safeLocation =
-      body.location &&
-      typeof body.location.latitude === "number" &&
-      typeof body.location.longitude === "number"
-        ? {
-            latitude: Number(body.location.latitude),
-            longitude: Number(body.location.longitude),
-            accuracy: Number(body.location.accuracy ?? 0),
-            radius: Number(body.location.radius ?? qr.location?.radius ?? 100),
-          }
-        : {
-            latitude: Number(qr.location?.latitude ?? 0),
-            longitude: Number(qr.location?.longitude ?? 0),
-            accuracy: 0,
-            radius: Number(qr.location?.radius ?? 100),
-          };
+      location && location.latitude && location.longitude
+        ? location
+        : { latitude: 0, longitude: 0, accuracy: 0 };
 
-    let locationMatch = true;
-    if (
-      qr.location?.latitude &&
-      qr.location?.longitude &&
-      safeLocation.latitude &&
-      safeLocation.longitude
-    ) {
-      const distance = geolib.getDistance(
-        {
-          latitude: Number(qr.location.latitude),
-          longitude: Number(qr.location.longitude),
-        },
-        {
-          latitude: Number(safeLocation.latitude),
-          longitude: Number(safeLocation.longitude),
-        }
-      );
-      const tolerance = org.settings?.locationToleranceMeters ?? 50;
-      locationMatch = Number.isFinite(distance) ? distance <= tolerance : true;
-    }
-    const verified = qrCodeValid && locationMatch;
+    console.log("✅ Creating attendance record");
 
-    // Persist attendance
-    const attendance = await Attendance.create({
-      userId: req.user._id,
-      organizationId: userOrgId,
+    // Create attendance record
+    const record = await Attendance.create({
+      userId: user._id,
+      organizationId: qr.organizationId,
       qrCodeId: qr._id,
       type,
       location: safeLocation,
@@ -221,40 +202,63 @@ exports.scanQRCode = async (req, res) => {
       },
     });
 
-    await QRCode.updateOne({ _id: qr._id }, { $inc: { usageCount: 1 } });
+    console.log("✅ Attendance record created:", record._id);
 
+    // Update daily timesheet
     const timeSheet = await updateDailyTimeSheet(
-      req.user._id,
-      userOrgId,
-      attendance
+      user._id,
+      qr.organizationId,
+      record
     );
+
+    // Update user activity
+    user.lastActivity = type === "check-in";
+    await user.save();
+
+    // Update QR usage count
+    qr.usageCount += 1;
+    await qr.save();
+
+    // Format response
+    const istOffset = 5.5 * 60 * 60 * 1000;
+    const recordObj = record.toObject();
+    recordObj.createdAtIST = new Date(record.createdAt.getTime() + istOffset);
+
+    console.log("✅ Sending success response");
 
     return res.json({
       success: true,
-      message:
-        type === "check-in"
-          ? "Checked in successfully"
-          : "Checked out successfully",
-      data: {
-        attendanceId: attendance._id,
-        verified,
-        dailySummary: {
-          totalMinutes: timeSheet.totalWorkingTime || 0,
-          status: timeSheet.status,
-          sessions: (timeSheet.sessions || []).length,
-        },
+      message: `${
+        type === "check-in" ? "Checked in" : "Checked out"
+      } successfully`,
+      attendance: recordObj,
+      dailyStatus: {
+        totalWorkingTime:
+          Math.floor(timeSheet.totalWorkingTime / 60) +
+          "h " +
+          (timeSheet.totalWorkingTime % 60) +
+          "m",
+        status: timeSheet.status,
+        sessions: timeSheet.sessions.length,
       },
+      timestamp: new Date().toISOString(),
     });
-  } catch (err) {
-    console.error("scanQRCode error", err);
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to scan QR" });
+  } catch (error) {
+    console.error("❌ Error in scanQRCode:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to process attendance scan",
+      error:
+        process.env.NODE_ENV === "development"
+          ? error.message
+          : "Internal server error",
+      timestamp: new Date().toISOString(),
+    });
   }
 };
 
 // 🔥 Get User Past Attendance
-exports.getUserPastAttendance = async (req, res) => {
+const getUserPastAttendance = async (req, res) => {
   try {
     const userId = req.user._id;
     const { limit = 50, page = 1 } = req.query;
@@ -267,24 +271,9 @@ exports.getUserPastAttendance = async (req, res) => {
       .limit(parseInt(limit))
       .skip(skip);
 
-    // Add IST timestamps
-    const formattedAttendance = attendance.map((record) => {
-      const istOffset = 5.5 * 60 * 60 * 1000;
-      const obj = record.toObject();
-      obj.createdAtIST = new Date(record.createdAt.getTime() + istOffset);
-      return obj;
-    });
-
-    const total = await Attendance.countDocuments({ userId });
-
     res.json({
       success: true,
-      attendance: formattedAttendance,
-      pagination: {
-        current: parseInt(page),
-        total: Math.ceil(total / limit),
-        hasNext: skip + attendance.length < total,
-      },
+      attendance,
     });
   } catch (error) {
     console.error("Error fetching user attendance:", error);
@@ -295,46 +284,18 @@ exports.getUserPastAttendance = async (req, res) => {
   }
 };
 
-// 🔥 Upload Attendance File
-exports.uploadAttendanceFile = async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: "No file uploaded",
-      });
-    }
-
-    res.json({
-      success: true,
-      message: "File uploaded successfully",
-      file: {
-        filename: req.file.filename,
-        originalname: req.file.originalname,
-        size: req.file.size,
-        url: req.file.path,
-      },
-    });
-  } catch (error) {
-    console.error("Error uploading attendance file:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to upload file",
-    });
-  }
-};
-
-// 🔥 Get Daily Report
-exports.getDailyReport = async (req, res) => {
+// 🔥 Get Daily Report (JSON)
+const getDailyReport = async (req, res) => {
   try {
     const { date } = req.query;
     const orgId = req.user.organizationId;
     const reportDate = date ? new Date(date) : new Date();
+
     const startOfDay = new Date(
       reportDate.getFullYear(),
       reportDate.getMonth(),
       reportDate.getDate(),
-      reportDate.getDay()
+      reportDate.getDay(),
     );
 
     const dailyReports = await DailyTimeSheet.find({
@@ -342,10 +303,8 @@ exports.getDailyReport = async (req, res) => {
       date: startOfDay,
     }).populate("userId", "name email institute department");
 
-    // Get all users in organization
     const allUsers = await User.find({ organizationId: orgId, role: "user" });
 
-    // Create report with absent users
     const reportMap = new Map();
     allUsers.forEach((user) => {
       reportMap.set(user._id.toString(), {
@@ -361,31 +320,22 @@ exports.getDailyReport = async (req, res) => {
     });
 
     dailyReports.forEach((report) => {
-      if (reportMap.has(report.userId._id.toString())) {
-        reportMap.set(report.userId._id.toString(), {
-          userId: report.userId._id,
-          name: report.userId.name,
-          email: report.userId.email,
-          institute: report.userId.institute,
-          department: report.userId.department,
-          totalWorkingTime: report.totalWorkingTime,
-          status: report.status,
-          sessions: report.sessions.length,
-        });
-      }
+      reportMap.set(report.userId._id.toString(), {
+        userId: report.userId._id,
+        name: report.userId.name,
+        email: report.userId.email,
+        institute: report.userId.institute,
+        department: report.userId.department,
+        totalWorkingTime: report.totalWorkingTime,
+        status: report.status,
+        sessions: report.sessions.length,
+      });
     });
-
-    const finalReport = Array.from(reportMap.values());
 
     res.json({
       success: true,
       date: startOfDay,
-      totalEmployees: allUsers.length,
-      present: finalReport.filter((r) => r.status !== "absent").length,
-      absent: finalReport.filter((r) => r.status === "absent").length,
-      fullDay: finalReport.filter((r) => r.status === "full-day").length,
-      halfDay: finalReport.filter((r) => r.status === "half-day").length,
-      employees: finalReport,
+      employees: Array.from(reportMap.values()),
     });
   } catch (error) {
     console.error("Error generating daily report:", error);
@@ -396,17 +346,17 @@ exports.getDailyReport = async (req, res) => {
   }
 };
 
-// 🔥 Get Weekly Report
-exports.getWeeklyReport = async (req, res) => {
+// 🔥 Get Weekly Report (JSON)
+const getWeeklyReport = async (req, res) => {
   try {
     const { startDate } = req.query;
     const orgId = req.user.organizationId;
     const start = startDate ? new Date(startDate) : new Date();
-    start.setDate(start.getDate() - start.getDay()); // Start of week (Sunday)
+    start.setDate(start.getDate() - start.getDay());
     start.setHours(0, 0, 0, 0);
 
     const end = new Date(start);
-    end.setDate(end.getDate() + 6); // End of week (Saturday)
+    end.setDate(end.getDate() + 6);
     end.setHours(23, 59, 59, 999);
 
     const weeklyReports = await DailyTimeSheet.find({
@@ -414,64 +364,11 @@ exports.getWeeklyReport = async (req, res) => {
       date: { $gte: start, $lte: end },
     }).populate("userId", "name email institute department");
 
-    const allUsers = await User.find({ organizationId: orgId, role: "user" });
-
-    // Create weekly summary
-    const userSummary = {};
-    allUsers.forEach((user) => {
-      userSummary[user._id.toString()] = {
-        name: user.name,
-        email: user.email,
-        institute: user.institute,
-        department: user.department,
-        days: {},
-        totalHours: 0,
-        presentDays: 0,
-        absentDays: 0,
-        halfDays: 0,
-        fullDays: 0,
-      };
-
-      // Initialize all days as absent
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        const dateKey = d.toISOString().split("T")[0];
-        userSummary[user._id.toString()].days[dateKey] = {
-          status: "absent",
-          workingTime: 0,
-          sessions: 0,
-        };
-      }
-    });
-
-    // Fill in actual data
-    weeklyReports.forEach((report) => {
-      const userId = report.userId._id.toString();
-      const dateKey = report.date.toISOString().split("T")[0];
-      if (userSummary[userId]) {
-        userSummary[userId].days[dateKey] = {
-          status: report.status,
-          workingTime: report.totalWorkingTime,
-          sessions: report.sessions.length,
-        };
-        userSummary[userId].totalHours += report.totalWorkingTime;
-        if (report.status === "full-day") userSummary[userId].fullDays++;
-        else if (report.status === "half-day") userSummary[userId].halfDays++;
-        else if (report.status === "absent") userSummary[userId].absentDays++;
-        if (report.status !== "absent") userSummary[userId].presentDays++;
-      }
-    });
-
-    // Count absent days
-    Object.keys(userSummary).forEach((userId) => {
-      const user = userSummary[userId];
-      user.absentDays = 7 - user.presentDays;
-    });
-
     res.json({
       success: true,
       weekStart: start,
       weekEnd: end,
-      summary: userSummary,
+      reports: weeklyReports,
     });
   } catch (error) {
     console.error("Error generating weekly report:", error);
@@ -482,10 +379,157 @@ exports.getWeeklyReport = async (req, res) => {
   }
 };
 
+// 🔥 Download Daily Report (XLSX)
+const downloadDailyReport = async (req, res) => {
+  try {
+    const { date } = req.query;
+    const orgId = req.user.organizationId;
+    const reportDate = date ? new Date(date) : new Date();
+
+    const startOfDay = new Date(
+      reportDate.getFullYear(),
+      reportDate.getMonth(),
+      reportDate.getDate()
+    );
+
+    const dailyReports = await DailyTimeSheet.find({
+      organizationId: orgId,
+      date: startOfDay,
+    }).populate("userId", "name email institute department");
+
+    const allUsers = await User.find({ organizationId: orgId, role: "user" });
+
+    const reportMap = new Map();
+    allUsers.forEach((user) => {
+      reportMap.set(user._id.toString(), {
+        name: user.name,
+        email: user.email,
+        institute: user.institute,
+        department: user.department,
+        totalWorkingTime: 0,
+        status: "absent",
+        sessions: 0,
+      });
+    });
+
+    dailyReports.forEach((report) => {
+      reportMap.set(report.userId._id.toString(), {
+        name: report.userId.name,
+        email: report.userId.email,
+        institute: report.userId.institute,
+        department: report.userId.department,
+        totalWorkingTime: report.totalWorkingTime,
+        status: report.status,
+        sessions: report.sessions.length,
+      });
+    });
+
+    const finalReport = Array.from(reportMap.values());
+
+    const ws = XLSX.utils.json_to_sheet(finalReport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Daily Report");
+    const buffer = XLSX.write(wb, { bookType: "xlsx", type: "buffer" });
+
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="daily_report_${startOfDay
+        .toISOString()
+        .split("T")[0]}.xlsx"`
+    );
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.send(buffer);
+  } catch (error) {
+    console.error("Error downloading daily report:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to download daily report",
+    });
+  }
+};
+
+// 🔥 Download Weekly Report (XLSX)
+const downloadWeeklyReport = async (req, res) => {
+  try {
+    const { startDate } = req.query;
+    const orgId = req.user.organizationId;
+    const start = startDate ? new Date(startDate) : new Date();
+
+    start.setDate(start.getDate() - start.getDay());
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date(start);
+    end.setDate(end.getDate() + 6);
+    end.setHours(23, 59, 59, 999);
+
+    const weeklyReports = await DailyTimeSheet.find({
+      organizationId: orgId,
+      date: { $gte: start, $lte: end },
+    }).populate("userId", "name email institute department");
+
+    const allUsers = await User.find({ organizationId: orgId, role: "user" });
+
+    const userSummary = {};
+    allUsers.forEach((user) => {
+      userSummary[user._id.toString()] = {
+        name: user.name,
+        email: user.email,
+        institute: user.institute,
+        department: user.department,
+        totalHours: 0,
+        presentDays: 0,
+        halfDays: 0,
+        fullDays: 0,
+        absentDays: 0,
+      };
+    });
+
+    weeklyReports.forEach((report) => {
+      const userId = report.userId._id.toString();
+      if (userSummary[userId]) {
+        userSummary[userId].totalHours += report.totalWorkingTime;
+        if (report.status === "full-day") userSummary[userId].fullDays++;
+        else if (report.status === "half-day") userSummary[userId].halfDays++;
+        else if (report.status === "absent") userSummary[userId].absentDays++;
+        if (report.status !== "absent") userSummary[userId].presentDays++;
+      }
+    });
+
+    const finalReport = Object.values(userSummary);
+
+    const ws = XLSX.utils.json_to_sheet(finalReport);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Weekly Report");
+    const buffer = XLSX.write(wb, { bookType: "xlsx", type: "buffer" });
+
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="weekly_report_${start
+        .toISOString()
+        .split("T")[0]}_${end.toISOString().split("T")[0]}.xlsx"`
+    );
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+    res.send(buffer);
+  } catch (error) {
+    console.error("Error downloading weekly report:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to download weekly report",
+    });
+  }
+};
+
 module.exports = {
-  getUserPastAttendance: exports.getUserPastAttendance,
-  scanQRCode: exports.scanQRCode,
-  uploadAttendanceFile: exports.uploadAttendanceFile,
-  getDailyReport: exports.getDailyReport,
-  getWeeklyReport: exports.getWeeklyReport,
+  scanQRCode,
+  getUserPastAttendance,
+  getDailyReport,
+  getWeeklyReport,
+  downloadDailyReport,
+  downloadWeeklyReport,
 };
