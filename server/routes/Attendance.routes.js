@@ -29,6 +29,9 @@ router.get("/past", auth, attendanceController.getUserPastAttendance);
 // //get daily report 
 // router.get("/weekly-report", auth, attendanceController.getDailyReport);
 
+// GET date=2025-08-15
+router.get("/check", attendanceController.checkWorkingDay);
+
 
 
 module.exports = router;

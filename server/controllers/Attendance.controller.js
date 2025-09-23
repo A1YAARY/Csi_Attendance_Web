@@ -3,6 +3,7 @@ const DailyTimeSheet = require("../models/DailyTimeSheet.models");
 const QRCode = require("../models/Qrcode.models");
 const Organization = require("../models/organization.models");
 const User = require("../models/user.models");
+const holidayService = require("../utils/holidayService");
 const geolib = require("geolib");
 
 const getISTDate = (date = new Date()) => {
@@ -482,10 +483,32 @@ exports.getWeeklyReport = async (req, res) => {
   }
 };
 
+
+// Check if a given date is a working day
+exports.checkWorkingDay = async (req, res) => {
+  try {
+    const { date } = req.query;
+    if (!date) {
+      return res.status(400).json({ error: "Date is required (YYYY-MM-DD)" });
+    }
+
+    const workingDay = await holidayService.isWorkingDay(new Date(date));
+    res.json({
+      date,
+      workingDay,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+};
+
+
 module.exports = {
   getUserPastAttendance: exports.getUserPastAttendance,
   scanQRCode: exports.scanQRCode,
   uploadAttendanceFile: exports.uploadAttendanceFile,
   getDailyReport: exports.getDailyReport,
   getWeeklyReport: exports.getWeeklyReport,
+  checkWorkingDay
 };
