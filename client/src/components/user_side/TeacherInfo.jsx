@@ -1,21 +1,48 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 // import { motion } from 'framer-motion'
 import Navbar from "./Navbar";
 import { Link, useNavigate } from "react-router-dom";
 import { div } from "framer-motion/client";
 
 const TeacherInfo = () => {
+  const [loading, setLoading] = useState(true);
+  const [userTeacher, setUserTeacher] = useState(null);
   const user = JSON.parse(localStorage.getItem("userData"));
-  useEffect(() => {
-    if (user) {
-      console.log(user);
-    }
-  }, [user]);
+  // useEffect(() => {
+  //   if (user) {
+  //     setTimeout(() => {
+  //     setUserTeacher(userData);
+  //     setLoading(false);
+  //   }, 1000); // adjust delay as needed
+  //     console.log(user);
+  //   }
+  // }, [user]);
+  // useEffect(() => {
+  //   // Simulate fetching user from localStorage
+  //   const userData = JSON.parse(localStorage.getItem("userData"));
+    
+  //   // Optional: simulate delay
+  //   setTimeout(() => {
+  //     setUserTeacher(userData);
+  //     setLoading(false);
+  //   }, 1000); // adjust delay as needed
+  // }, []);
+  
   const Dashboard = () => navigate("/dashboard");
   const navigate = useNavigate();
   const hidden = () => {
     navigate("/ScanQR");
   };
+  if (loading) {
+    return (
+      <div className="p-4 sm:p-6 bg-gray-50 min-h-screen flex justify-center items-center">
+        <div className="flex items-center justify-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+          <p className="ml-4 text-gray-600">Loading profile...</p>
+        </div>
+      </div>
+    );
+  }
   return (
     // <motion.div
     //     initial = {{ opacity:1 ,x:100}}
