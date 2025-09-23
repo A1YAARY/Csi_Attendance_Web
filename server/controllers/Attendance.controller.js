@@ -112,12 +112,10 @@ exports.scanQRCode = async (req, res) => {
           .status(404)
           .json({ success: false, message: "QR not found or inactive" });
       if (qr.organizationId?.toString() !== userOrgId) {
-        return res
-          .status(403)
-          .json({
-            success: false,
-            message: "QR belongs to another organization",
-          });
+        return res.status(403).json({
+          success: false,
+          message: "QR belongs to another organization",
+        });
       }
     }
     const type = qr.qrType; // authoritative type from QR
@@ -136,21 +134,17 @@ exports.scanQRCode = async (req, res) => {
     );
 
     if (type === "check-in" && hasOpenSession) {
-      return res
-        .status(409)
-        .json({
-          success: false,
-          message:
-            "Already checked in. Please check out before checking in again.",
-        });
+      return res.status(409).json({
+        success: false,
+        message:
+          "Already checked in. Please check out before checking in again.",
+      });
     }
     if (type === "check-out" && !hasOpenSession) {
-      return res
-        .status(409)
-        .json({
-          success: false,
-          message: "No active check-in found. Please check in first.",
-        });
+      return res.status(409).json({
+        success: false,
+        message: "No active check-in found. Please check in first.",
+      });
     }
 
     // Expiry
@@ -297,7 +291,7 @@ exports.getUserPastAttendance = async (req, res) => {
 };
 
 // 🔥 Upload Attendance File
-exports.uploadAttendanceFile = async (req, res) => {
+const uploadAttendanceFile = async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({
@@ -483,7 +477,6 @@ exports.getWeeklyReport = async (req, res) => {
   }
 };
 
-
 // Check if a given date is a working day
 exports.checkWorkingDay = async (req, res) => {
   try {
@@ -503,12 +496,11 @@ exports.checkWorkingDay = async (req, res) => {
   }
 };
 
-
 module.exports = {
   getUserPastAttendance: exports.getUserPastAttendance,
   scanQRCode: exports.scanQRCode,
   uploadAttendanceFile: exports.uploadAttendanceFile,
   getDailyReport: exports.getDailyReport,
   getWeeklyReport: exports.getWeeklyReport,
-  checkWorkingDay
+  checkWorkingDay: exports.checkWorkingDay,
 };
