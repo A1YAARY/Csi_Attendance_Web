@@ -9,8 +9,8 @@ const ScheduleAttendanceCheck = () => {
     // 12:00 AM IST = 6:30 PM UTC
     try {
       console.log("🔄 Running daily reset job...");
-
       const users = await User.find({ role: "user" });
+
       const updatePromises = users.map((user) => {
         user.lastActivity = false;
         return user.save();
@@ -23,12 +23,11 @@ const ScheduleAttendanceCheck = () => {
     }
   });
 
-  // 🔥 NEW: Delete old attendance records (6 months old)
+  // Delete old attendance records (6 months old)
   cron.schedule("0 2 * * 0", async () => {
     // Every Sunday at 2 AM IST
     try {
       console.log("🗑️ Running cleanup job...");
-
       const sixMonthsAgo = new Date();
       sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
@@ -42,7 +41,7 @@ const ScheduleAttendanceCheck = () => {
         date: { $lt: sixMonthsAgo },
       });
 
-      console.log(`✅ Cleanup completed: 
+      console.log(`✅ Cleanup completed:
         - Deleted ${attendanceResult.deletedCount} attendance records
         - Deleted ${timesheetResult.deletedCount} timesheet records`);
     } catch (error) {

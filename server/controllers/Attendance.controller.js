@@ -6,6 +6,7 @@ const User = require("../models/user.models");
 const holidayService = require("../utils/holidayService");
 const geolib = require("geolib");
 
+// IST helper functions
 const getISTDate = (date = new Date()) => {
   const istOffset = 5.5 * 60 * 60 * 1000;
   const utc = date.getTime() + date.getTimezoneOffset() * 60000;
@@ -17,6 +18,53 @@ const startOfISTDay = (date = new Date()) => {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
 };
 
+const endOfISTDay = (date = new Date()) => {
+  const d = getISTDate(date);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+};
+
+const formatISTDate = (date) => {
+  return new Date(date).toLocaleString("en-IN", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+};
+
+// Enhanced location spoofing detection
+const detectLocationSpoofing = (location, userAgent, deviceInfo) => {
+  const suspiciousIndicators = [];
+  
+  // Check for unrealistic accuracy
+  if (location.accuracy && location.accuracy < 1) {
+    suspiciousIndicators.push("Unrealistic GPS accuracy");
+  }
+  
+  // Check for mock location apps in user agent
+  const mockLocationKeywords = ['mock', 'fake', 'spoof', 'simulator'];
+  if (userAgent && mockLocationKeywords.some(keyword => 
+    userAgent.toLowerCase().includes(keyword))) {
+    suspiciousIndicators.push("Mock location app detected");
+  }
+  
+  // Check for developer options indicators
+  if (deviceInfo && (
+    deviceInfo.developmentSettingsEnabled || 
+    deviceInfo.mockLocationEnabled
+  )) {
+    suspiciousIndicators.push("Developer options enabled");
+  }
+  
+  return {
+    isSuspicious: suspiciousIndicators.length > 0,
+    indicators: suspiciousIndicators
+  };
+};
+
 const calculateWorkingTime = (checkIn, checkOut) => {
   if (!checkIn || !checkOut) return 0;
   return Math.floor((new Date(checkOut) - new Date(checkIn)) / 60000);
@@ -24,12 +72,12 @@ const calculateWorkingTime = (checkIn, checkOut) => {
 
 const updateDailyTimeSheet = async (userId, organizationId, attendance) => {
   const dayStart = startOfISTDay();
-
   let sheet = await DailyTimeSheet.findOne({
     userId,
     organizationId,
     date: dayStart,
   });
+
   if (!sheet) {
     sheet = new DailyTimeSheet({
       userId,
@@ -43,13 +91,16 @@ const updateDailyTimeSheet = async (userId, organizationId, attendance) => {
 
   if (attendance.type === "check-in") {
     sheet.sessions.push({
-      checkIn: { time: attendance.createdAt, attendanceId: attendance._id },
+      checkIn: {
+        time: getISTDate(attendance.createdAt),
+        attendanceId: attendance._id,
+      },
     });
   } else if (attendance.type === "check-out") {
     const last = sheet.sessions[sheet.sessions.length - 1];
     if (last && !last.checkOut?.time) {
       last.checkOut = {
-        time: attendance.createdAt,
+        time: getISTDate(attendance.createdAt),
         attendanceId: attendance._id,
       };
       last.duration = Math.floor(
@@ -74,28 +125,69 @@ const updateDailyTimeSheet = async (userId, organizationId, attendance) => {
   await sheet.save();
   return sheet;
 };
+
+// Enhanced QR scanning with comprehensive security
 exports.scanQRCode = async (req, res) => {
   try {
     const userOrgId = (
       req.user.organizationId?._id ?? req.user.organizationId
     )?.toString();
+
     const body = req.body || {};
     const code = body.code || body.qrCode || body.token;
     const reqType = body.type || body.qrType;
 
     if (!code) {
-      return res
-        .status(400)
-        .json({ success: false, message: "Missing required field: code" });
+      return res.status(400).json({ 
+        success: false, 
+        message: "Missing required field: code" 
+      });
     }
 
-    const org = await Organization.findById(userOrgId);
-    if (!org)
-      return res
-        .status(404)
-        .json({ success: false, message: "Organization not found" });
+    // Validate user location is provided
+    if (!body.location || !body.location.latitude || !body.location.longitude) {
+      return res.status(400).json({
+        success: false,
+        message: "Current location is required for attendance",
+        code: "LOCATION_REQUIRED"
+      });
+    }
 
-    // Resolve QR (primary by org+type+code, fallback by code only with org enforcement)
+    // Get organization
+    const org = await Organization.findById(userOrgId);
+    if (!org) {
+      return res.status(404).json({ 
+        success: false, 
+        message: "Organization not found" 
+      });
+    }
+
+    // Device verification for users
+    const user = await User.findById(req.user._id);
+    if (user.role === "user") {
+      // Check device registration
+      if (!user.deviceInfo.isRegistered) {
+        return res.status(403).json({
+          success: false,
+          message: "Device not registered. Please contact admin.",
+          code: "DEVICE_NOT_REGISTERED"
+        });
+      }
+
+      // Check device ID
+      const currentDeviceId = body.deviceInfo?.deviceId || req.headers['x-device-id'];
+      if (!currentDeviceId || currentDeviceId !== user.deviceInfo.deviceId) {
+        return res.status(403).json({
+          success: false,
+          message: "Unauthorized device. Please use your registered device or request device change.",
+          code: "UNAUTHORIZED_DEVICE",
+          registeredDevice: user.deviceInfo.deviceId,
+          currentDevice: currentDeviceId
+        });
+      }
+    }
+
+    // Resolve QR
     let qr = null;
     if (reqType && ["check-in", "check-out"].includes(reqType)) {
       qr = await QRCode.findOne({
@@ -105,20 +197,24 @@ exports.scanQRCode = async (req, res) => {
         active: true,
       });
     }
+
     if (!qr) {
       qr = await QRCode.findOne({ code, active: true });
-      if (!qr)
-        return res
-          .status(404)
-          .json({ success: false, message: "QR not found or inactive" });
+      if (!qr) {
+        return res.status(404).json({ 
+          success: false, 
+          message: "QR code not found or inactive" 
+        });
+      }
       if (qr.organizationId?.toString() !== userOrgId) {
         return res.status(403).json({
           success: false,
-          message: "QR belongs to another organization",
+          message: "QR code belongs to another organization",
         });
       }
     }
-    const type = qr.qrType; // authoritative type from QR
+
+    const type = qr.qrType;
 
     // Business rule: one open session at a time
     const dayStart = startOfISTDay();
@@ -127,6 +223,7 @@ exports.scanQRCode = async (req, res) => {
       organizationId: userOrgId,
       date: dayStart,
     });
+
     const hasOpenSession = !!(
       sheet &&
       sheet.sessions.length &&
@@ -136,10 +233,10 @@ exports.scanQRCode = async (req, res) => {
     if (type === "check-in" && hasOpenSession) {
       return res.status(409).json({
         success: false,
-        message:
-          "Already checked in. Please check out before checking in again.",
+        message: "Already checked in. Please check out before checking in again.",
       });
     }
+
     if (type === "check-out" && !hasOpenSession) {
       return res.status(409).json({
         success: false,
@@ -147,61 +244,87 @@ exports.scanQRCode = async (req, res) => {
       });
     }
 
-    // Expiry
-    const nowSec = Math.floor(Date.now() / 1000);
+    // Expiry check using IST
+    const nowSec = Math.floor(getISTDate().getTime() / 1000);
     const maxAge = (org.settings?.qrCodeValidityMinutes ?? 30) * 60;
     const qrCodeValid =
       typeof qr.timestamp === "number" ? nowSec - qr.timestamp <= maxAge : true;
 
-    // Location (optional)
-    const safeLocation =
-      body.location &&
-      typeof body.location.latitude === "number" &&
-      typeof body.location.longitude === "number"
-        ? {
-            latitude: Number(body.location.latitude),
-            longitude: Number(body.location.longitude),
-            accuracy: Number(body.location.accuracy ?? 0),
-            radius: Number(body.location.radius ?? qr.location?.radius ?? 100),
-          }
-        : {
-            latitude: Number(qr.location?.latitude ?? 0),
-            longitude: Number(qr.location?.longitude ?? 0),
-            accuracy: 0,
-            radius: Number(qr.location?.radius ?? 100),
-          };
-
-    let locationMatch = true;
-    if (
-      qr.location?.latitude &&
-      qr.location?.longitude &&
-      safeLocation.latitude &&
-      safeLocation.longitude
-    ) {
-      const distance = geolib.getDistance(
-        {
-          latitude: Number(qr.location.latitude),
-          longitude: Number(qr.location.longitude),
-        },
-        {
-          latitude: Number(safeLocation.latitude),
-          longitude: Number(safeLocation.longitude),
-        }
-      );
-      const tolerance = org.settings?.locationToleranceMeters ?? 50;
-      locationMatch = Number.isFinite(distance) ? distance <= tolerance : true;
+    if (!qrCodeValid) {
+      return res.status(400).json({
+        success: false,
+        message: "QR code has expired. Please request a new QR code.",
+        code: "QR_EXPIRED"
+      });
     }
-    const verified = qrCodeValid && locationMatch;
 
-    // Persist attendance
+    // Enhanced location validation
+    const userLocation = {
+      latitude: Number(body.location.latitude),
+      longitude: Number(body.location.longitude),
+      accuracy: Number(body.location.accuracy ?? 0),
+    };
+
+    // Check distance from organization location
+    const orgLocation = {
+      latitude: Number(org.location.latitude),
+      longitude: Number(org.location.longitude),
+    };
+
+    const distance = geolib.getDistance(orgLocation, userLocation);
+    const allowedRadius = org.settings?.locationToleranceMeters ?? 100;
+    const locationMatch = distance <= allowedRadius;
+
+    if (!locationMatch) {
+      return res.status(403).json({
+        success: false,
+        message: `You are not within the organization premises. You are ${distance} meters away, but must be within ${allowedRadius} meters.`,
+        code: "LOCATION_OUT_OF_RANGE",
+        data: {
+          currentDistance: distance,
+          allowedRadius,
+          organizationLocation: {
+            latitude: org.location.latitude,
+            longitude: org.location.longitude,
+            address: org.location.address
+          }
+        }
+      });
+    }
+
+    // Location spoofing detection
+    const spoofingCheck = detectLocationSpoofing(
+      body.location, 
+      req.headers["user-agent"],
+      body.deviceInfo
+    );
+
+    // If strict verification is enabled and spoofing is detected
+    if (org.settings?.strictLocationVerification && spoofingCheck.isSuspicious) {
+      return res.status(403).json({
+        success: false,
+        message: "Potential location spoofing detected. Please try again with legitimate location.",
+        code: "LOCATION_SPOOFING_DETECTED",
+        indicators: spoofingCheck.indicators
+      });
+    }
+
+    const verified = qrCodeValid && locationMatch && !spoofingCheck.isSuspicious;
+
+    // Create attendance record with IST and enhanced verification
     const attendance = await Attendance.create({
       userId: req.user._id,
       organizationId: userOrgId,
       qrCodeId: qr._id,
       type,
-      location: safeLocation,
+      istTimestamp: getISTDate(),
+      location: {
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        accuracy: userLocation.accuracy,
+      },
       deviceInfo: {
-        deviceId: body.deviceInfo?.deviceId,
+        deviceId: body.deviceInfo?.deviceId || req.headers['x-device-id'],
         platform: body.deviceInfo?.platform,
         userAgent: req.headers["user-agent"],
         ipAddress: req.ip,
@@ -212,11 +335,25 @@ exports.scanQRCode = async (req, res) => {
         locationMatch,
         qrCodeValid,
         deviceTrusted: true,
-        spoofingDetected: false,
+        spoofingDetected: spoofingCheck.isSuspicious,
+        distance: distance,
+        spoofingIndicators: spoofingCheck.indicators
       },
     });
 
+    // Update QR usage count
     await QRCode.updateOne({ _id: qr._id }, { $inc: { usageCount: 1 } });
+
+    // Update user's last known location
+    if (user.role === "user") {
+      user.deviceInfo.lastKnownLocation = {
+        latitude: userLocation.latitude,
+        longitude: userLocation.longitude,
+        accuracy: userLocation.accuracy,
+        timestamp: getISTDate()
+      };
+      await user.save();
+    }
 
     const timeSheet = await updateDailyTimeSheet(
       req.user._id,
@@ -226,13 +363,15 @@ exports.scanQRCode = async (req, res) => {
 
     return res.json({
       success: true,
-      message:
-        type === "check-in"
-          ? "Checked in successfully"
-          : "Checked out successfully",
+      message: type === "check-in" ? "Checked in successfully" : "Checked out successfully",
       data: {
         attendanceId: attendance._id,
         verified,
+        timestamp: formatISTDate(attendance.istTimestamp),
+        location: {
+          distance: distance,
+          withinRange: locationMatch,
+        },
         dailySummary: {
           totalMinutes: timeSheet.totalWorkingTime || 0,
           status: timeSheet.status,
@@ -242,13 +381,14 @@ exports.scanQRCode = async (req, res) => {
     });
   } catch (err) {
     console.error("scanQRCode error", err);
-    return res
-      .status(500)
-      .json({ success: false, message: "Failed to scan QR" });
+    return res.status(500).json({ 
+      success: false, 
+      message: "Failed to scan QR code" 
+    });
   }
 };
 
-// 🔥 Get User Past Attendance
+// Get User Past Attendance with IST
 exports.getUserPastAttendance = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -262,11 +402,13 @@ exports.getUserPastAttendance = async (req, res) => {
       .limit(parseInt(limit))
       .skip(skip);
 
-    // Add IST timestamps
+    // Format with IST timestamps
     const formattedAttendance = attendance.map((record) => {
-      const istOffset = 5.5 * 60 * 60 * 1000;
       const obj = record.toObject();
-      obj.createdAtIST = new Date(record.createdAt.getTime() + istOffset);
+      obj.istTimestampFormatted = formatISTDate(
+        record.istTimestamp || record.createdAt
+      );
+      obj.createdAtISTFormatted = formatISTDate(record.createdAt);
       return obj;
     });
 
@@ -290,54 +432,21 @@ exports.getUserPastAttendance = async (req, res) => {
   }
 };
 
-// 🔥 Upload Attendance File
-const uploadAttendanceFile = async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({
-        success: false,
-        message: "No file uploaded",
-      });
-    }
-
-    res.json({
-      success: true,
-      message: "File uploaded successfully",
-      file: {
-        filename: req.file.filename,
-        originalname: req.file.originalname,
-        size: req.file.size,
-        url: req.file.path,
-      },
-    });
-  } catch (error) {
-    console.error("Error uploading attendance file:", error);
-    res.status(500).json({
-      success: false,
-      message: "Failed to upload file",
-    });
-  }
-};
-
-// 🔥 Get Daily Report
+// Get Daily Report with IST
 exports.getDailyReport = async (req, res) => {
   try {
     const { date } = req.query;
     const orgId = req.user.organizationId;
-    const reportDate = date ? new Date(date) : new Date();
-    const startOfDay = new Date(
-      reportDate.getFullYear(),
-      reportDate.getMonth(),
-      reportDate.getDate(),
-      reportDate.getDay()
-    );
+    const reportDate = date ? new Date(date) : getISTDate();
+    
+    const startOfDay = startOfISTDay(reportDate);
+    const endOfDay = endOfISTDay(reportDate);
 
     const dailyReports = await DailyTimeSheet.find({
       organizationId: orgId,
-      date: startOfDay,
+      date: { $gte: startOfDay, $lte: endOfDay },
     }).populate("userId", "name email institute department");
 
-    // Get all users in organization
     const allUsers = await User.find({ organizationId: orgId, role: "user" });
 
     // Create report with absent users
@@ -352,17 +461,15 @@ exports.getDailyReport = async (req, res) => {
         totalWorkingTime: 0,
         status: "absent",
         sessions: [],
+        deviceRegistered: user.deviceInfo.isRegistered || false
       });
     });
 
     dailyReports.forEach((report) => {
       if (reportMap.has(report.userId._id.toString())) {
+        const existing = reportMap.get(report.userId._id.toString());
         reportMap.set(report.userId._id.toString(), {
-          userId: report.userId._id,
-          name: report.userId.name,
-          email: report.userId.email,
-          institute: report.userId.institute,
-          department: report.userId.department,
+          ...existing,
           totalWorkingTime: report.totalWorkingTime,
           status: report.status,
           sessions: report.sessions.length,
@@ -374,7 +481,7 @@ exports.getDailyReport = async (req, res) => {
 
     res.json({
       success: true,
-      date: startOfDay,
+      date: formatISTDate(startOfDay),
       totalEmployees: allUsers.length,
       present: finalReport.filter((r) => r.status !== "absent").length,
       absent: finalReport.filter((r) => r.status === "absent").length,
@@ -391,22 +498,24 @@ exports.getDailyReport = async (req, res) => {
   }
 };
 
-// 🔥 Get Weekly Report
+// Get Weekly Report with IST
 exports.getWeeklyReport = async (req, res) => {
   try {
     const { startDate } = req.query;
     const orgId = req.user.organizationId;
-    const start = startDate ? new Date(startDate) : new Date();
-    start.setDate(start.getDate() - start.getDay()); // Start of week (Sunday)
-    start.setHours(0, 0, 0, 0);
-
-    const end = new Date(start);
-    end.setDate(end.getDate() + 6); // End of week (Saturday)
-    end.setHours(23, 59, 59, 999);
+    const start = startDate ? new Date(startDate) : getISTDate();
+    
+    // Adjust to IST week start
+    const istStart = startOfISTDay(start);
+    istStart.setDate(istStart.getDate() - istStart.getDay()); // Start of week (Sunday)
+    
+    const istEnd = new Date(istStart);
+    istEnd.setDate(istEnd.getDate() + 6); // End of week (Saturday)
+    istEnd.setHours(23, 59, 59, 999);
 
     const weeklyReports = await DailyTimeSheet.find({
       organizationId: orgId,
-      date: { $gte: start, $lte: end },
+      date: { $gte: istStart, $lte: istEnd },
     }).populate("userId", "name email institute department");
 
     const allUsers = await User.find({ organizationId: orgId, role: "user" });
@@ -428,7 +537,7 @@ exports.getWeeklyReport = async (req, res) => {
       };
 
       // Initialize all days as absent
-      for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      for (let d = new Date(istStart); d <= istEnd; d.setDate(d.getDate() + 1)) {
         const dateKey = d.toISOString().split("T")[0];
         userSummary[user._id.toString()].days[dateKey] = {
           status: "absent",
@@ -442,16 +551,19 @@ exports.getWeeklyReport = async (req, res) => {
     weeklyReports.forEach((report) => {
       const userId = report.userId._id.toString();
       const dateKey = report.date.toISOString().split("T")[0];
+      
       if (userSummary[userId]) {
         userSummary[userId].days[dateKey] = {
           status: report.status,
           workingTime: report.totalWorkingTime,
           sessions: report.sessions.length,
         };
+        
         userSummary[userId].totalHours += report.totalWorkingTime;
+        
         if (report.status === "full-day") userSummary[userId].fullDays++;
         else if (report.status === "half-day") userSummary[userId].halfDays++;
-        else if (report.status === "absent") userSummary[userId].absentDays++;
+        
         if (report.status !== "absent") userSummary[userId].presentDays++;
       }
     });
@@ -464,8 +576,8 @@ exports.getWeeklyReport = async (req, res) => {
 
     res.json({
       success: true,
-      weekStart: start,
-      weekEnd: end,
+      weekStart: formatISTDate(istStart),
+      weekEnd: formatISTDate(istEnd),
       summary: userSummary,
     });
   } catch (error) {
@@ -477,29 +589,39 @@ exports.getWeeklyReport = async (req, res) => {
   }
 };
 
-// Check if a given date is a working day
+// Check working day with IST
 exports.checkWorkingDay = async (req, res) => {
   try {
     const { date } = req.query;
     if (!date) {
-      return res.status(400).json({ error: "Date is required (YYYY-MM-DD)" });
+      return res.status(400).json({ 
+        success: false,
+        error: "Date is required (YYYY-MM-DD)" 
+      });
     }
 
-    const workingDay = await holidayService.isWorkingDay(new Date(date));
+    const checkDate = new Date(date);
+    const istDate = getISTDate(checkDate);
+    const workingDay = await holidayService.isWorkingDay(istDate);
+
     res.json({
-      date,
+      success: true,
+      date: formatISTDate(istDate),
+      originalDate: date,
       workingDay,
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ error: "Internal Server Error" });
+    res.status(500).json({ 
+      success: false,
+      error: "Internal Server Error" 
+    });
   }
 };
 
 module.exports = {
   getUserPastAttendance: exports.getUserPastAttendance,
   scanQRCode: exports.scanQRCode,
-  uploadAttendanceFile: exports.uploadAttendanceFile,
   getDailyReport: exports.getDailyReport,
   getWeeklyReport: exports.getWeeklyReport,
   checkWorkingDay: exports.checkWorkingDay,

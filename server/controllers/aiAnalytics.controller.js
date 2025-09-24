@@ -3,7 +3,7 @@ const { getAIAgent } = require("../utils/aiAgent");
 const processAIQuery = async (req, res) => {
   try {
     const { question } = req.body; // Removed generateAudio parameter
-
+    //testing
     // Extract organization ID
     let organizationId;
     if (req.user.organizationId) {

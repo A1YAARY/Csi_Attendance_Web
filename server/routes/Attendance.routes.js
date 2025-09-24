@@ -8,10 +8,17 @@ const {
   downloadDailyReport,
   downloadWeeklyReport,
 } = require("../controllers/download.controller");
+const antiSpoofingMiddleware = require("../middleware/DIstance.middleware");
 
 // Scan QR
 // router.post("/scan", auth, attendanceController.scanQRCode);
-router.post("/scan", auth, qrRateLimiter, attendanceController.scanQRCode);
+router.post(
+  "/scan",
+  auth,
+  qrRateLimiter,
+  antiSpoofingMiddleware,
+  attendanceController.scanQRCode
+);
 
 // Get past attendance for logged-in user
 router.get("/past", auth, attendanceController.getUserPastAttendance);
