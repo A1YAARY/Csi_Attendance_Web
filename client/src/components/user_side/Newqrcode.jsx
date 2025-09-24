@@ -15,34 +15,26 @@ const NewQrcode = () => {
   const [showActionModal, setShowActionModal] = useState(false); // NEW: popup modal
   const [selectedAction, setSelectedAction] = useState(null); // NEW: user choice
   const [scannerStarted, setScannerStarted] = useState(false); // NEW: track scanner state
+  const [locationStatus, setLocationStatus] = useState("Getting location...");
 
   const BASE_URL =
     import.meta.env.VITE_BACKEND_BASE_URL ||
     "https://csi-attendance-web.onrender.com";
   const token = localStorage.getItem("accessToken");
+  const deviceId = localStorage.getItem("deviceId") || "unknown_device";
 
-  // Generate or get device ID
-  const getDeviceId = () => {
-    let deviceId = localStorage.getItem("deviceId");
-    if (!deviceId) {
-      // Generate a unique device ID based on browser fingerprint
-      deviceId =
-        "device_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
-      localStorage.setItem("deviceId", deviceId);
-    }
-    return deviceId;
-  };
-
-  // Get user's current attendance status
+  // Get user's current attendance status (fixed to handle both response shapes)
   const getUserStatus = async () => {
     try {
       const response = await axios.get(`${BASE_URL}/attend/past?limit=1`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
+          "X-Device-ID": deviceId,
         },
       });
 
+      // Handle both { data: [...] } and { attendance: [...] } response shapes
       const arr = response.data?.data || response.data?.attendance || [];
       if (Array.isArray(arr) && arr.length > 0) {
         const lastEntry = arr[0];
@@ -50,14 +42,14 @@ const NewQrcode = () => {
           lastEntry.type === "check-in" ? "checked-in" : "checked-out"
         );
       } else {
-        setCurrentStatus("checked-out");
+        setCurrentStatus("checked-out"); // Default for first-time user
       }
     } catch (error) {
       console.log("Could not fetch user status, defaulting to checked-out");
       setCurrentStatus("checked-out");
     } finally {
-      setReady(true);
-      setShowActionModal(true);
+      setReady(true); // Allow scanner to start
+      setShowActionModal(true); // NEW: Show action selection popup
     }
   };
 
@@ -86,63 +78,101 @@ const NewQrcode = () => {
     return currentStatus === "checked-in" ? "🔓" : "🔒";
   };
 
-  // Parse QR payload
+  // Parse QR payload (prefer qrType from QR if present)
   const parseQr = (decodedText) => {
     try {
       const parsed = JSON.parse(decodedText);
       return {
         code: parsed.code || decodedText,
-        qrType: parsed.qrType || parsed.type,
+        qrType: parsed.qrType || parsed.type, // respect QR's declared type
       };
     } catch {
-      return {
-        code: decodedText,
-        qrType: undefined,
-      };
+      return { code: decodedText, qrType: undefined };
     }
   };
 
-  // Get geolocation
-  const getGeo = () =>
-    new Promise((resolve) => {
+  // Enhanced geolocation with high accuracy and multiple attempts
+  const getHighAccuracyLocation = () => {
+    return new Promise((resolve) => {
       if (!navigator.geolocation) {
-        console.warn("Geolocation not supported");
+        setLocationStatus("❌ Geolocation not supported");
         return resolve(null);
       }
 
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          console.log("📍 Location obtained:", {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-          });
-          resolve({
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            accuracy: position.coords.accuracy,
-          });
-        },
-        (error) => {
-          console.warn("Location error:", error.message);
-          resolve(null);
-        },
-        {
-          timeout: 10000,
-          enableHighAccuracy: true,
-          maximumAge: 300000, // 5 minutes
-        }
-      );
-    });
+      setLocationStatus("📍 Getting precise location...");
 
-  // Handle QR scan result - UPDATED with deviceId and location
+      const options = {
+        enableHighAccuracy: true,
+        timeout: 15000, // 15 seconds
+        maximumAge: 0, // Don't use cached location
+      };
+
+      let attempts = 0;
+      const maxAttempts = 3;
+      let bestLocation = null;
+
+      const tryGetLocation = () => {
+        attempts++;
+        setLocationStatus(
+          `📍 Getting location (attempt ${attempts}/${maxAttempts})...`
+        );
+
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const location = {
+              latitude: position.coords.latitude,
+              longitude: position.coords.longitude,
+              accuracy: position.coords.accuracy,
+              timestamp: Date.now(),
+            };
+
+            console.log(`📍 Location attempt ${attempts}:`, location);
+
+            // Keep the most accurate location
+            if (!bestLocation || location.accuracy < bestLocation.accuracy) {
+              bestLocation = location;
+            }
+
+            // If we got a very accurate location (< 10m) or this is our last attempt
+            if (location.accuracy <= 10 || attempts >= maxAttempts) {
+              setLocationStatus(
+                `✅ Location acquired (±${Math.round(bestLocation.accuracy)}m)`
+              );
+              resolve(bestLocation);
+            } else {
+              // Try again for better accuracy
+              setTimeout(tryGetLocation, 1000);
+            }
+          },
+          (error) => {
+            console.error(`❌ Location attempt ${attempts} failed:`, error);
+
+            if (attempts >= maxAttempts) {
+              setLocationStatus("⚠️ Using approximate location");
+              // Return best location we got, or null if none
+              resolve(bestLocation);
+            } else {
+              setTimeout(tryGetLocation, 1000);
+            }
+          },
+          options
+        );
+      };
+
+      tryGetLocation();
+    });
+  };
+
+  // Handle QR scan result (FIXED: single POST guaranteed)
   const handleScanning = async (decodedText) => {
-    if (busyRef.current || isProcessing) return;
+    if (busyRef.current || isProcessing) return; // Double gate
     busyRef.current = true;
     setIsProcessing(true);
 
     try {
       const { code, qrType } = parseQr(decodedText);
+
+      // NEW: Use selected action from popup instead of inferring
       const nextAction =
         selectedAction ||
         (qrType && (qrType === "check-in" || qrType === "check-out")
@@ -152,27 +182,34 @@ const NewQrcode = () => {
       console.log("🔍 Scanned QR Code:", code);
       console.log("📋 Action:", nextAction);
 
-      // Get location if available
-      const location = await getGeo();
+      // Get high accuracy location
+      const location = await getHighAccuracyLocation();
 
-      // Get device ID
-      const deviceId = getDeviceId();
+      if (!location) {
+        throw new Error(
+          "Unable to get location. Please ensure location services are enabled and try again."
+        );
+      }
 
-      // Prepare request body with required fields
+      // Enhanced device info
+      const deviceInfo = {
+        deviceId: deviceId,
+        platform: /Android/.test(navigator.userAgent)
+          ? "Android"
+          : /iPhone|iPad|iPod/.test(navigator.userAgent)
+          ? "iOS"
+          : "Web",
+        userAgent: navigator.userAgent,
+        fingerprint: deviceId,
+        timestamp: Date.now(),
+      };
+
+      // Prepare request body
       const requestBody = {
         code,
         type: nextAction,
-        location: location || {
-          latitude: 0,
-          longitude: 0,
-          accuracy: 0,
-        },
-        deviceInfo: {
-          deviceId: deviceId,
-          platform: navigator.platform || "Web",
-          userAgent: navigator.userAgent,
-          fingerprint: deviceId, // Use deviceId as fingerprint fallback
-        },
+        location,
+        deviceInfo,
       };
 
       console.log("📤 Sending request to /attend/scan:", requestBody);
@@ -184,7 +221,7 @@ const NewQrcode = () => {
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
-            "x-device-id": deviceId, // Also send as header
+            "X-Device-ID": deviceId,
           },
           withCredentials: true,
         }
@@ -203,21 +240,30 @@ const NewQrcode = () => {
       }, 500);
     } catch (error) {
       console.error("❌ Scan failed:", error);
-      const errorMsg =
+
+      let errorMsg =
         error.response?.data?.message || error.message || "Scan failed";
+
+      // Handle specific error codes
+      if (error.response?.data?.code === "LOCATION_OUT_OF_RANGE") {
+        errorMsg = `❌ ${errorMsg}\n\nDistance: ${error.response.data.data?.currentDistance}m\nRequired: Within ${error.response.data.data?.allowedRadius}m`;
+      } else if (error.response?.data?.code === "UNAUTHORIZED_DEVICE") {
+        errorMsg = `❌ Unauthorized device\nRegistered: ${error.response.data.registeredDevice}\nCurrent: ${error.response.data.currentDevice}`;
+      }
+
       setErrorMessage(errorMsg);
 
       // Navigate back after showing error
       setTimeout(() => {
         navigate("/dashboard");
-      }, 3000);
+      }, 5000);
     } finally {
       setIsProcessing(false);
-      busyRef.current = false; // Reset busy flag
+      // Note: busyRef stays true to prevent rescanning until user navigates back
     }
   };
 
-  // Handle action selection and start scanner
+  // NEW: Handle action selection and start scanner
   const handleActionSelect = (action) => {
     setSelectedAction(action);
     setShowActionModal(false);
@@ -225,10 +271,12 @@ const NewQrcode = () => {
   };
 
   useEffect(() => {
+    // Get user status first, then show popup
     getUserStatus();
   }, []);
 
   useEffect(() => {
+    // NEW: Only start scanner after action is selected
     if (!ready || !scannerStarted || showActionModal) return;
 
     const elementId = "qr-reader";
@@ -245,7 +293,7 @@ const NewQrcode = () => {
           return;
         }
 
-        // Try to find rear camera first
+        // Prioritize rear camera for mobile
         const rearCamera = devices.find((camera) => {
           const label = (camera.label || "").toLowerCase();
           return (
@@ -268,17 +316,18 @@ const NewQrcode = () => {
             disableFlip: false,
           },
           (decodedText) => {
+            // CRITICAL: Hard gate to prevent multiple scans
             if (busyRef.current) return;
             console.log("📷 QR Detected:", decodedText);
 
-            // Handle scanning asynchronously
+            // Stop camera IMMEDIATELY to prevent repeat callbacks
             (async () => {
               await stopCamera();
               await handleScanning(decodedText);
             })();
           },
           (error) => {
-            // Suppress common scan errors
+            // Ignore frequent scan errors
             if (error && !String(error).includes("NotFoundException")) {
               console.warn("Scanner error:", error);
             }
@@ -290,28 +339,25 @@ const NewQrcode = () => {
         console.error("Scanner initialization failed:", err);
         if (err.name === "NotAllowedError") {
           setErrorMessage(
-            "📷 Camera permission denied. Please allow camera access and refresh the page."
+            "📷 Camera permission denied. Please allow camera access."
           );
         } else if (err.name === "NotFoundError") {
           setErrorMessage("📷 No camera found on this device.");
         } else if (err.name === "NotSupportedError") {
-          setErrorMessage(
-            "📷 Camera not supported in this browser. Try Chrome or Safari."
-          );
+          setErrorMessage("📷 Camera not supported in this browser.");
         } else {
-          setErrorMessage(
-            "📷 Failed to start camera: " + (err.message || "Unknown error")
-          );
+          setErrorMessage("📷 Failed to start camera: " + err.message);
         }
       }
     };
 
     const timer = setTimeout(startScanner, 100);
+
     return () => {
       clearTimeout(timer);
-      stopCamera();
+      stopCamera(); // Safe cleanup using ref
     };
-  }, [ready, scannerStarted, showActionModal]);
+  }, [ready, scannerStarted, showActionModal]); // NEW: depend on scanner started flag
 
   const handleCancel = () => {
     stopCamera();
@@ -319,107 +365,108 @@ const NewQrcode = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md">
-        {/* Action Selection Modal */}
-        {showActionModal && (
-          <div className="text-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-800 mb-4">
-              What would you like to do?
-            </h2>
-            <p className="text-gray-600 mb-6">
-              Current Status:{" "}
-              {currentStatus === "checked-in"
-                ? "🔓 Checked In"
-                : "🔒 Checked Out"}
-            </p>
-            <div className="space-y-3">
-              <button
-                onClick={() => handleActionSelect("check-in")}
-                className="w-full bg-green-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-green-600 transition-colors flex items-center justify-center"
-              >
-                🔒 Check In
-              </button>
-              <button
-                onClick={() => handleActionSelect("check-out")}
-                className="w-full bg-red-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-red-600 transition-colors flex items-center justify-center"
-              >
-                🔓 Check Out
-              </button>
-              <button
-                onClick={handleCancel}
-                className="w-full bg-gray-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-gray-600 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Error Display */}
-        {errorMessage && (
-          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
-            <p className="font-semibold">Error:</p>
-            <p>{errorMessage}</p>
-          </div>
-        )}
-
-        {/* Processing State */}
-        {isProcessing && (
-          <div className="text-center mb-4">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto mb-2"></div>
-            <p className="text-gray-600">Processing scan...</p>
-            <p className="text-sm text-gray-500">
-              {selectedAction === "check-in"
-                ? "Checking in..."
-                : "Checking out..."}
-            </p>
-          </div>
-        )}
-
-        {/* QR Scanner */}
-        {!showActionModal && (
-          <>
-            <div className="text-center mb-4">
-              <h1 className="text-2xl font-bold text-gray-800 mb-2">
-                📱 Scan QR Code
-              </h1>
-              <p className="text-gray-600">
-                Action:{" "}
-                {selectedAction === "check-in" ? "🔒 Check In" : "🔓 Check Out"}
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      {/* Action Selection Modal */}
+      {showActionModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
+            <div className="text-center">
+              <div className="text-4xl mb-4">{getStatusIcon()}</div>
+              <h2 className="text-xl font-bold text-gray-800 mb-2">
+                What would you like to do?
+              </h2>
+              <p className="text-gray-600 mb-6">
+                {currentStatus === "checked-in"
+                  ? "You are currently checked in"
+                  : "You are currently checked out"}
               </p>
-              <p className="text-sm text-gray-500">
-                Point your camera at the QR code
-              </p>
-            </div>
 
-            <div className="relative mb-6">
-              <div
-                id="qr-reader"
-                className="w-full rounded-lg overflow-hidden border-4 border-indigo-200"
-                style={{ minHeight: "300px" }}
-              ></div>
-
-              {/* Scanner overlay */}
-              <div className="absolute inset-0 pointer-events-none">
-                <div className="absolute inset-4 border-2 border-white rounded-lg opacity-50"></div>
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
-                  <div className="w-8 h-8 border-t-2 border-l-2 border-white absolute -top-4 -left-4"></div>
-                  <div className="w-8 h-8 border-t-2 border-r-2 border-white absolute -top-4 -right-4"></div>
-                  <div className="w-8 h-8 border-b-2 border-l-2 border-white absolute -bottom-4 -left-4"></div>
-                  <div className="w-8 h-8 border-b-2 border-r-2 border-white absolute -bottom-4 -right-4"></div>
-                </div>
+              <div className="space-y-3">
+                <button
+                  onClick={() => handleActionSelect("check-in")}
+                  className="w-full bg-green-500 hover:bg-green-600 text-white py-3 px-4 rounded-lg font-medium transition duration-200"
+                >
+                  🔓 Check In
+                </button>
+                <button
+                  onClick={() => handleActionSelect("check-out")}
+                  className="w-full bg-red-500 hover:bg-red-600 text-white py-3 px-4 rounded-lg font-medium transition duration-200"
+                >
+                  🔒 Check Out
+                </button>
+                <button
+                  onClick={handleCancel}
+                  className="w-full bg-gray-300 hover:bg-gray-400 text-gray-700 py-3 px-4 rounded-lg font-medium transition duration-200"
+                >
+                  Cancel
+                </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
 
-            <button
-              onClick={handleCancel}
-              className="w-full bg-gray-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-gray-600 transition-colors"
-            >
-              Cancel
-            </button>
-          </>
-        )}
+      {/* Main Scanner Interface */}
+      <div className="container mx-auto px-4 py-8">
+        <div className="max-w-md mx-auto">
+          {/* Header */}
+          <div className="text-center mb-6">
+            <h1 className="text-2xl font-bold text-gray-800 mb-2">
+              QR Code Scanner
+            </h1>
+            {selectedAction && (
+              <div className="bg-blue-100 rounded-lg p-3 mb-4">
+                <p className="text-blue-800 font-medium">
+                  Ready to:{" "}
+                  {selectedAction === "check-in"
+                    ? "🔓 Check In"
+                    : "🔒 Check Out"}
+                </p>
+                <p className="text-sm text-blue-600 mt-1">{locationStatus}</p>
+              </div>
+            )}
+          </div>
+
+          {/* Error Message */}
+          {errorMessage && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-4 text-center">
+              <p className="whitespace-pre-line">{errorMessage}</p>
+            </div>
+          )}
+
+          {/* Processing State */}
+          {isProcessing && (
+            <div className="bg-blue-100 border border-blue-400 text-blue-700 px-4 py-3 rounded-lg mb-4 text-center">
+              <div className="flex items-center justify-center">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-700 mr-2"></div>
+                Processing scan...
+              </div>
+            </div>
+          )}
+
+          {/* QR Scanner */}
+          <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+            <div id="qr-reader" className="w-full"></div>
+
+            {!showActionModal && !errorMessage && (
+              <div className="p-4 text-center">
+                <p className="text-gray-600 mb-2">
+                  📱 Point your camera at the QR code
+                </p>
+                <p className="text-sm text-gray-500">
+                  Scanning will happen automatically
+                </p>
+
+                <button
+                  onClick={handleCancel}
+                  className="mt-4 bg-gray-500 hover:bg-gray-600 text-white py-2 px-6 rounded-lg font-medium transition duration-200"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

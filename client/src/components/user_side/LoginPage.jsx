@@ -1,11 +1,48 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast, ToastContainer } from "react-toastify";
 import axios from "axios";
 import { useAuth } from "../../context/AuthContext";
 import "react-toastify/dist/ReactToastify.css";
 import Magnet from "../../reactbitscomponents/Magnet";
-import {AiOutlineEye, AiOutlineEyeInvisible} from 'react-icons/ai';
+import { AiOutlineEye, AiOutlineEyeInvisible } from "react-icons/ai";
+
+// Enhanced device ID generation - MORE STRICT
+const generateDeviceId = () => {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  ctx.textBaseline = "top";
+  ctx.font = "14px Arial";
+  ctx.fillText("Device fingerprint", 2, 2);
+
+  const fingerprint = [
+    navigator.userAgent,
+    navigator.language,
+    screen.width + "x" + screen.height,
+    screen.colorDepth,
+    new Date().getTimezoneOffset(),
+    navigator.platform,
+    navigator.hardwareConcurrency || "unknown",
+    navigator.deviceMemory || "unknown",
+    canvas.toDataURL(),
+    navigator.cookieEnabled.toString(),
+    typeof Storage !== "undefined" ? "storage" : "no-storage",
+  ].join("|");
+
+  let hash = 0;
+  for (let i = 0; i < fingerprint.length; i++) {
+    const char = fingerprint.charCodeAt(i);
+    hash = (hash << 5) - hash + char;
+    hash = hash & hash;
+  }
+
+  return (
+    "strict_device_" +
+    Math.abs(hash).toString(36) +
+    "_" +
+    Date.now().toString(36)
+  );
+};
 
 export const LoginPage = () => {
   const navigate = useNavigate();
@@ -14,36 +51,79 @@ export const LoginPage = () => {
   const [password, setPassword] = useState("");
   const [show, setshow] = useState(false);
   const [loginadmin, setloginadmin] = useState(true);
+  const [deviceId, setDeviceId] = useState("");
+
+  // Generate device ID - STRICT MODE
+  useEffect(() => {
+    let storedDeviceId = localStorage.getItem("strict_deviceId");
+
+    // ALWAYS regenerate to ensure uniqueness per browser session
+    const newDeviceId = generateDeviceId();
+
+    // Only use stored device ID if it exists AND matches current session
+    if (storedDeviceId && storedDeviceId.startsWith("strict_device_")) {
+      setDeviceId(storedDeviceId);
+    } else {
+      localStorage.setItem("strict_deviceId", newDeviceId);
+      setDeviceId(newDeviceId);
+    }
+  }, []);
 
   const handleClick = () => {
-    setshow(!show)
-  }
+    setshow(!show);
+  };
   const handleAdminLogin = () => {
     setloginadmin(!loginadmin);
-  }
+  };
 
   const handleEmailLogin = async (e) => {
     const BASE_URL =
       import.meta.env.VITE_BACKEND_BASE_URL ||
       "https://csi-attendance-web.onrender.com";
     e.preventDefault();
+
     try {
       const res = await axios.post(
         `${BASE_URL}/auth2/login`,
-        { email, password },
+        {
+          email,
+          password,
+          // STRICT DEVICE TRACKING
+          deviceId: deviceId,
+          deviceType: /Android/.test(navigator.userAgent)
+            ? "Android"
+            : /iPhone|iPad|iPod/.test(navigator.userAgent)
+            ? "iOS"
+            : "Web",
+          deviceFingerprint: [
+            navigator.userAgent,
+            screen.width + "x" + screen.height,
+            navigator.platform,
+            navigator.language,
+            new Date().getTimezoneOffset().toString(),
+          ].join("|||"), // Triple pipe for extra uniqueness
+        },
         {
           withCredentials: true,
           headers: {
             Accept: "application/json",
             "Content-Type": "application/json",
+            "X-Device-ID": deviceId,
+            "X-Device-Fingerprint": navigator.userAgent, // Additional verification
           },
-          timeout: 10000, // Add timeout
+          timeout: 10000,
         }
       );
+
       if (res.data.accessToken) {
         localStorage.setItem("orginizationcode", res.data.organization.name);
+        // Store device ID permanently for this user
+        localStorage.setItem("strict_deviceId", deviceId);
+        localStorage.setItem("user_device_binding", `${email}:${deviceId}`);
+
         login(res.data.user, res.data.accessToken);
-        toast.success("Login successful!");
+        toast.success("Device registered and login successful!");
+
         if (res.data.user.role === "organization") {
           navigate("/admin", { replace: true });
         } else {
@@ -51,7 +131,29 @@ export const LoginPage = () => {
         }
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || "Login error");
+      console.error("❌ Login error:", error);
+
+      // Enhanced error handling for device restrictions
+      if (error.response?.data?.code === "DEVICE_NOT_AUTHORIZED") {
+        toast.error(
+          `❌ This account is registered to a different device.\n\n` +
+            `Registered Device: ${error.response.data.registeredDevice?.substring(
+              0,
+              20
+            )}...\n` +
+            `Current Device: ${error.response.data.currentDevice?.substring(
+              0,
+              20
+            )}...\n\n` +
+            `Contact admin to change your registered device.`,
+          {
+            autoClose: 8000,
+            style: { whiteSpace: "pre-line" },
+          }
+        );
+      } else {
+        toast.error(error.response?.data?.message || "Login error");
+      }
     }
   };
 
@@ -115,14 +217,32 @@ export const LoginPage = () => {
                   className="p-3 lg:p-4 rounded-lg border border-gray-300 focus:border-[#1D61E7] focus:outline-none focus:ring-2 focus:ring-[#1D61E7]/20 transition-all text-sm sm:text-base"
                 />
                 <div className="flex items-center justify-between w-[95%]">
-          <input
-            type={show ? "text":"password"}
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="p-3 rounded-lg border w-[348px]"
-          /><p onClick={handleClick}className="ml-[-30px] h-[20px]">{show ? <AiOutlineEyeInvisible></AiOutlineEyeInvisible>:<AiOutlineEye></AiOutlineEye>}</p></div>
+                  <input
+                    type={show ? "text" : "password"}
+                    placeholder="Password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    className="p-3 rounded-lg border w-[348px]"
+                  />
+                  <p onClick={handleClick} className="ml-[-30px] h-[20px]">
+                    {show ? (
+                      <AiOutlineEyeInvisible></AiOutlineEyeInvisible>
+                    ) : (
+                      <AiOutlineEye></AiOutlineEye>
+                    )}
+                  </p>
+                </div>
+
+                {/* Device Security Notice */}
+                {deviceId && (
+                  <div className="text-xs text-gray-500 bg-blue-50 p-2 rounded-lg">
+                    🔒 Secure Device: {deviceId.substring(0, 15)}...
+                    <br />
+                    One account per device policy active
+                  </div>
+                )}
+
                 <Magnet padding={90} disabled={false} magnetStrength={90}>
                   <div className="w-full flex gap-3 lg:gap-4">
                     <button
@@ -149,8 +269,11 @@ export const LoginPage = () => {
 
               {/* Uncomment if needed */}
               <h3 className="text-[#6C7278] text-[12px] mt-4 text-center lg:text-left flex ">
-                Or Login as {loginadmin ?"Admin/Oraganizer" : "Staff"}?{"  "}
-                <p className="text-[#4D81E7] hover:underline cursor-pointer" onClick={handleAdminLogin}>
+                Or Login as {loginadmin ? "Admin/Oraganizer" : "Staff"}?{"  "}
+                <p
+                  className="text-[#4D81E7] hover:underline cursor-pointer"
+                  onClick={handleAdminLogin}
+                >
                   Login
                 </p>
               </h3>

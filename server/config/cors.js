@@ -1,4 +1,5 @@
 // File: config/cors.js
+
 const cors = require("cors");
 
 const corsOptions = {
@@ -6,7 +7,7 @@ const corsOptions = {
     const allowedOrigins = [
       "*",
       "https://csi-attendance-frontend.onrender.com",
-      "https://csi-attendance-web-1-40fy.onrender.com",
+      "https://csi-attendance-web-1-40fy.onrender.com", 
       "http://localhost:5173",
       "http://localhost:3000",
       "http://localhost:3001",
@@ -32,11 +33,13 @@ const corsOptions = {
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: [
     "Content-Type",
-    "Authorization",
+    "Authorization", 
     "X-Requested-With",
     "Accept",
     "Origin",
     "X-HTTP-Method-Override",
+    "X-Device-ID", // ✅ Already added this
+    "X-Device-Fingerprint", // ✅ ADD THIS LINE - This is missing!
   ],
 };
 
