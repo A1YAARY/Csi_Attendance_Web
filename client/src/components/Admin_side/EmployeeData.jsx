@@ -31,9 +31,9 @@ export const EmployeeData = ({ allusers }) => {
   //   setIsOpen(false);
   //   deleteUser(userId);
   // };
-  const handleDelete = async (userId) => {
+  const handleDelete = (userId) => {
   try {
-    await deleteUser(userId); // API call
+    deleteUser(userId); // API call
     setUsers((prev) => prev.filter((user) => (user._id || user.id) !== userId)); // Remove from local state
     setOpenDropdownUserId(null); // Close dropdown
   } catch (error) {
