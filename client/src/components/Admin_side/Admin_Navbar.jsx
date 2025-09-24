@@ -89,8 +89,8 @@ export const Admin_Navbar = () => {
     {
       id: "nav-reports",
       view: "reports",
-      icon: "/Report.svg",
-      label: "Reports",
+      icon: "/register-svgrepo-com.svg",
+      label: "Registration",
     },
     { id: "nav-qr", view: "qr", icon: "/QR.svg", label: "QR" },
     {
