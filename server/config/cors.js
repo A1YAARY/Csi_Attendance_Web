@@ -1,20 +1,20 @@
+// File: config/cors.js
 const cors = require("cors");
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, Postman, etc.)
-    if (!origin) return callback(null, true);
-
     const allowedOrigins = [
       "*",
       "https://csi-attendance-frontend.onrender.com",
       "https://csi-attendance-web-1-40fy.onrender.com",
-      "http://192.168.29.219:5173",
       "http://localhost:5173",
       "http://localhost:3000",
       "http://localhost:3001",
       process.env.FRONTEND_URL,
-    ].filter(Boolean); // Remove undefined values
+    ].filter(Boolean);
+
+    // Allow requests with no origin (mobile apps, Postman)
+    if (!origin) return callback(null, true);
 
     if (
       origin.includes("localhost") ||
@@ -36,11 +36,8 @@ const corsOptions = {
     "X-Requested-With",
     "Accept",
     "Origin",
-    "Access-Control-Request-Method",
-    "Access-Control-Request-Headers",
+    "X-HTTP-Method-Override",
   ],
-  exposedHeaders: ["Set-Cookie"],
-  preflightContinue: false,
 };
 
 module.exports = cors(corsOptions);

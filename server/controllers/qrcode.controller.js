@@ -2,6 +2,25 @@ const QRCode = require("../models/Qrcode.models");
 const Organization = require("../models/organization.models");
 const { generateQRCode } = require("../utils/qrGenerator");
 
+// IST helper function
+const getISTDate = (date = new Date()) => {
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const utc = date.getTime() + date.getTimezoneOffset() * 60000;
+  return new Date(utc + istOffset);
+};
+
+const formatISTDate = (date) => {
+  return new Date(date).toLocaleString("en-IN", { 
+    timeZone: "Asia/Kolkata",
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit'
+  });
+};
+
 exports.generateNewQRCode = async (req, res) => {
   try {
     const { qrType } = req.body;
@@ -28,7 +47,9 @@ exports.generateNewQRCode = async (req, res) => {
       { $set: { active: false } }
     );
 
-    const { code, timestamp, qrCodeImage } = await generateQRCode(
+    // Generate QR with IST timestamp
+    const istTimestamp = Math.floor(getISTDate().getTime() / 1000);
+    const { code, qrCodeImage } = await generateQRCode(
       org._id,
       org.location,
       org.settings?.qrCodeValidityMinutes ?? 30,
@@ -44,7 +65,7 @@ exports.generateNewQRCode = async (req, res) => {
         longitude: Number(org.location?.longitude ?? 0),
         radius: Number(org.location?.radius ?? 100),
       },
-      timestamp,
+      timestamp: istTimestamp,
       active: true,
       usageCount: 0,
       qrImageData: qrCodeImage,
@@ -62,6 +83,8 @@ exports.generateNewQRCode = async (req, res) => {
         qrType: qrDoc.qrType,
         qrImageData: qrDoc.qrImageData,
         timestamp: qrDoc.timestamp,
+        timestampIST: formatISTDate(new Date(qrDoc.timestamp * 1000)),
+        validUntil: formatISTDate(new Date((qrDoc.timestamp + (org.settings?.qrCodeValidityMinutes ?? 30) * 60) * 1000)),
       },
     });
   } catch (error) {
@@ -86,13 +109,21 @@ exports.getActiveQRCode = async (req, res) => {
     if (!qr)
       return res.status(404).json({ message: "No active QR code found" });
 
+    // Get organization for validity calculation
+    const org = await Organization.findById(orgId);
+    const validityMinutes = org?.settings?.qrCodeValidityMinutes ?? 30;
+
     res.json({
       code: qr.code,
       qrType: qr.qrType,
       qrImageData: qr.qrImageData,
       timestamp: qr.timestamp,
+      timestampIST: formatISTDate(new Date(qr.timestamp * 1000)),
+      validUntil: formatISTDate(new Date((qr.timestamp + validityMinutes * 60) * 1000)),
+      isValid: Math.floor(getISTDate().getTime() / 1000) - qr.timestamp <= validityMinutes * 60,
     });
   } catch (error) {
+    console.error("Error fetching QR code:", error);
     res.status(500).json({ message: "Could not fetch QR code" });
   }
 };

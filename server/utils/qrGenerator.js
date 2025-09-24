@@ -2,13 +2,20 @@
 const QRCode = require("qrcode");
 const crypto = require("crypto");
 
+// IST helper function
+const getISTDate = (date = new Date()) => {
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const utc = date.getTime() + date.getTimezoneOffset() * 60000;
+  return new Date(utc + istOffset);
+};
+
 async function generateQRCode(
   organizationId,
   location,
   validityMinutes = 30,
   qrType = "check-in"
 ) {
-  const timestamp = Math.floor(Date.now() / 1000); // seconds
+  const timestamp = Math.floor(getISTDate().getTime() / 1000); // IST seconds
   const code = crypto.randomBytes(8).toString("hex"); // compact unique token
 
   // Data encoded into the QR image (for UI/debug only)
