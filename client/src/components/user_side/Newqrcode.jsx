@@ -15,12 +15,12 @@ const NewQrcode = () => {
   const [showActionModal, setShowActionModal] = useState(false); // NEW: popup modal
   const [selectedAction, setSelectedAction] = useState(null); // NEW: user choice
   const [scannerStarted, setScannerStarted] = useState(false); // NEW: track scanner state
-  const [locationStatus, setLocationStatus] = useState("Getting location...");
 
   const BASE_URL =
     import.meta.env.VITE_BACKEND_BASE_URL ||
     "https://csi-attendance-web.onrender.com";
   const token = localStorage.getItem("accessToken");
+  // ✅ GET EXACT SAME DEVICE ID USED IN LOGIN
   const deviceId = localStorage.getItem("deviceId") || "unknown_device";
 
   // Get user's current attendance status (fixed to handle both response shapes)
@@ -30,7 +30,7 @@ const NewQrcode = () => {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
-          "X-Device-ID": deviceId,
+          "X-Device-ID": deviceId, // ✅ ADD DEVICE ID TO STATUS CHECK TOO
         },
       });
 
@@ -91,77 +91,22 @@ const NewQrcode = () => {
     }
   };
 
-  // Enhanced geolocation with high accuracy and multiple attempts
-  const getHighAccuracyLocation = () => {
-    return new Promise((resolve) => {
-      if (!navigator.geolocation) {
-        setLocationStatus("❌ Geolocation not supported");
-        return resolve(null);
-      }
+  // Get geolocation (best effort)
+  const getGeo = () =>
+    new Promise((resolve) => {
+      if (!navigator.geolocation) return resolve(null);
 
-      setLocationStatus("📍 Getting precise location...");
-
-      const options = {
-        enableHighAccuracy: true,
-        timeout: 15000, // 15 seconds
-        maximumAge: 0, // Don't use cached location
-      };
-
-      let attempts = 0;
-      const maxAttempts = 3;
-      let bestLocation = null;
-
-      const tryGetLocation = () => {
-        attempts++;
-        setLocationStatus(
-          `📍 Getting location (attempt ${attempts}/${maxAttempts})...`
-        );
-
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const location = {
-              latitude: position.coords.latitude,
-              longitude: position.coords.longitude,
-              accuracy: position.coords.accuracy,
-              timestamp: Date.now(),
-            };
-
-            console.log(`📍 Location attempt ${attempts}:`, location);
-
-            // Keep the most accurate location
-            if (!bestLocation || location.accuracy < bestLocation.accuracy) {
-              bestLocation = location;
-            }
-
-            // If we got a very accurate location (< 10m) or this is our last attempt
-            if (location.accuracy <= 10 || attempts >= maxAttempts) {
-              setLocationStatus(
-                `✅ Location acquired (±${Math.round(bestLocation.accuracy)}m)`
-              );
-              resolve(bestLocation);
-            } else {
-              // Try again for better accuracy
-              setTimeout(tryGetLocation, 1000);
-            }
-          },
-          (error) => {
-            console.error(`❌ Location attempt ${attempts} failed:`, error);
-
-            if (attempts >= maxAttempts) {
-              setLocationStatus("⚠️ Using approximate location");
-              // Return best location we got, or null if none
-              resolve(bestLocation);
-            } else {
-              setTimeout(tryGetLocation, 1000);
-            }
-          },
-          options
-        );
-      };
-
-      tryGetLocation();
+      navigator.geolocation.getCurrentPosition(
+        (position) =>
+          resolve({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+          }),
+        () => resolve(null),
+        { timeout: 5000, enableHighAccuracy: true }
+      );
     });
-  };
 
   // Handle QR scan result (FIXED: single POST guaranteed)
   const handleScanning = async (decodedText) => {
@@ -181,35 +126,26 @@ const NewQrcode = () => {
 
       console.log("🔍 Scanned QR Code:", code);
       console.log("📋 Action:", nextAction);
+      console.log("🔐 Device ID:", deviceId); // ✅ LOG DEVICE ID
 
-      // Get high accuracy location
-      const location = await getHighAccuracyLocation();
+      // Get location if available
+      const location = await getGeo();
 
-      if (!location) {
-        throw new Error(
-          "Unable to get location. Please ensure location services are enabled and try again."
-        );
-      }
-
-      // Enhanced device info
-      const deviceInfo = {
-        deviceId: deviceId,
-        platform: /Android/.test(navigator.userAgent)
-          ? "Android"
-          : /iPhone|iPad|iPod/.test(navigator.userAgent)
-          ? "iOS"
-          : "Web",
-        userAgent: navigator.userAgent,
-        fingerprint: deviceId,
-        timestamp: Date.now(),
-      };
-
-      // Prepare request body
+      // ✅ MATCH BACKEND EXACTLY - Device ID in BOTH body AND header
       const requestBody = {
         code,
         type: nextAction,
-        location,
-        deviceInfo,
+        ...(location && { location }),
+        deviceInfo: {
+          deviceId: deviceId, // ✅ EXACT MATCH WITH LOGIN
+          platform: /Android/.test(navigator.userAgent)
+            ? "Android"
+            : /iPhone|iPad|iPod/.test(navigator.userAgent)
+            ? "iOS"
+            : "Web",
+          userAgent: navigator.userAgent,
+          fingerprint: deviceId, // ✅ USE SAME DEVICE ID AS FINGERPRINT
+        },
       };
 
       console.log("📤 Sending request to /attend/scan:", requestBody);
@@ -221,7 +157,7 @@ const NewQrcode = () => {
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
-            "X-Device-ID": deviceId,
+            "X-Device-ID": deviceId, // ✅ EXACT SAME DEVICE ID IN HEADER
           },
           withCredentials: true,
         }
@@ -244,11 +180,12 @@ const NewQrcode = () => {
       let errorMsg =
         error.response?.data?.message || error.message || "Scan failed";
 
-      // Handle specific error codes
-      if (error.response?.data?.code === "LOCATION_OUT_OF_RANGE") {
-        errorMsg = `❌ ${errorMsg}\n\nDistance: ${error.response.data.data?.currentDistance}m\nRequired: Within ${error.response.data.data?.allowedRadius}m`;
-      } else if (error.response?.data?.code === "UNAUTHORIZED_DEVICE") {
-        errorMsg = `❌ Unauthorized device\nRegistered: ${error.response.data.registeredDevice}\nCurrent: ${error.response.data.currentDevice}`;
+      // ✅ ENHANCED DEVICE ERROR HANDLING
+      if (error.response?.data?.code === "UNAUTHORIZED_DEVICE") {
+        errorMsg = `❌ Device not authorized\n\nRegistered Device: ${error.response.data.registeredDevice}\nCurrent Device: ${error.response.data.currentDevice}\n\nContact admin to register this device.`;
+      } else if (error.response?.data?.code === "DEVICE_NOT_REGISTERED") {
+        errorMsg =
+          "❌ Device not registered. Please contact admin to register your device.";
       }
 
       setErrorMessage(errorMsg);
@@ -414,15 +351,11 @@ const NewQrcode = () => {
             <h1 className="text-2xl font-bold text-gray-800 mb-2">
               QR Code Scanner
             </h1>
-            {selectedAction && (
+            {deviceId && (
               <div className="bg-blue-100 rounded-lg p-3 mb-4">
                 <p className="text-blue-800 font-medium">
-                  Ready to:{" "}
-                  {selectedAction === "check-in"
-                    ? "🔓 Check In"
-                    : "🔒 Check Out"}
+                  Device: {deviceId.substring(0, 15)}...
                 </p>
-                <p className="text-sm text-blue-600 mt-1">{locationStatus}</p>
               </div>
             )}
           </div>
