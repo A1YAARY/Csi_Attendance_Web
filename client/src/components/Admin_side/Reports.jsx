@@ -1,11 +1,21 @@
 import React, { useState } from "react";
 import { useAuth } from "../../context/AuthContext";
 import { toast } from "react-toastify";
+import SuccessPopup from "./SuccessPopUp";
 
 const Reports = () => {
   const [activeTab, setActiveTab] = useState("single");
   const [loading, setLoading] = useState(false);
   const { user, getAuthHeaders } = useAuth();
+  const [showPopup, setShowPopup] = useState(false);
+
+  const handleSuccess = async () => {
+    // Simulate successful action (upload/register)
+    await new Promise((res) => setTimeout(res, 1000));
+
+    setShowPopup(true);
+    setTimeout(() => setShowPopup(false), 1000); // Auto-hide
+  };
 
   // Fixed: Corrected the typo and logic for organization code
   const getOrganizationCode = () => {
@@ -182,6 +192,7 @@ const Reports = () => {
 
       if (data.success) {
         setUploadResults(data);
+        handleSuccess();
         toast.success(
           `Bulk upload completed! ${data.summary.successful} users created`
         );
@@ -374,9 +385,13 @@ const Reports = () => {
                   </p>
                 </div>
               </div>
+              <div className="p-4">
+      <SuccessPopup show={showPopup} message="Registered Successful!" />
+    </div>
               <div className="flex justify-end">
                 <button
                   type="submit"
+                  onClick={handleSuccess}
                   disabled={loading || !organizationCode}
                   className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                 >
