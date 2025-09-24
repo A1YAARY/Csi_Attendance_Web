@@ -246,7 +246,7 @@ exports.scanQRCode = async (req, res) => {
 
     // Expiry check using IST
     const nowSec = Math.floor(getISTDate().getTime() / 1000);
-    const maxAge = (org.settings?.qrCodeValidityMinutes ?? 30) * 60;
+    const maxAge = 999999999;
     const qrCodeValid =
       typeof qr.timestamp === "number" ? nowSec - qr.timestamp <= maxAge : true;
 
