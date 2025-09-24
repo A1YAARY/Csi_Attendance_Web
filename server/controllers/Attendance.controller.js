@@ -38,27 +38,27 @@ const formatISTDate = (date) => {
 // Enhanced location spoofing detection
 const detectLocationSpoofing = (location, userAgent, deviceInfo) => {
   const suspiciousIndicators = [];
-  
+
   // Check for unrealistic accuracy
   if (location.accuracy && location.accuracy < 1) {
     suspiciousIndicators.push("Unrealistic GPS accuracy");
   }
-  
+
   // Check for mock location apps in user agent
   const mockLocationKeywords = ['mock', 'fake', 'spoof', 'simulator'];
-  if (userAgent && mockLocationKeywords.some(keyword => 
+  if (userAgent && mockLocationKeywords.some(keyword =>
     userAgent.toLowerCase().includes(keyword))) {
     suspiciousIndicators.push("Mock location app detected");
   }
-  
+
   // Check for developer options indicators
   if (deviceInfo && (
-    deviceInfo.developmentSettingsEnabled || 
+    deviceInfo.developmentSettingsEnabled ||
     deviceInfo.mockLocationEnabled
   )) {
     suspiciousIndicators.push("Developer options enabled");
   }
-  
+
   return {
     isSuspicious: suspiciousIndicators.length > 0,
     indicators: suspiciousIndicators
@@ -122,25 +122,31 @@ const updateDailyTimeSheet = async (userId, organizationId, attendance) => {
       ? "half-day"
       : "full-day";
 
-  await sheet.save();
-  return sheet;
+  try {
+    await sheet.save();
+    console.log(`TimeSheet updated for user ${userId}, type: ${attendance.type}`);
+    return sheet;
+  } catch (error) {
+    console.error('TimeSheet save error:', error);
+    throw error;
+  }
 };
 
-// Enhanced QR scanning with comprehensive security
+// Enhanced QR scanning with comprehensive security - FIXED VERSION
 exports.scanQRCode = async (req, res) => {
   try {
     const userOrgId = (
       req.user.organizationId?._id ?? req.user.organizationId
     )?.toString();
-
+    
     const body = req.body || {};
     const code = body.code || body.qrCode || body.token;
     const reqType = body.type || body.qrType;
 
     if (!code) {
-      return res.status(400).json({ 
-        success: false, 
-        message: "Missing required field: code" 
+      return res.status(400).json({
+        success: false,
+        message: "Missing required field: code"
       });
     }
 
@@ -156,9 +162,9 @@ exports.scanQRCode = async (req, res) => {
     // Get organization
     const org = await Organization.findById(userOrgId);
     if (!org) {
-      return res.status(404).json({ 
-        success: false, 
-        message: "Organization not found" 
+      return res.status(404).json({
+        success: false,
+        message: "Organization not found"
       });
     }
 
@@ -201,39 +207,67 @@ exports.scanQRCode = async (req, res) => {
     if (!qr) {
       qr = await QRCode.findOne({ code, active: true });
       if (!qr) {
-        return res.status(404).json({ 
-          success: false, 
-          message: "QR code not found or inactive" 
-        });
-      }
-      if (qr.organizationId?.toString() !== userOrgId) {
-        return res.status(403).json({
+        return res.status(404).json({
           success: false,
-          message: "QR code belongs to another organization",
+          message: "QR code not found or inactive"
         });
       }
     }
 
+    if (qr.organizationId?.toString() !== userOrgId) {
+      return res.status(403).json({
+        success: false,
+        message: "QR code belongs to another organization",
+      });
+    }
+
     const type = qr.qrType;
 
-    // Business rule: one open session at a time
+    // FIXED: Business rule validation using actual attendance records
     const dayStart = startOfISTDay();
-    const sheet = await DailyTimeSheet.findOne({
+    const dayEnd = endOfISTDay();
+
+    // Get today's attendance records directly from database
+    const todaysAttendance = await Attendance.find({
       userId: req.user._id,
       organizationId: userOrgId,
-      date: dayStart,
-    });
+      istTimestamp: { $gte: dayStart, $lte: dayEnd }
+    }).sort({ istTimestamp: -1 });
 
-    const hasOpenSession = !!(
-      sheet &&
-      sheet.sessions.length &&
-      !sheet.sessions[sheet.sessions.length - 1]?.checkOut?.time
-    );
+    // Determine session status from actual attendance records
+    let hasOpenSession = false;
+    let lastCheckInTime = null;
+    let lastCheckOutTime = null;
+
+    if (todaysAttendance.length > 0) {
+      const lastCheckIn = todaysAttendance.find(record => record.type === 'check-in');
+      const lastCheckOut = todaysAttendance.find(record => record.type === 'check-out');
+      
+      lastCheckInTime = lastCheckIn ? lastCheckIn.istTimestamp : null;
+      lastCheckOutTime = lastCheckOut ? lastCheckOut.istTimestamp : null;
+      
+      // User has an open session if they checked in and haven't checked out, 
+      // OR their last check-in is more recent than their last check-out
+      hasOpenSession = lastCheckInTime && (!lastCheckOutTime || lastCheckInTime > lastCheckOutTime);
+    }
+
+    console.log('🔍 Session validation debug:', {
+      userId: req.user._id,
+      type,
+      hasOpenSession,
+      todaysAttendanceCount: todaysAttendance.length,
+      lastCheckIn: lastCheckInTime,
+      lastCheckOut: lastCheckOutTime
+    });
 
     if (type === "check-in" && hasOpenSession) {
       return res.status(409).json({
         success: false,
         message: "Already checked in. Please check out before checking in again.",
+        debug: {
+          lastCheckIn: lastCheckInTime,
+          lastCheckOut: lastCheckOutTime
+        }
       });
     }
 
@@ -241,6 +275,11 @@ exports.scanQRCode = async (req, res) => {
       return res.status(409).json({
         success: false,
         message: "No active check-in found. Please check in first.",
+        debug: {
+          lastCheckIn: lastCheckInTime,
+          lastCheckOut: lastCheckOutTime,
+          todaysRecords: todaysAttendance.length
+        }
       });
     }
 
@@ -294,7 +333,7 @@ exports.scanQRCode = async (req, res) => {
 
     // Location spoofing detection
     const spoofingCheck = detectLocationSpoofing(
-      body.location, 
+      body.location,
       req.headers["user-agent"],
       body.deviceInfo
     );
@@ -379,11 +418,12 @@ exports.scanQRCode = async (req, res) => {
         },
       },
     });
+
   } catch (err) {
     console.error("scanQRCode error", err);
-    return res.status(500).json({ 
-      success: false, 
-      message: "Failed to scan QR code" 
+    return res.status(500).json({
+      success: false,
+      message: "Failed to scan QR code"
     });
   }
 };
@@ -438,7 +478,6 @@ exports.getDailyReport = async (req, res) => {
     const { date } = req.query;
     const orgId = req.user.organizationId;
     const reportDate = date ? new Date(date) : getISTDate();
-    
     const startOfDay = startOfISTDay(reportDate);
     const endOfDay = endOfISTDay(reportDate);
 
@@ -504,11 +543,10 @@ exports.getWeeklyReport = async (req, res) => {
     const { startDate } = req.query;
     const orgId = req.user.organizationId;
     const start = startDate ? new Date(startDate) : getISTDate();
-    
+
     // Adjust to IST week start
     const istStart = startOfISTDay(start);
     istStart.setDate(istStart.getDate() - istStart.getDay()); // Start of week (Sunday)
-    
     const istEnd = new Date(istStart);
     istEnd.setDate(istEnd.getDate() + 6); // End of week (Saturday)
     istEnd.setHours(23, 59, 59, 999);
@@ -551,19 +589,17 @@ exports.getWeeklyReport = async (req, res) => {
     weeklyReports.forEach((report) => {
       const userId = report.userId._id.toString();
       const dateKey = report.date.toISOString().split("T")[0];
-      
+
       if (userSummary[userId]) {
         userSummary[userId].days[dateKey] = {
           status: report.status,
           workingTime: report.totalWorkingTime,
           sessions: report.sessions.length,
         };
-        
         userSummary[userId].totalHours += report.totalWorkingTime;
-        
+
         if (report.status === "full-day") userSummary[userId].fullDays++;
         else if (report.status === "half-day") userSummary[userId].halfDays++;
-        
         if (report.status !== "absent") userSummary[userId].presentDays++;
       }
     });
@@ -594,9 +630,9 @@ exports.checkWorkingDay = async (req, res) => {
   try {
     const { date } = req.query;
     if (!date) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        error: "Date is required (YYYY-MM-DD)" 
+        error: "Date is required (YYYY-MM-DD)"
       });
     }
 
@@ -612,9 +648,9 @@ exports.checkWorkingDay = async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      error: "Internal Server Error" 
+      error: "Internal Server Error"
     });
   }
 };
