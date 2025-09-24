@@ -9,8 +9,7 @@ import Logout from "./components/user_side/LogoutPage";
 import Dashboad from "./components/user_side/Dashboad";
 import { LoginPage } from "./components/user_side/LoginPage";
 import OrganizationRegister from "./components/user_side/OrganizationRegister";
-import LoginPage_G from "./components/Guard_side/LoginPage_G";
-import QRGenrator_G from "./components/Guard_side/QRGenrator_G";
+
 import AdminHome from "./components/Admin_side/AdminHome";
 import ProtectedRoute from "./components/ProtectedRoute";
 import PublicRoute from "./components/PublicRoute";
@@ -68,21 +67,7 @@ function App() {
               }
             />
 
-            <Route
-              path="/guard-login"
-              element={
-                <PublicRoute>
-                  <motion.div
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ duration: 0.3 }}
-                  >
-                    <LoginPage_G />
-                  </motion.div>
-                </PublicRoute>
-              }
-            />
+           
 
             {/* Protected Routes - Require authentication */}
             <Route
@@ -171,14 +156,7 @@ function App() {
               }
             />
 
-            <Route
-              path="/guard-qr"
-              element={
-                <ProtectedRoute>
-                  <QRGenrator_G />
-                </ProtectedRoute>
-              }
-            />
+           
 
             {/* Root route - redirect based on authentication */}
             <Route

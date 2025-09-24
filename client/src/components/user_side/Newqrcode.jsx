@@ -21,7 +21,19 @@ const NewQrcode = () => {
     "https://csi-attendance-web.onrender.com";
   const token = localStorage.getItem("accessToken");
 
-  // Get user's current attendance status (fixed to handle both response shapes)
+  // Generate or get device ID
+  const getDeviceId = () => {
+    let deviceId = localStorage.getItem("deviceId");
+    if (!deviceId) {
+      // Generate a unique device ID based on browser fingerprint
+      deviceId =
+        "device_" + Date.now() + "_" + Math.random().toString(36).substr(2, 9);
+      localStorage.setItem("deviceId", deviceId);
+    }
+    return deviceId;
+  };
+
+  // Get user's current attendance status
   const getUserStatus = async () => {
     try {
       const response = await axios.get(`${BASE_URL}/attend/past?limit=1`, {
@@ -31,7 +43,6 @@ const NewQrcode = () => {
         },
       });
 
-      // Handle both { data: [...] } and { attendance: [...] } response shapes
       const arr = response.data?.data || response.data?.attendance || [];
       if (Array.isArray(arr) && arr.length > 0) {
         const lastEntry = arr[0];
@@ -39,14 +50,14 @@ const NewQrcode = () => {
           lastEntry.type === "check-in" ? "checked-in" : "checked-out"
         );
       } else {
-        setCurrentStatus("checked-out"); // Default for first-time user
+        setCurrentStatus("checked-out");
       }
     } catch (error) {
       console.log("Could not fetch user status, defaulting to checked-out");
       setCurrentStatus("checked-out");
     } finally {
-      setReady(true); // Allow scanner to start
-      setShowActionModal(true); // NEW: Show action selection popup
+      setReady(true);
+      setShowActionModal(true);
     }
   };
 
@@ -75,46 +86,65 @@ const NewQrcode = () => {
     return currentStatus === "checked-in" ? "🔓" : "🔒";
   };
 
-  // Parse QR payload (prefer qrType from QR if present)
+  // Parse QR payload
   const parseQr = (decodedText) => {
     try {
       const parsed = JSON.parse(decodedText);
       return {
         code: parsed.code || decodedText,
-        qrType: parsed.qrType || parsed.type, // respect QR's declared type
+        qrType: parsed.qrType || parsed.type,
       };
     } catch {
-      return { code: decodedText, qrType: undefined };
+      return {
+        code: decodedText,
+        qrType: undefined,
+      };
     }
   };
 
-  // Get geolocation (best effort)
+  // Get geolocation
   const getGeo = () =>
     new Promise((resolve) => {
-      if (!navigator.geolocation) return resolve(null);
+      if (!navigator.geolocation) {
+        console.warn("Geolocation not supported");
+        return resolve(null);
+      }
+
       navigator.geolocation.getCurrentPosition(
-        (position) =>
+        (position) => {
+          console.log("📍 Location obtained:", {
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+          });
           resolve({
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
             accuracy: position.coords.accuracy,
-          }),
-        () => resolve(null),
-        { timeout: 5000, enableHighAccuracy: true }
+          });
+        },
+        (error) => {
+          console.warn("Location error:", error.message);
+          resolve(null);
+        },
+        {
+          timeout: 10000,
+          enableHighAccuracy: true,
+          maximumAge: 300000, // 5 minutes
+        }
       );
     });
 
-  // Handle QR scan result (FIXED: single POST guaranteed)
+  // Handle QR scan result - UPDATED with deviceId and location
   const handleScanning = async (decodedText) => {
-    if (busyRef.current || isProcessing) return; // Double gate
+    if (busyRef.current || isProcessing) return;
     busyRef.current = true;
     setIsProcessing(true);
 
     try {
       const { code, qrType } = parseQr(decodedText);
-
-      // NEW: Use selected action from popup instead of inferring
-      const nextAction = selectedAction || 
+      const nextAction =
+        selectedAction ||
         (qrType && (qrType === "check-in" || qrType === "check-out")
           ? qrType
           : getNextActionType());
@@ -125,14 +155,23 @@ const NewQrcode = () => {
       // Get location if available
       const location = await getGeo();
 
-      // Prepare request body
+      // Get device ID
+      const deviceId = getDeviceId();
+
+      // Prepare request body with required fields
       const requestBody = {
         code,
         type: nextAction,
-        ...(location && { location }),
+        location: location || {
+          latitude: 0,
+          longitude: 0,
+          accuracy: 0,
+        },
         deviceInfo: {
-          platform: "Android",
+          deviceId: deviceId,
+          platform: navigator.platform || "Web",
           userAgent: navigator.userAgent,
+          fingerprint: deviceId, // Use deviceId as fingerprint fallback
         },
       };
 
@@ -145,6 +184,7 @@ const NewQrcode = () => {
           headers: {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
+            "x-device-id": deviceId, // Also send as header
           },
           withCredentials: true,
         }
@@ -173,11 +213,11 @@ const NewQrcode = () => {
       }, 3000);
     } finally {
       setIsProcessing(false);
-      // Note: busyRef stays true to prevent rescanning until user navigates back
+      busyRef.current = false; // Reset busy flag
     }
   };
 
-  // NEW: Handle action selection and start scanner
+  // Handle action selection and start scanner
   const handleActionSelect = (action) => {
     setSelectedAction(action);
     setShowActionModal(false);
@@ -185,12 +225,10 @@ const NewQrcode = () => {
   };
 
   useEffect(() => {
-    // Get user status first, then show popup
     getUserStatus();
   }, []);
 
   useEffect(() => {
-    // NEW: Only start scanner after action is selected
     if (!ready || !scannerStarted || showActionModal) return;
 
     const elementId = "qr-reader";
@@ -207,7 +245,7 @@ const NewQrcode = () => {
           return;
         }
 
-        // Prioritize rear camera for mobile
+        // Try to find rear camera first
         const rearCamera = devices.find((camera) => {
           const label = (camera.label || "").toLowerCase();
           return (
@@ -230,19 +268,17 @@ const NewQrcode = () => {
             disableFlip: false,
           },
           (decodedText) => {
-            // CRITICAL: Hard gate to prevent multiple scans
             if (busyRef.current) return;
-
             console.log("📷 QR Detected:", decodedText);
 
-            // Stop camera IMMEDIATELY to prevent repeat callbacks
+            // Handle scanning asynchronously
             (async () => {
               await stopCamera();
               await handleScanning(decodedText);
             })();
           },
           (error) => {
-            // Ignore frequent scan errors
+            // Suppress common scan errors
             if (error && !String(error).includes("NotFoundException")) {
               console.warn("Scanner error:", error);
             }
@@ -252,28 +288,30 @@ const NewQrcode = () => {
         setScannerRunning(true);
       } catch (err) {
         console.error("Scanner initialization failed:", err);
-
         if (err.name === "NotAllowedError") {
           setErrorMessage(
-            "📷 Camera permission denied. Please allow camera access."
+            "📷 Camera permission denied. Please allow camera access and refresh the page."
           );
         } else if (err.name === "NotFoundError") {
           setErrorMessage("📷 No camera found on this device.");
         } else if (err.name === "NotSupportedError") {
-          setErrorMessage("📷 Camera not supported in this browser.");
+          setErrorMessage(
+            "📷 Camera not supported in this browser. Try Chrome or Safari."
+          );
         } else {
-          setErrorMessage("📷 Failed to start camera: " + err.message);
+          setErrorMessage(
+            "📷 Failed to start camera: " + (err.message || "Unknown error")
+          );
         }
       }
     };
 
     const timer = setTimeout(startScanner, 100);
-
     return () => {
       clearTimeout(timer);
-      stopCamera(); // Safe cleanup using ref
+      stopCamera();
     };
-  }, [ready, scannerStarted, showActionModal]); // NEW: depend on scanner started flag
+  }, [ready, scannerStarted, showActionModal]);
 
   const handleCancel = () => {
     stopCamera();
@@ -281,425 +319,108 @@ const NewQrcode = () => {
   };
 
   return (
-    <div className="qr-scanner-container">
-      {/* NEW: Action Selection Modal */}
-      {showActionModal && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <h2>Select Action</h2>
-            <p>What would you like to do?</p>
-            <div className="action-buttons">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="bg-white rounded-3xl shadow-2xl p-8 w-full max-w-md">
+        {/* Action Selection Modal */}
+        {showActionModal && (
+          <div className="text-center mb-6">
+            <h2 className="text-2xl font-bold text-gray-800 mb-4">
+              What would you like to do?
+            </h2>
+            <p className="text-gray-600 mb-6">
+              Current Status:{" "}
+              {currentStatus === "checked-in"
+                ? "🔓 Checked In"
+                : "🔒 Checked Out"}
+            </p>
+            <div className="space-y-3">
               <button
-                className="action-button check-in"
                 onClick={() => handleActionSelect("check-in")}
+                className="w-full bg-green-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-green-600 transition-colors flex items-center justify-center"
               >
-                <span className="action-icon">🔒</span>
-                Check In
+                🔒 Check In
               </button>
               <button
-                className="action-button check-out"
                 onClick={() => handleActionSelect("check-out")}
+                className="w-full bg-red-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-red-600 transition-colors flex items-center justify-center"
               >
-                <span className="action-icon">🔓</span>
-                Check Out
+                🔓 Check Out
+              </button>
+              <button
+                onClick={handleCancel}
+                className="w-full bg-gray-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-gray-600 transition-colors"
+              >
+                Cancel
               </button>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Header */}
-      <div className="scanner-header">
-        <button
-          onClick={handleCancel}
-          className="back-button"
-          disabled={isProcessing}
-        >
-          ← Back
-        </button>
-        <h1 className="scanner-title">QR Scanner</h1>
-        <div className="spacer"></div>
-      </div>
+        {/* Error Display */}
+        {errorMessage && (
+          <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+            <p className="font-semibold">Error:</p>
+            <p>{errorMessage}</p>
+          </div>
+        )}
 
-      {/* Status Card */}
-      <div className="status-card">
-        <div className="status-icon">
-          {selectedAction === "check-in" ? "🔒" : selectedAction === "check-out" ? "🔓" : getStatusIcon()}
-        </div>
-        <div className="status-text">
-          <h2>
-            {selectedAction 
-              ? `Ready to ${selectedAction === "check-in" ? "Check In" : "Check Out"}`
-              : `Ready to ${getNextActionText()}`
-            }
-          </h2>
-          <p>
-            {currentStatus === "checked-in"
-              ? "You are currently checked in"
-              : "You are currently checked out"}
-          </p>
-        </div>
-      </div>
+        {/* Processing State */}
+        {isProcessing && (
+          <div className="text-center mb-4">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600 mx-auto mb-2"></div>
+            <p className="text-gray-600">Processing scan...</p>
+            <p className="text-sm text-gray-500">
+              {selectedAction === "check-in"
+                ? "Checking in..."
+                : "Checking out..."}
+            </p>
+          </div>
+        )}
 
-      {/* Error Message */}
-      {errorMessage && (
-        <div className="error-card">
-          <div className="error-icon">⚠️</div>
-          <p>{errorMessage}</p>
-        </div>
-      )}
-
-      {/* Scanner Container */}
-      <div className="scanner-wrapper">
-        <div className="scanner-frame">
-          <div id="qr-reader" className="qr-reader"></div>
-
-          {/* Processing Overlay */}
-          {isProcessing && (
-            <div className="processing-overlay">
-              <div className="spinner"></div>
-              <p>Processing scan...</p>
+        {/* QR Scanner */}
+        {!showActionModal && (
+          <>
+            <div className="text-center mb-4">
+              <h1 className="text-2xl font-bold text-gray-800 mb-2">
+                📱 Scan QR Code
+              </h1>
+              <p className="text-gray-600">
+                Action:{" "}
+                {selectedAction === "check-in" ? "🔒 Check In" : "🔓 Check Out"}
+              </p>
+              <p className="text-sm text-gray-500">
+                Point your camera at the QR code
+              </p>
             </div>
-          )}
-        </div>
 
-        <div className="scan-instruction">
-          <p>📱 Point your camera at the QR code</p>
-          <p>Scanning will happen automatically</p>
-        </div>
+            <div className="relative mb-6">
+              <div
+                id="qr-reader"
+                className="w-full rounded-lg overflow-hidden border-4 border-indigo-200"
+                style={{ minHeight: "300px" }}
+              ></div>
+
+              {/* Scanner overlay */}
+              <div className="absolute inset-0 pointer-events-none">
+                <div className="absolute inset-4 border-2 border-white rounded-lg opacity-50"></div>
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+                  <div className="w-8 h-8 border-t-2 border-l-2 border-white absolute -top-4 -left-4"></div>
+                  <div className="w-8 h-8 border-t-2 border-r-2 border-white absolute -top-4 -right-4"></div>
+                  <div className="w-8 h-8 border-b-2 border-l-2 border-white absolute -bottom-4 -left-4"></div>
+                  <div className="w-8 h-8 border-b-2 border-r-2 border-white absolute -bottom-4 -right-4"></div>
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={handleCancel}
+              className="w-full bg-gray-500 text-white py-3 px-6 rounded-lg font-semibold hover:bg-gray-600 transition-colors"
+            >
+              Cancel
+            </button>
+          </>
+        )}
       </div>
-
-      {/* Clean white Android-optimized styles + Modal styles */}
-      <style jsx>{`
-        .qr-scanner-container {
-          min-height: 100vh;
-          background: #ffffff;
-          color: #111111;
-          padding: 20px;
-          display: flex;
-          flex-direction: column;
-          font-family: system-ui, -apple-system, Roboto, "Segoe UI", Arial,
-            sans-serif;
-        }
-
-        /* NEW: Modal Styles */
-        .modal-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(0, 0, 0, 0.5);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 1000;
-        }
-
-        .modal-content {
-          background: #ffffff;
-          border-radius: 20px;
-          padding: 30px;
-          margin: 20px;
-          max-width: 320px;
-          width: 100%;
-          text-align: center;
-          box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-        }
-
-        .modal-content h2 {
-          margin: 0 0 10px 0;
-          font-size: 24px;
-          font-weight: 700;
-          color: #111111;
-        }
-
-        .modal-content p {
-          margin: 0 0 25px 0;
-          color: #6b7280;
-          font-size: 16px;
-        }
-
-        .action-buttons {
-          display: flex;
-          flex-direction: column;
-          gap: 15px;
-        }
-
-        .action-button {
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 12px;
-          padding: 18px 24px;
-          border: none;
-          border-radius: 16px;
-          font-size: 18px;
-          font-weight: 600;
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-
-        .action-button.check-in {
-          background: #10b981;
-          color: #ffffff;
-        }
-
-        .action-button.check-in:hover {
-          background: #059669;
-          transform: translateY(-2px);
-        }
-
-        .action-button.check-out {
-          background: #f59e0b;
-          color: #ffffff;
-        }
-
-        .action-button.check-out:hover {
-          background: #d97706;
-          transform: translateY(-2px);
-        }
-
-        .action-icon {
-          font-size: 20px;
-        }
-
-        .scanner-header {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-          margin-bottom: 20px;
-          padding-top: env(safe-area-inset-top, 20px);
-        }
-
-        .back-button {
-          background: #f3f4f6;
-          border: 1px solid #e5e7eb;
-          color: #111111;
-          padding: 12px 16px;
-          border-radius: 12px;
-          font-size: 16px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-        }
-
-        .back-button:hover {
-          background: #e5e7eb;
-        }
-
-        .back-button:disabled {
-          opacity: 0.5;
-          cursor: not-allowed;
-        }
-
-        .scanner-title {
-          font-size: 24px;
-          font-weight: 700;
-          text-align: center;
-          margin: 0;
-          color: #111111;
-        }
-
-        .spacer {
-          width: 80px;
-        }
-
-        .status-card {
-          background: #ffffff;
-          border: 1px solid #e5e7eb;
-          border-radius: 16px;
-          padding: 20px;
-          margin-bottom: 20px;
-          display: flex;
-          align-items: center;
-          gap: 15px;
-          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-        }
-
-        .status-icon {
-          font-size: 32px;
-          background: #f3f4f6;
-          border-radius: 50%;
-          width: 60px;
-          height: 60px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-
-        .status-text h2 {
-          margin: 0 0 5px 0;
-          font-size: 20px;
-          font-weight: 600;
-          color: #111111;
-        }
-
-        .status-text p {
-          margin: 0;
-          color: #6b7280;
-          font-size: 14px;
-        }
-
-        .error-card {
-          background: #fef2f2;
-          border: 1px solid #fecaca;
-          border-radius: 12px;
-          padding: 16px;
-          margin-bottom: 20px;
-          display: flex;
-          align-items: center;
-          gap: 12px;
-        }
-
-        .error-icon {
-          font-size: 20px;
-        }
-
-        .error-card p {
-          margin: 0;
-          font-size: 14px;
-          color: #dc2626;
-        }
-
-        .scanner-wrapper {
-          flex: 1;
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          gap: 20px;
-        }
-
-        .scanner-frame {
-          position: relative;
-          width: 100%;
-          max-width: 350px;
-          aspect-ratio: 1;
-          background: #f9fafb;
-          border: 2px solid #e5e7eb;
-          border-radius: 20px;
-          overflow: hidden;
-          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-
-        .qr-reader {
-          width: 100%;
-          height: 100%;
-        }
-
-        .processing-overlay {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background: rgba(255, 255, 255, 0.9);
-          display: flex;
-          flex-direction: column;
-          align-items: center;
-          justify-content: center;
-          gap: 15px;
-        }
-
-        .spinner {
-          width: 40px;
-          height: 40px;
-          border: 3px solid #e5e7eb;
-          border-top: 3px solid #3b82f6;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-        }
-
-        @keyframes spin {
-          0% {
-            transform: rotate(0deg);
-          }
-          100% {
-            transform: rotate(360deg);
-          }
-        }
-
-        .processing-overlay p {
-          margin: 0;
-          font-size: 16px;
-          font-weight: 500;
-          color: #374151;
-        }
-
-        .scan-instruction {
-          text-align: center;
-          margin-bottom: env(safe-area-inset-bottom, 20px);
-        }
-
-        .scan-instruction p {
-          margin: 5px 0;
-          color: #6b7280;
-          font-size: 14px;
-        }
-
-        /* Mobile optimizations */
-        @media (max-width: 480px) {
-          .qr-scanner-container {
-            padding: 15px;
-          }
-
-          .scanner-title {
-            font-size: 20px;
-          }
-
-          .status-card {
-            padding: 15px;
-          }
-
-          .status-icon {
-            width: 50px;
-            height: 50px;
-            font-size: 28px;
-          }
-
-          .status-text h2 {
-            font-size: 18px;
-          }
-
-          .scanner-frame {
-            max-width: 300px;
-          }
-
-          .modal-content {
-            margin: 15px;
-            padding: 25px;
-          }
-        }
-
-        /* Landscape mobile optimization */
-        @media (orientation: landscape) and (max-height: 500px) {
-          .status-card {
-            padding: 10px 15px;
-          }
-
-          .scanner-frame {
-            max-width: 250px;
-          }
-        }
-
-        /* Android-specific optimizations */
-        @media (max-width: 768px) {
-          .qr-scanner-container {
-            -webkit-user-select: none;
-            user-select: none;
-            -webkit-tap-highlight-color: transparent;
-          }
-
-          .back-button {
-            -webkit-appearance: none;
-            appearance: none;
-            border-radius: 12px;
-          }
-
-          .scanner-frame {
-            border-width: 1px;
-          }
-        }
-      `}</style>
     </div>
   );
 };

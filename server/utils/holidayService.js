@@ -2,8 +2,8 @@ const { google } = require("googleapis");
 const path = require("path");
 
 // Path to your service account JSON
-// const SERVICE_ACCOUNT_FILE = path.join("service-account.json");
-const SERVICE_ACCOUNT_FILE = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+const SERVICE_ACCOUNT_FILE = path.join("service-account.json");
+// const SERVICE_ACCOUNT_FILE = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
 
 // Google Calendar ID for India holidays
 const HOLIDAY_CALENDAR_ID = "en.indian#holiday@group.v.calendar.google.com";
