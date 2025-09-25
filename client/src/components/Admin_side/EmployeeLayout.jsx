@@ -9,35 +9,50 @@ const EmployeeLayout = () => {
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [filteredUsers, setFilteredUsers] = useState([]);
+  const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [roleFilter, setRoleFilter] = useState("all");
 
   // Fetch all users when component mounts
   useEffect(() => {
     fetchAllUsers();
   }, []);
 
-  // Filter users based on search term
+  // Filter users based on search term, department, and role
   useEffect(() => {
-    if (searchTerm.trim() === "") {
-      setFilteredUsers(allusers);
-    } else {
-      const filtered = allusers.filter(
+    let filtered = [...allusers];
+
+    // Search filter
+    if (searchTerm.trim() !== "") {
+      filtered = filtered.filter(
         (user) =>
           user.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           user.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           user.role?.toLowerCase().includes(searchTerm.toLowerCase())
       );
-      setFilteredUsers(filtered);
     }
-  }, [searchTerm, allusers]);
+
+    // Department filter (only one active at a time)
+    if (departmentFilter !== "all") {
+      filtered = filtered.filter((user) => 
+        user.department?.toLowerCase() === departmentFilter.toLowerCase()
+      );
+    }
+    // Role filter (only one active at a time)
+    else if (roleFilter !== "all") {
+      filtered = filtered.filter((user) => 
+        user.role?.toLowerCase() === roleFilter.toLowerCase()
+      );
+    }
+
+    setFilteredUsers(filtered);
+  }, [searchTerm, departmentFilter, roleFilter, allusers]);
 
   const fetchAllUsers = async () => {
     try {
       setLoading(true);
       setError(null);
-      // console.log("Fetching all users...");
       const response = await getallusers();
-      // console.log("Raw response:", response);
 
       // Handle different response formats
       let usersData = [];
@@ -53,7 +68,6 @@ const EmployeeLayout = () => {
           : [response.data];
       }
 
-      // console.log("Processed users data:", usersData);
       setAllUsers(usersData);
       setFilteredUsers(usersData);
     } catch (err) {
@@ -66,6 +80,24 @@ const EmployeeLayout = () => {
 
   const handleSearch = (e) => {
     setSearchTerm(e.target.value);
+  };
+
+  const handleDepartmentFilter = (e) => {
+    const newDepartment = e.target.value;
+    setDepartmentFilter(newDepartment);
+    // Reset role filter when department is selected
+    if (newDepartment !== "all") {
+      setRoleFilter("all");
+    }
+  };
+
+  const handleRoleFilter = (e) => {
+    const newRole = e.target.value;
+    setRoleFilter(newRole);
+    // Reset department filter when role is selected
+    if (newRole !== "all") {
+      setDepartmentFilter("all");
+    }
   };
 
   if (loading) {
@@ -90,8 +122,7 @@ const EmployeeLayout = () => {
           <p className="text-sm sm:text-base text-gray-600 mb-4">{error}</p>
           <button
             onClick={fetchAllUsers}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors text-sm sm:text-base"
-          >
+            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors text-sm sm:text-base">
             Try Again
           </button>
         </div>
@@ -126,43 +157,93 @@ const EmployeeLayout = () => {
             </div>
           </div>
 
-          {/* Results Count - Mobile Friendly */}
-          {searchTerm && (
-            <div className="mt-4 pt-4 border-t border-gray-200">
-              <p className="text-xs sm:text-sm text-gray-600 text-center sm:text-left">
-                {filteredUsers.length > 0
-                  ? `Found ${filteredUsers.length} employee${
-                      filteredUsers.length !== 1 ? "s" : ""
-                    } matching "${searchTerm}"`
-                  : `No employees found matching "${searchTerm}"`}
-              </p>
-            </div>
-          )}
+          {/* Results Count */}
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <p className="text-xs sm:text-sm text-gray-600 text-center sm:text-left">
+              Showing {filteredUsers.length} of {allusers.length} employees
+            </p>
+          </div>
         </div>
 
         {/* Table Header - Desktop Only */}
         <div className="hidden lg:block bg-white rounded-t-lg shadow-sm">
           <div className="grid grid-cols-12 gap-4 p-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
-            {/* <div className="col-span-1 flex justify-center">
-              <input type="checkbox" className="rounded" />
-            </div> */}
             <div className="col-span-4 text-sm font-semibold text-gray-700 uppercase tracking-wide pl-10">
               Employee
             </div>
-            <div className="col-span-2 text-sm font-semibold text-gray-700 uppercase tracking-wide text-left">
-              Department
+            <div className="col-span-2">
+              <select
+                value={departmentFilter}
+                onChange={handleDepartmentFilter}
+                className="font-semibold text-gray-700 uppercase pr-2 tracking-wide text-left border-0 focus:ring-0 focus:bg-blue-50 focus:border-none active:ring-0 text-sm bg-transparent">
+                <option value="all">Department</option>
+                <option value="cmpn">CMPN</option>
+                <option value="extc">EXTC</option>
+                <option value="ecs">ECS</option>
+                <option value="inft">INFT</option>
+              </select>
             </div>
-            <div className="col-span-2 text-sm font-semibold text-gray-700 uppercase tracking-wide text-left">
-              Role
+            <div className="col-span-2">
+              <select
+                value={roleFilter}
+                onChange={handleRoleFilter}
+                className="font-semibold text-gray-700 uppercase tracking-wide text-left border-0 focus:ring-0 focus:bg-blue-50 focus:border-none active:ring-0 text-sm bg-transparent">
+                <option value="all">Role</option>
+                <option value="professor">Professor</option>
+                <option value="user">User</option>
+              </select>
             </div>
             <div className="col-span-2 text-sm font-semibold text-gray-700 uppercase tracking-wide text-center">
               Work Hours
             </div>
+            <div className="col-span-2 text-sm font-semibold text-gray-700 uppercase tracking-wide text-center">
+              Actions
+            </div>
           </div>
         </div>
 
-        {/* Employee Data */}
-        <EmployeeData allusers={filteredUsers} />
+        {/* Employee Data or No Data Message */}
+        {filteredUsers.length > 0 ? (
+          <EmployeeData allusers={filteredUsers} />
+        ) : (
+          <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+            <div className="mx-auto h-24 w-24 text-gray-400 mb-4">
+              <svg
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+                className="w-full h-full"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="1"
+                  d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197m13.5-9a2.5 2.5 0 11-5 0 2.5 2.5 0 015 0z"
+                />
+              </svg>
+            </div>
+            <p className="text-lg text-gray-600 mb-2">
+              No employees found
+            </p>
+            <p className="text-sm text-gray-400">
+              {searchTerm || departmentFilter !== "all" || roleFilter !== "all"
+                ? "Try adjusting your filters to see more results"
+                : "Employees will appear here once they register"}
+            </p>
+            {(searchTerm || departmentFilter !== "all" || roleFilter !== "all") && (
+              <button
+                onClick={() => {
+                  setSearchTerm("");
+                  setDepartmentFilter("all");
+                  setRoleFilter("all");
+                }}
+                className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm"
+              >
+                Clear Filters
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
