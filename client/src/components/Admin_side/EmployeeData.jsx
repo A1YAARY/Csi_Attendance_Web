@@ -63,6 +63,9 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
     }
   };
 
+  const editProfile = () => {
+    navigate("/edit")
+  }
   // Send password reset email to user
   const handleSendResetEmail = async (userId, userEmail) => {
     setActionLoading(`reset-password-${userId}`);
@@ -169,6 +172,7 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
           return (
             <div
               key={userId}
+              onClick={editProfile}
               className="cursor-pointer hover:bg-gray-50 transition-colors duration-200 relative"
             >
               {/* Desktop Layout */}

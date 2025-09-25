@@ -10,13 +10,13 @@ const Navbar = () => {
   return (
     <div>
       <div className="navbar w-screen h-[110px] flex justify-between items-end p-[16px] border-slate-200 border-b-[1px]">
-        <img src="/logo.png" alt="atharva logo" />
+        <img src="/logo.svg" alt="atharva logo" />
         {/* <Link to={"/admin"}>
           <button className="p-[0.4rem] bg-red-600">ADMIN</button>
         </Link> */}
         <img
           onClick={showlogout}
-          src="/Profile.png"
+          src="/profile.svg"
           alt="profile"
           className="h-[27px] w-[27px]"
         />

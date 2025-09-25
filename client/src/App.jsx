@@ -18,6 +18,7 @@ import "cally";
 import AdminProtected from "./components/AdminProtected";
 import ClickSpark from "./reactbitscomponents/ClickSpark";
 import ResetPass from "./components/Admin_side/ResetPass";
+import UpdationUser from "./components/Admin_side/UpdationUser";
 
 function App() {
   const location = useLocation();
@@ -173,6 +174,8 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+              <Route path="/edit" element={<UpdationUser/>} />
 
             {/* Root route - redirect based on authentication and role */}
             <Route
