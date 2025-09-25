@@ -4,6 +4,7 @@ const auth = require("../middleware/Auth.middleware");
 const role = require("../middleware/role.middleware");
 const upload = require("../middleware/multer.middleware");
 const bulkUserController = require("../controllers/bulkUser.controller");
+const cache = require("../middleware/cache.middleware");
 
 // Bulk user registration via Excel upload
 router.post(
@@ -19,6 +20,7 @@ router.get(
   "/template", 
   auth, 
   role(["organization"]), 
+  cache(3600),
   bulkUserController.downloadTemplate
 );
 

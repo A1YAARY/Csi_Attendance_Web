@@ -7,8 +7,8 @@ const auth = require("../middleware/Auth.middleware");
 const cache = require("../middleware/cache.middleware");
 
 // Existing routes
-router.get("/records", auth, role(["organization"]), adminController.records);
-router.get("/allusers", auth, role(["organization"]), adminController.getusers);
+router.get("/records", auth, role(["organization"]), cache(60),adminController.records);
+router.get("/allusers", auth, role(["organization"]), cache(60),adminController.getusers);
 router.post(
   "/reset-user-device",
   auth,
@@ -19,6 +19,7 @@ router.get(
   "/singleUser/:id",
   auth,
   role(["organization"]),
+  cache(30),
   adminController.singleUser
 );
 router.patch(
@@ -50,6 +51,7 @@ router.get(
   "/todays-attendance",
   auth,
   role(["organization"]),
+  cache(30),
   adminController.getTodaysAttendance
 );
 router.delete(
