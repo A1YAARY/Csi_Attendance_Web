@@ -78,6 +78,7 @@ const resetUserDevice = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to reset user device",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };

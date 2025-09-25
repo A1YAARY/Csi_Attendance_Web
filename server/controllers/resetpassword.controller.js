@@ -1,78 +1,161 @@
-const jwt = require("jsonwebtoken");
 const User = require("../models/user.models");
-const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
 const { sendMail } = require("../utils/mailer");
 
-// Request password reset (send email with token)
+// Request password reset
 const requestPasswordReset = async (req, res) => {
   try {
     const { email } = req.body;
 
     if (!email) {
-      return res.status(400).json({ message: "Email is required" });
+      return res.status(400).json({
+        success: false,
+        message: "Email is required",
+      });
     }
 
-    const user = await User.findOne({ email });
+    // Find user by email
+    const user = await User.findOne({ email }).populate("organizationId");
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({
+        success: false,
+        message: "User with this email does not exist",
+      });
     }
 
-    // Generate reset token (JWT, valid for 15 min)
+    // Generate reset token (valid for 1 hour)
     const resetToken = jwt.sign(
-      { userId: user._id },
-      process.env.JWT_RESET_SECRET,
-      { expiresIn: "15m" }
+      {
+        userId: user._id,
+        email: user.email,
+      },
+      process.env.JWT_RESET_SECRET || process.env.JWT_SECRET,
+      { expiresIn: "1h" }
     );
 
+    // Create reset link
     const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
 
-    // Send reset email
-    await sendMail(
-      user.email,
-      "Password Reset Request",
-      `<h3>Password Reset</h3>
-       <p>Click below to reset your password:</p>
-       <a href="${resetLink}">${resetLink}</a>
-       <p>This link will expire in 15 minutes.</p>`
-    );
+    // Send password reset email
+    const emailSubject = "Password Reset Request - Attendance System";
+    const emailBody = `
+Hello ${user.name},
 
-    res.json({ message: "Password reset email sent" });
+You have requested to reset your password for the Attendance System.
+
+Click the link below to reset your password:
+${resetLink}
+
+This link will expire in 1 hour for security reasons.
+
+If you did not request this password reset, please ignore this email.
+
+Organization: ${user.organizationId?.name || "N/A"}
+Email: ${user.email}
+
+Best regards,
+Attendance System Team
+    `;
+
+    await sendMail(user.email, emailSubject, emailBody);
+
+    res.json({
+      success: true,
+      message: "Password reset link sent to your email",
+      data: {
+        email: user.email,
+        resetTokenExpiry: "1 hour",
+      },
+    });
   } catch (error) {
-    console.error("Request password reset error:", error);
-    res.status(500).json({ message: "Server error" });
+    console.error("Password reset request error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to send password reset email",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
   }
 };
 
-// Reset password (verify token & update password)
+// Reset password with token
 const resetPassword = async (req, res) => {
   try {
-    const { token, newPassword } = req.body;
+    const { token, newPassword, confirmPassword } = req.body;
 
-    if (!token || !newPassword) {
-      return res.status(400).json({ message: "Token and new password required" });
+    if (!token || !newPassword || !confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Token, new password, and confirm password are required",
+      });
     }
 
-    let payload;
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({
+        success: false,
+        message: "Passwords do not match",
+      });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message: "Password must be at least 6 characters long",
+      });
+    }
+
+    // Verify reset token
+    let decoded;
     try {
-      payload = jwt.verify(token, process.env.JWT_RESET_SECRET);
-    } catch (err) {
-      return res.status(400).json({ message: "Invalid or expired token" });
+      decoded = jwt.verify(
+        token,
+        process.env.JWT_RESET_SECRET || process.env.JWT_SECRET
+      );
+    } catch (error) {
+      let errorMessage = "Invalid or expired reset token";
+      if (error.name === "TokenExpiredError") {
+        errorMessage = "Reset token has expired. Please request a new one.";
+      }
+      return res.status(401).json({
+        success: false,
+        message: errorMessage,
+      });
     }
 
-    const user = await User.findById(payload.userId);
+    // Find user
+    const user = await User.findById(decoded.userId);
     if (!user) {
-      return res.status(404).json({ message: "User not found" });
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
     }
 
-    // Hash new password and save
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 12);
+
+    // Update user password
     user.password = hashedPassword;
     await user.save();
 
-    res.json({ message: "Password reset successful" });
+    console.log(`✅ Password reset successful for user: ${user.email}`);
+
+    res.json({
+      success: true,
+      message:
+        "Password reset successful. You can now login with your new password.",
+      data: {
+        email: user.email,
+        resetAt: new Date().toISOString(),
+      },
+    });
   } catch (error) {
-    console.error("Reset password error:", error);
-    res.status(500).json({ message: "Server error" });
+    console.error("Password reset error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to reset password",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
+    });
   }
 };
 
