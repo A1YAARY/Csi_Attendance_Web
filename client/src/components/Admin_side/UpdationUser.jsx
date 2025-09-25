@@ -58,12 +58,12 @@ const UpdationPage = () => {
   return (
     <div>
       <div>
-        <div className="w-screen h-[110px] flex justify-center items-center p-[16px] border-slate-200 border-b-[1px]">
-          <img src="./logo.svg" alt="atharva logo" />
+        <div className="w-screen h-[90px] flex justify-center items-center p-[16px] border-slate-200 border-b-[1px]">
+          <img className="h-[40px]" src="./logo.svg" alt="atharva logo" />
         </div>
       </div>
       <div className="flex flex-row">
-        <div className="absolute left-65 w-[25%] h-[76vh] mx-auto mt-10 bg-white p-6 shadow-lg rounded-lg">
+        <div className="absolute left-65 w-[25%] h-[620px] mx-auto mt-10 bg-white p-[22px] shadow-lg rounded-lg">
           <h2 className="text-2xl font-bold mb-4">Teacher Profile</h2>
           {/* <form onSubmit={handleSubmit} className="space-y-4">
         {['name', 'email', 'institute', 'department', 'role', 'work time'].map(field => (
@@ -85,7 +85,7 @@ const UpdationPage = () => {
           Update
         </button>
       </form> */}
-          <div className="flex-1 flex flex-col justify-center items-center px-4 sm:px-6 lg:px-8 pt-16 sm:pt-20 lg:pt-24 pb-8">
+          <div className="flex-1 flex flex-col justify-center items-center px-4 sm:px-6 lg:px-8 pt-16 sm:pt-20 lg:pt-15">
             {/* Avatar section with responsive sizing */}
             <div className="flex justify-center items-center mb-8 sm:mb-12 lg:mb-16">
               <div className="avatar w-[60%] gap-3 flex flex-col justify-center items-center">

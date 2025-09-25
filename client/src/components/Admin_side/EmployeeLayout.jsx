@@ -143,16 +143,16 @@ const EmployeeLayout = () => {
         {/* Table Header - Desktop Only */}
         <div className="hidden lg:block bg-white rounded-t-lg shadow-sm">
           <div className="grid grid-cols-12 gap-4 p-4 border-b border-gray-200 bg-gray-50 rounded-t-lg">
-            <div className="col-span-1 flex justify-center">
+            {/* <div className="col-span-1 flex justify-center">
               <input type="checkbox" className="rounded" />
-            </div>
-            <div className="col-span-4 text-sm font-semibold text-gray-700 uppercase tracking-wide">
+            </div> */}
+            <div className="col-span-4 text-sm font-semibold text-gray-700 uppercase tracking-wide pl-10">
               Employee
             </div>
-            <div className="col-span-3 text-sm font-semibold text-gray-700 uppercase tracking-wide">
+            <div className="col-span-2 text-sm font-semibold text-gray-700 uppercase tracking-wide text-left">
               Department
             </div>
-            <div className="col-span-2 text-sm font-semibold text-gray-700 uppercase tracking-wide">
+            <div className="col-span-2 text-sm font-semibold text-gray-700 uppercase tracking-wide text-left">
               Role
             </div>
             <div className="col-span-2 text-sm font-semibold text-gray-700 uppercase tracking-wide text-center">
