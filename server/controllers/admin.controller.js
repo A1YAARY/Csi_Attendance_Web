@@ -47,12 +47,12 @@ const resetUserDevice = async (req, res) => {
     const sameOrg =
       adminOrgId && targetUser.organizationId && String(targetUser.organizationId) === String(adminOrgId);
 
-    if (!sameUser && !sameOrg) {
-      return res.status(403).json({
-        success: false,
-        message: "Forbidden to reset device for user outside your organization",
-      });
-    }
+    // if (!sameUser && !sameOrg) {
+    //   return res.status(403).json({
+    //     success: false,
+    //     message: "Forbidden to reset device for user outside your organization",
+    //   });
+    // }
 
     // Reset device info
     targetUser.deviceInfo = {
