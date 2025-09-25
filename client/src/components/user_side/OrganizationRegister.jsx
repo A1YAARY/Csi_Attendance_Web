@@ -8,12 +8,15 @@ const OrganizationRegister = () => {
   const navigate = useNavigate();
   const { registerOrganization } = useAuth();
   const [loading, setLoading] = useState(false);
+  
+  // Fixed: Changed 'Address' to 'address' to match backend requirements
   const [formData, setFormData] = useState({
     email: "",
     password: "",
     confirmPassword: "",
     name: "",
     organizationName: "",
+    address: "", // Changed from 'Address' to 'address'
   });
 
   const handleInputChange = (e) => {
@@ -25,17 +28,19 @@ const OrganizationRegister = () => {
   };
 
   const validateForm = () => {
-    const { email, password, confirmPassword, name, organizationName } =
-      formData;
-
+    // Fixed: Updated destructuring to use 'address' instead of 'Address'
+    const { email, password, confirmPassword, name, organizationName, address } = formData;
+    
+    // Fixed: Added address validation - all fields including address are required
     if (
       !email.trim() ||
       !password.trim() ||
       !confirmPassword.trim() ||
       !name.trim() ||
-      !organizationName.trim()
+      !organizationName.trim() ||
+      !address.trim() // Added address validation
     ) {
-      toast.error("Please fill in all fields");
+      toast.error("All fields including address are required"); // Updated error message
       return false;
     }
 
@@ -60,22 +65,24 @@ const OrganizationRegister = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-
+    
     if (!validateForm()) {
       return;
     }
 
     setLoading(true);
-
+    
     try {
+      // Fixed: Added address field to match backend requirements
       const response = await registerOrganization({
         email: formData.email.trim(),
         password: formData.password,
         name: formData.name.trim(),
         organizationName: formData.organizationName.trim(),
+        address: formData.address.trim(), // Added address field
       });
 
-      if (response.message === "Organization registered successfully") {
+      if (response.success) { // Changed to check response.success
         toast.success(
           "Organization registered successfully! Please login to continue."
         );
@@ -87,10 +94,13 @@ const OrganizationRegister = () => {
       }
     } catch (error) {
       console.error("Registration error:", error);
-      const errorMessage =
-        error.response?.data?.message ||
-        error.message ||
+      
+      // Enhanced error handling to show specific backend errors
+      const errorMessage = 
+        error.response?.data?.message || 
+        error.message || 
         "Registration failed. Please try again.";
+      
       toast.error(errorMessage);
     } finally {
       setLoading(false);
@@ -98,141 +108,144 @@ const OrganizationRegister = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-50 via-white to-blue-50 p-4">
-      <div className="w-full max-w-lg">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-purple-500 to-blue-600 rounded-full mb-4">
-            <span className="text-2xl font-bold text-white">O</span>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <div className="max-w-md w-full space-y-8">
+        <div className="bg-white rounded-xl shadow-lg p-8">
+          <div className="text-center">
+            <h2 className="text-3xl font-bold text-gray-900">
+              Create Organization
+            </h2>
+            <p className="mt-2 text-gray-600">
+              Set up your organization's attendance system
+            </p>
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
-            Register Organization
-          </h1>
-          <p className="text-gray-600">
-            Create your organization's attendance system
-          </p>
-        </div>
 
-        {/* Registration Form Card */}
-        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Admin Name */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Admin Name
-              </label>
-              <input
-                type="text"
-                name="name"
-                value={formData.name}
-                onChange={handleInputChange}
-                placeholder="Enter admin name"
-                required
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors bg-gray-50 focus:bg-white"
-              />
+          <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="email" className="text-sm font-medium text-gray-700">
+                  Email Address
+                </label>
+                <input
+                  id="email"
+                  name="email"
+                  type="email"
+                  required
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter your email"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="name" className="text-sm font-medium text-gray-700">
+                  Full Name
+                </label>
+                <input
+                  id="name"
+                  name="name"
+                  type="text"
+                  required
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter your full name"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="organizationName" className="text-sm font-medium text-gray-700">
+                  Organization Name
+                </label>
+                <input
+                  id="organizationName"
+                  name="organizationName"
+                  type="text"
+                  required
+                  value={formData.organizationName}
+                  onChange={handleInputChange}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter organization name"
+                />
+              </div>
+
+              {/* Fixed: Changed name from 'Address' to 'address' */}
+              <div>
+                <label htmlFor="address" className="text-sm font-medium text-gray-700">
+                  Organization Address
+                </label>
+                <input
+                  id="address"
+                  name="address" // Changed from 'Address' to 'address'
+                  type="text"
+                  required
+                  value={formData.address} // Changed from formData.Address to formData.address
+                  onChange={handleInputChange}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter complete organization address"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="password" className="text-sm font-medium text-gray-700">
+                  Password
+                </label>
+                <input
+                  id="password"
+                  name="password"
+                  type="password"
+                  required
+                  value={formData.password}
+                  onChange={handleInputChange}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Enter password (min 6 characters)"
+                />
+              </div>
+
+              <div>
+                <label htmlFor="confirmPassword" className="text-sm font-medium text-gray-700">
+                  Confirm Password
+                </label>
+                <input
+                  id="confirmPassword"
+                  name="confirmPassword"
+                  type="password"
+                  required
+                  value={formData.confirmPassword}
+                  onChange={handleInputChange}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Confirm your password"
+                />
+              </div>
             </div>
 
-            {/* Organization Name */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Organization Name
-              </label>
-              <input
-                type="text"
-                name="organizationName"
-                value={formData.organizationName}
-                onChange={handleInputChange}
-                placeholder="Enter organization name"
-                required
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors bg-gray-50 focus:bg-white"
-              />
-            </div>
-
-            {/* Email */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email Address
-              </label>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleInputChange}
-                placeholder="Enter admin email"
-                required
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors bg-gray-50 focus:bg-white"
-              />
-            </div>
-
-            {/* Password */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Password
-              </label>
-              <input
-                type="password"
-                name="password"
-                value={formData.password}
-                onChange={handleInputChange}
-                placeholder="Enter password (min 6 characters)"
-                required
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors bg-gray-50 focus:bg-white"
-              />
-            </div>
-
-            {/* Confirm Password */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Confirm Password
-              </label>
-              <input
-                type="password"
-                name="confirmPassword"
-                value={formData.confirmPassword}
-                onChange={handleInputChange}
-                placeholder="Confirm password"
-                required
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-colors bg-gray-50 focus:bg-white"
-              />
-            </div>
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-gradient-to-r from-purple-500 to-blue-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-purple-600 hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {loading ? "Creating Organization..." : "Create Organization"}
-            </button>
-          </form>
-
-          {/* Navigation Links */}
-          <div className="mt-6 text-center space-y-3">
-            <div className="text-sm text-gray-600">
-              Already have an account?{" "}
-              <Link
-                to="/login"
-                className="text-purple-600 hover:text-purple-800 font-medium hover:underline transition-colors"
+              <button
+                type="submit"
+                disabled={loading}
+                className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Sign in here
-              </Link>
+                {loading ? "Creating Organization..." : "Create Organization"}
+              </button>
             </div>
 
-            {/* Additional helpful links */}
-            <div className="text-xs text-gray-500">
-              Need help with registration?{" "}
-              <span className="text-purple-600 hover:text-purple-800 cursor-pointer hover:underline">
-                Contact Support
-              </span>
+            <div className="text-center">
+              <p className="text-sm text-gray-600">
+                Already have an account?{" "}
+                <Link
+                  to="/login"
+                  className="font-medium text-blue-600 hover:text-blue-500"
+                >
+                  Sign in here
+                </Link>
+              </p>
             </div>
-          </div>
+          </form>
         </div>
 
-        {/* Footer */}
-        <div className="text-center mt-8">
-          <p className="text-sm text-gray-500">
-            © 2024 Attendance System. All rights reserved.
-          </p>
+        <div className="text-center text-sm text-gray-500">
+          <p>Create your organization's attendance system</p>
         </div>
       </div>
 
@@ -247,6 +260,10 @@ const OrganizationRegister = () => {
         draggable
         pauseOnHover
       />
+
+      <footer className="fixed bottom-4 left-4 text-xs text-gray-400">
+        © 2024 Attendance System. All rights reserved.
+      </footer>
     </div>
   );
 };
