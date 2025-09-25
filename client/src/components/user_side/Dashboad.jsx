@@ -10,16 +10,28 @@ const Dashboard = () => {
   const { getPastAttendance } = useAuth();
   const navigate = useNavigate();
   const [pastAttendance, setPastAttendance] = useState([]);
+  const [todayAttendance, setTodayAttendance] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Fixed useEffect - create async function inside or use .then()
   useEffect(() => {
     const fetchPastAttendance = async () => {
       try {
         setLoading(true);
         const data = await getPastAttendance();
         console.log("Past attendance data:", data);
-        setPastAttendance(data);
+
+        if (data && data.attendance && Array.isArray(data.attendance)) {
+          setPastAttendance(data.attendance);
+
+          // Find today's attendance (latest entry)
+          const today = new Date().toDateString();
+          const todayRecord = data.attendance.find((record) => {
+            const recordDate = new Date(record.createdAt).toDateString();
+            return recordDate === today;
+          });
+
+          setTodayAttendance(todayRecord);
+        }
       } catch (error) {
         console.error("Error fetching past attendance:", error);
       } finally {
@@ -28,7 +40,7 @@ const Dashboard = () => {
     };
 
     fetchPastAttendance();
-  }, []); // Remove getPastAttendance from dependency array to avoid infinite loops
+  }, []);
 
   const hidden = () => {
     navigate("/ScanQR");
@@ -39,70 +51,39 @@ const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen w-full">
-      {/* Responsive Navbar */}
-      <div className="navbar w-full h-[80px] sm:h-[100px] lg:h-[110px] flex justify-between items-end p-4 sm:p-[16px] border-slate-200 border-b-[1px]">
-        <img
-          src="/logo.svg"
-          alt="Atharva logo"
-          className="h-auto max-h-[50px] sm:max-h-[60px] lg:max-h-[70px]"
-        />
-        <img
-          onClick={hidden1}
-          src="/profile.svg"
-          alt="Profile"
-          className="h-[32px] w-[32px] sm:h-[36px] sm:w-[36px] lg:h-[40px] lg:w-[40px] cursor-pointer hover:opacity-80 transition-opacity"
-        />
-      </div>
+    <div className="h-[100dvh] bg-white px-4 pb-4">
+      <Navbar onProfileClick={hidden1} />
 
-      {/* Main content with responsive padding */}
-      <div className="px-4 sm:px-6 lg:px-[20px] py-4 sm:py-6 lg:py-[20px] flex flex-col gap-6 sm:gap-8 lg:gap-[30px] mb-3 sm:mb-[12px]">
-        {/* Welcome section with responsive text */}
-        <p className="font-bold text-[24px] sm:text-[28px] lg:text-[32px] xl:text-[36px]">
-          Welcome
-        </p>
+      <div className="mt-4">
+        <h1 className="text-2xl font-semibold mb-6">Welcome</h1>
 
-        {/* Card component */}
-        <Card />
+        {/* Card component with today's data */}
+        <Card todayAttendance={todayAttendance} loading={loading} />
 
-        {/* Scan QR button with responsive sizing */}
         <button
           onClick={hidden}
-          className="text-[13px] sm:text-[14px] lg:text-[15px] flex justify-center items-center p-3 sm:p-[10px] lg:p-[12px] bg-[#1D61E7] hover:bg-[#1a56d1] transition-all duration-200 shadow-[0px_4px_4px_0px_#00000040] active:shadow-[0px_2px_1px_0px_#00000040] rounded-[10px] gap-2 sm:gap-[8px] text-white h-[48px] sm:h-[52px] lg:h-[56px]"
+          className="w-full mt-6 bg-[#1D61E7] text-white py-3 rounded-lg flex items-center justify-center gap-2 text-sm font-medium"
         >
-          <img
-            src="/QR_logo.svg"
-            alt="QR Code"
-            className="h-[18px] w-[18px] sm:h-[20px] sm:w-[20px] lg:h-[22px] lg:w-[22px]"
-          />
-          <p>Scan QR</p>
+          <span className="text-lg">📱</span>
+          Scan QR
         </button>
 
-        {/* Previous Attendance section */}
-        <div className="flex flex-col gap-2 sm:gap-3 lg:gap-[10px]">
-          <h3 className="text-[14px] sm:text-[15px] lg:text-[16px] xl:text-[18px] font-semibold">
-            Previous Attendance
-          </h3>
-          <div className="flex flex-col gap-2 sm:gap-3 lg:gap-4">
-            {loading ? (
-              <div className="flex justify-center items-center py-4">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-[#1D61E7]"></div>
-                <span className="ml-2 text-gray-600">
-                  Loading attendance...
-                </span>
-              </div>
-            ) : pastAttendance && pastAttendance.length > 0 ? (
-              pastAttendance
-                .slice(0, 5)
-                .map((attendance, index) => (
-                  <Previous key={attendance.id || index} data={attendance} />
-                ))
-            ) : (
-              <div className="text-center py-4 text-gray-500">
-                <p>No previous attendance records found</p>
-              </div>
-            )}
-          </div>
+        <div className="mt-6">
+          <h2 className="text-lg font-semibold mb-4">Previous Attendance</h2>
+
+          {loading ? (
+            <div className="text-center text-gray-500 py-8">Loading...</div>
+          ) : pastAttendance.length === 0 ? (
+            <div className="text-center text-gray-500 py-8">
+              No previous attendance records found
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {pastAttendance.slice(0, 5).map((record, index) => (
+                <Previous key={record._id || index} attendanceData={record} />
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
