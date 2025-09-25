@@ -1,33 +1,30 @@
-import React, { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import React from "react";
+import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 const ProtectedRoute = ({ children }) => {
-  const navigate = useNavigate();
-  const { user, loading } = useAuth();
+  const location = useLocation();
+  const { isAuthenticated, loading } = useAuth();
 
-  useEffect(() => {
-    const token = localStorage.getItem("accessToken");
-    if (!token) {
-      // No token, redirect to login
-      navigate("/login", { replace: true });
-    }
-  }, [navigate]);
-
-  // Show loading if auth is being checked
+  // Show loading while auth is being checked
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
+          <p className="text-gray-600">Authenticating...</p>
+        </div>
       </div>
     );
   }
 
-  const token = localStorage.getItem("accessToken");
-  if (!token) {
-    return null; // Don't render anything while redirecting
+  // Check authentication
+  if (!isAuthenticated()) {
+    // Store the attempted location for redirect after login
+    return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
+  // User is authenticated, render the protected content
   return children;
 };
 

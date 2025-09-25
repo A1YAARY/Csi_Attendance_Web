@@ -338,7 +338,6 @@ const register_orginization = async (req, res) => {
 };
 
 // Enhanced user registration
-// Enhanced user registration with password reset email
 const register_user = async (req, res) => {
   try {
     const { email, name, organizationCode, institute, department, password } =
@@ -367,10 +366,10 @@ const register_user = async (req, res) => {
       });
     }
 
-    // Create user with temporary password
+    // Create user with temporary password (always use temp password)
     const user = new User({
       email,
-      password: password || "pass123", // Default temp password
+      password: "pass123", // Always use temporary password
       name,
       role: "user",
       institute,
@@ -380,48 +379,90 @@ const register_user = async (req, res) => {
         isRegistered: false,
       },
     });
+
     await user.save();
 
-    // Send password reset email if no password provided
-    if (!password) {
-      try {
-        const resetToken = jwt.sign(
-          { userId: user._id },
-          process.env.JWT_RESET_SECRET,
-          { expiresIn: "24h" } // 24 hours for initial setup
-        );
+    // ALWAYS send password reset email for every registration
+    try {
+      const resetToken = jwt.sign(
+        { userId: user._id, email: user.email },
+        process.env.JWT_RESET_SECRET || process.env.JWT_SECRET,
+        { expiresIn: "24h" } // 24 hours for initial setup
+      );
 
-        const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}&newUser=true`;
+      const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}&newUser=true`;
 
-        await sendMail(
-          user.email,
-          "Welcome to Attendance System - Set Your Password",
-          `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #1D61E7;">Welcome to the Attendance System!</h2>
-            <p>Hello ${name},</p>
-            <p>Your account has been created successfully. Please set your password using the link below:</p>
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${resetLink}" 
-                 style="background-color: #1D61E7; color: white; padding: 12px 24px; 
-                        text-decoration: none; border-radius: 6px; display: inline-block;">
-                Set Your Password
-              </a>
-            </div>
-            <p><strong>This link will expire in 24 hours.</strong></p>
-            <p>If you didn't request this, please ignore this email.</p>
-            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-            <p style="color: #666; font-size: 12px;">
-              Organization: ${organization.name}<br>
-              Email: ${email}
-            </p>
-          </div>`
-        );
+      const emailSubject = "Welcome to Attendance System - Set Your Password";
+      const emailBody = `
+Hello ${name},
 
-        console.log(`✅ Password reset email sent to ${email}`);
-      } catch (emailError) {
-        console.error("❌ Failed to send welcome email:", emailError);
-        // Continue with registration even if email fails
+Your account has been created successfully for ${organization.name}.
+
+Please set your password using the link below:
+${resetLink}
+
+This link will expire in 24 hours for security reasons.
+
+Account Details:
+- Email: ${email}
+- Organization: ${organization.name}
+- Institute: ${institute}
+- Department: ${department}
+
+If you didn't request this account creation, please contact your administrator.
+
+Best regards,
+Attendance System Team
+`;
+
+      const htmlBody = `
+<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+  <h2 style="color: #333;">Welcome to Attendance System</h2>
+  
+  <p>Hello <strong>${name}</strong>,</p>
+  
+  <p>Your account has been created successfully for <strong>${organization.name}</strong>.</p>
+  
+  <p>Please set your password by clicking the button below:</p>
+  
+  <div style="text-align: center; margin: 30px 0;">
+    <a href="${resetLink}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Set Your Password</a>
+  </div>
+  
+  <p style="color: #666; font-size: 14px;">This link will expire in 24 hours for security reasons.</p>
+  
+  <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <h3 style="margin-top: 0; color: #333;">Account Details:</h3>
+    <ul style="margin: 0;">
+      <li><strong>Email:</strong> ${email}</li>
+      <li><strong>Organization:</strong> ${organization.name}</li>
+      <li><strong>Institute:</strong> ${institute}</li>
+      <li><strong>Department:</strong> ${department}</li>
+    </ul>
+  </div>
+  
+  <p style="color: #666; font-size: 12px;">If you didn't request this account creation, please contact your administrator.</p>
+  
+  <p>Best regards,<br>Attendance System Team</p>
+</div>
+`;
+
+      const emailResult = await sendMail(
+        user.email,
+        emailSubject,
+        emailBody,
+        htmlBody
+      );
+
+      if (!emailResult.success) {
+        console.error("Failed to send welcome email:", emailResult.error);
+        // Don't fail registration if email fails, but log it
+      } else {
+        console.log(`✅ Welcome email sent to: ${user.email}`);
       }
+    } catch (emailError) {
+      console.error("Email sending error during registration:", emailError);
+      // Don't fail registration if email fails
     }
 
     const { accessToken, refreshToken } = generateTokens(user._id);
@@ -430,27 +471,27 @@ const register_user = async (req, res) => {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 180 * 24 * 60 * 60 * 1000,
+      maxAge: 180 * 24 * 60 * 60 * 1000, // 180 days
     });
 
     res.status(201).json({
       success: true,
-      message: password
-        ? "User registered successfully. Please register your device on first login."
-        : "User registered successfully. Password setup email sent.",
+      message: "User registered successfully. Password reset email sent.",
       user: {
         id: user._id,
         email: user.email,
         name: user.name,
         role: user.role,
-        deviceRegistered: false,
-        requiresPasswordSetup: !password,
+        institute: user.institute,
+        department: user.department,
       },
       organization: {
         id: organization._id,
         name: organization.name,
       },
       accessToken,
+      emailSent: true,
+      note: "Please check your email to set your password",
     });
   } catch (err) {
     console.error("User registration error:", err);
@@ -460,7 +501,7 @@ const register_user = async (req, res) => {
       error: process.env.NODE_ENV === "development" ? err.message : undefined,
     });
   }
-};
+};  
 
 // Enhanced login with device registration check - FIXED VERSION
 const login = async (req, res) => {

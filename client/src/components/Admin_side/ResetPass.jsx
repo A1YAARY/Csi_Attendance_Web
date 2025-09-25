@@ -65,29 +65,35 @@ export const ResetPass = () => {
 
     try {
       const response = await axios.post(
-        `${BASE_URL}/password/reset-password`,
+        `${BASE_URL}/password/reset-password`, // Make sure this matches your route
         {
           token: token,
           newPassword: password,
+          confirmPassword: confirmPassword, // Add this field
         },
         {
-          headers: {
-            "Content-Type": "application/json",
-          },
+          headers: { "Content-Type": "application/json" },
           timeout: 10000,
         }
       );
 
-      if (response.data.message) {
+      if (response.data.success) {
         toast.success(
           isNewUser
             ? "Password set successfully! You can now login."
             : "Password reset successfully!"
         );
 
+        // Clear the form
+        setPassword("");
+        setConfirmPassword("");
+
+        // Redirect to login
         setTimeout(() => {
           navigate("/login");
         }, 2000);
+      } else {
+        throw new Error(response.data.message || "Password reset failed");
       }
     } catch (error) {
       console.error("Password reset error:", error);
@@ -96,6 +102,10 @@ export const ResetPass = () => {
         toast.error(error.response.data.message);
       } else if (error.code === "ECONNABORTED") {
         toast.error("Request timeout. Please try again.");
+      } else if (error.response?.status === 400) {
+        toast.error(
+          "Invalid or expired token. Please request a new reset link."
+        );
       } else {
         toast.error("Failed to reset password. Please try again.");
       }

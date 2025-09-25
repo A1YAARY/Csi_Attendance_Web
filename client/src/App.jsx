@@ -9,7 +9,6 @@ import Logout from "./components/user_side/LogoutPage";
 import Dashboad from "./components/user_side/Dashboad";
 import { LoginPage } from "./components/user_side/LoginPage";
 import OrganizationRegister from "./components/user_side/OrganizationRegister";
-
 import AdminHome from "./components/Admin_side/AdminHome";
 import ProtectedRoute from "./components/ProtectedRoute";
 import PublicRoute from "./components/PublicRoute";
@@ -22,6 +21,7 @@ import ResetPass from "./components/Admin_side/ResetPass";
 
 function App() {
   const location = useLocation();
+  const { isAuthenticated, isAdmin } = useAuth();
 
   return (
     <>
@@ -34,7 +34,7 @@ function App() {
       >
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
-            {/* Public Routes - Redirect to teacherinfo if already logged in */}
+            {/* Public Routes - Accessible without authentication */}
             <Route
               path="/login"
               element={
@@ -67,7 +67,26 @@ function App() {
               }
             />
 
-           
+            {/* PASSWORD RESET ROUTE - COMPLETELY PUBLIC - No Protection at all */}
+            <Route
+              path="/reset-password"
+              element={
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <ResetPass />
+                </motion.div>
+              }
+            />
+
+            {/* Alternative route for backward compatibility */}
+            <Route
+              path="/ResetPass"
+              element={<Navigate to="/reset-password" replace />}
+            />
 
             {/* Protected Routes - Require authentication */}
             <Route
@@ -135,57 +154,86 @@ function App() {
                 </ProtectedRoute>
               }
             />
-             <Route
-              path="/ResetPass"
-              element={
-                <ProtectedRoute>
-                  <ResetPass />
-                </ProtectedRoute>
-              }
-            />
 
             {/* Admin Routes */}
             <Route
-              path="/admin"
+              path="/admin/*"
               element={
                 <ProtectedRoute>
                   <AdminProtected>
-                    <AdminHome />
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <AdminHome />
+                    </motion.div>
                   </AdminProtected>
                 </ProtectedRoute>
               }
             />
 
-           
-
-            {/* Root route - redirect based on authentication */}
+            {/* Root route - redirect based on authentication and role */}
             <Route
               path="/"
-              element={
-                localStorage.getItem("accessToken") ? (
-                  <Navigate to="/teacherinfo" replace />
-                ) : (
-                  <Navigate to="/login" replace />
-                )
-              }
+              element={(() => {
+                const token = localStorage.getItem("accessToken");
+                if (token) {
+                  // Check user role for proper redirection
+                  const userData = localStorage.getItem("userData");
+                  if (userData) {
+                    try {
+                      const user = JSON.parse(userData);
+                      if (user.role === "organization") {
+                        return <Navigate to="/admin" replace />;
+                      } else {
+                        return <Navigate to="/teacherinfo" replace />;
+                      }
+                    } catch (error) {
+                      console.error("Error parsing userData:", error);
+                      localStorage.removeItem("userData");
+                      localStorage.removeItem("accessToken");
+                      return <Navigate to="/login" replace />;
+                    }
+                  }
+                  // Default to teacherinfo if userData is not available
+                  return <Navigate to="/teacherinfo" replace />;
+                }
+                return <Navigate to="/login" replace />;
+              })()}
             />
 
-            {/* Catch all - redirect to appropriate page */}
+            {/* Catch all - redirect to appropriate page based on authentication */}
             <Route
               path="*"
-              element={
-                localStorage.getItem("accessToken") ? (
-                  <Navigate to="/teacherinfo" replace />
-                ) : (
-                  <Navigate to="/login" replace />
-                )
-              }
+              element={(() => {
+                const token = localStorage.getItem("accessToken");
+                if (token) {
+                  const userData = localStorage.getItem("userData");
+                  if (userData) {
+                    try {
+                      const user = JSON.parse(userData);
+                      if (user.role === "organization") {
+                        return <Navigate to="/admin" replace />;
+                      } else {
+                        return <Navigate to="/teacherinfo" replace />;
+                      }
+                    } catch (error) {
+                      console.error("Error parsing userData:", error);
+                      localStorage.removeItem("userData");
+                      localStorage.removeItem("accessToken");
+                      return <Navigate to="/login" replace />;
+                    }
+                  }
+                  return <Navigate to="/teacherinfo" replace />;
+                }
+                return <Navigate to="/login" replace />;
+              })()}
             />
           </Routes>
         </AnimatePresence>
       </ClickSpark>
-                        {/* <Navigate to="/login" replace /> */}
-
     </>
   );
 }
