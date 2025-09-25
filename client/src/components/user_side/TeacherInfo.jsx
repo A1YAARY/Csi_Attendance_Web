@@ -3,11 +3,28 @@ import React, { useEffect, useState } from "react";
 import Navbar from "./Navbar";
 import { Link, useNavigate } from "react-router-dom";
 import { div } from "framer-motion/client";
+import { useAuth } from "../../context/AuthContext";  
 
 const TeacherInfo = () => {
   const [loading, setLoading] = useState(true);
   const [userTeacher, setUserTeacher] = useState(null);
+  const [records, setRecords] = useState(null);
   const user = JSON.parse(localStorage.getItem("userData"));
+  const { getPastAttendance } = useAuth();
+  useEffect(() => {
+  const fetchData = async () => {
+    try {
+      const records = await getPastAttendance();
+      console.log("Records:", records);
+      setRecords(records);
+      // Assuming records = { dept, checkInTime, checkOutTime }
+    } catch (error) {
+      console.error("Error fetching records:", error);
+    }
+  };
+
+  fetchData();
+}, []);
   // useEffect(() => {
   //   if (user) {
   //     setTimeout(() => {
@@ -77,7 +94,7 @@ const TeacherInfo = () => {
               {user?.name}
             </span>
             <span className="text-gray-600 text-[14px] sm:text-[15px] lg:text-[16px] xl:text-[18px] mt-1">
-              Teacher, EXTC dept.
+              {/* {records.AttendanceRecords.department} */}
             </span>
           </div>
         </div>

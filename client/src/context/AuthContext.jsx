@@ -407,6 +407,11 @@ export function AuthProvider({ children }) {
     [getToken]
   );
 
+  const getUserRecords = useCallback(async () => {
+  return cachedFetch(`${BASE_URL}/auth2/records`);
+}, [cachedFetch]);
+
+
   // ADMIN API CALLS
   const getAdminRecords = useCallback(async () => {
     return cachedFetch(`${BASE_URL}/admin/records`);
@@ -661,6 +666,7 @@ export function AuthProvider({ children }) {
 
       // API functions - Admin
       getAdminRecords,
+      getUserRecords,
       getSingleUser,
       getAdminQRCodes,
       getTodaysAttendance,
@@ -710,6 +716,7 @@ export function AuthProvider({ children }) {
       getPastAttendance,
       uploadAttendance,
       getAdminRecords,
+      getUserRecords,
       getSingleUser,
       getAdminQRCodes,
       getTodaysAttendance,
