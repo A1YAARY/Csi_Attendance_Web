@@ -1,6 +1,13 @@
 const User = require("../models/user.models");
 const fingerprint = require("../utils/fingerprint");
 
+// IST helper function
+const getISTDate = (date = new Date()) => {
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const utc = date.getTime() + date.getTimezoneOffset() * 60000;
+  return new Date(utc + istOffset);
+};
+
 async function fingerprintCheckMiddleware(req, res, next) {
   try {
     const { fingerprint: fp } = req.body;
@@ -8,6 +15,7 @@ async function fingerprintCheckMiddleware(req, res, next) {
 
     if (!user) {
       return res.status(401).json({
+        success: false,
         message: "User not authenticated",
         spoofingDetected: true,
       });
@@ -15,6 +23,7 @@ async function fingerprintCheckMiddleware(req, res, next) {
 
     if (!fp) {
       return res.status(400).json({
+        success: false,
         message: "Device fingerprint is required for security",
         spoofingDetected: true,
       });
@@ -28,6 +37,7 @@ async function fingerprintCheckMiddleware(req, res, next) {
       fingerprint.logSuspicious(user, fp);
       await user.save();
       return res.status(403).json({
+        success: false,
         message: "Device not authorized. Please register this device first.",
         spoofingDetected: true,
         action: "device_registration_required",
@@ -41,7 +51,7 @@ async function fingerprintCheckMiddleware(req, res, next) {
         user.deviceInfo.registeredFingerprints || [];
       user.deviceInfo.registeredFingerprints.push({
         visitorId: fp,
-        createdAt: new Date(),
+        createdAt: getISTDate(),
         userAgent: req.headers["user-agent"] || "",
         ipAddress: req.ip,
       });
@@ -54,6 +64,7 @@ async function fingerprintCheckMiddleware(req, res, next) {
   } catch (err) {
     console.error("Fingerprint check middleware error:", err);
     res.status(500).json({
+      success: false,
       message: "Device verification failed",
       spoofingDetected: true,
     });

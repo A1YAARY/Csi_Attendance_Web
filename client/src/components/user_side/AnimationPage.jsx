@@ -43,7 +43,7 @@ const AnimationPage = () => {
             >
               {/* Logo Image */}
               <motion.img
-                src="/src/assets/Checkmark.png"
+                src="/Checkmark.png"
                 alt="Checkmark"
                 className="h-[156px] w-[152px]"
                 transition={{

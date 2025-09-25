@@ -1,109 +1,303 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import { toast, ToastContainer } from "react-toastify";
 import axios from "axios";
 import { useAuth } from "../../context/AuthContext";
 import "react-toastify/dist/ReactToastify.css";
+import Magnet from "../../reactbitscomponents/Magnet";
+import { AiOutlineEye, AiOutlineEyeInvisible } from "react-icons/ai";
+
+// Enhanced device ID generation - MORE RELIABLE
+const generateStableDeviceId = () => {
+  try {
+    // Try to get existing device ID first
+    let storedDeviceId = localStorage.getItem("attendance_device_id");
+    if (storedDeviceId && storedDeviceId.startsWith("device_")) {
+      return storedDeviceId;
+    }
+
+    // Generate new device ID with multiple fingerprints
+    const fingerprints = [
+      navigator.userAgent,
+      navigator.language,
+      screen.width + "x" + screen.height,
+      screen.colorDepth,
+      new Date().getTimezoneOffset().toString(),
+      navigator.platform,
+      navigator.hardwareConcurrency || "unknown",
+      navigator.deviceMemory || "unknown",
+      navigator.maxTouchPoints || "unknown",
+    ].join("|");
+
+    // Create hash
+    let hash = 0;
+    for (let i = 0; i < fingerprints.length; i++) {
+      const char = fingerprints.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash;
+    }
+
+    const newDeviceId =
+      "device_" + Math.abs(hash).toString(36) + "_" + Date.now().toString(36);
+
+    // Store permanently
+    localStorage.setItem("attendance_device_id", newDeviceId);
+    console.log("🔐 Generated new device ID:", newDeviceId);
+    return newDeviceId;
+  } catch (error) {
+    // Fallback device ID
+    const fallbackId = "device_fallback_" + Date.now();
+    localStorage.setItem("attendance_device_id", fallbackId);
+    return fallbackId;
+  }
+};
 
 export const LoginPage = () => {
   const navigate = useNavigate();
-  const { login, baseurl } = useAuth();
+  const { login, BASE_URL } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [show, setshow] = useState(false);
+  const [loginadmin, setloginadmin] = useState(true);
+  const [deviceId, setDeviceId] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Generate stable device ID on component mount
+  useEffect(() => {
+    const id = generateStableDeviceId();
+    setDeviceId(id);
+    console.log("📱 Device ID ready:", id);
+  }, []);
+
+  const handleClick = () => {
+    setshow(!show);
+  };
+
+  const handleAdminLogin = () => {
+    setloginadmin(!loginadmin);
+  };
 
   const handleEmailLogin = async (e) => {
     e.preventDefault();
+
+    if (isLoading) return;
+
+    setIsLoading(true);
+
     try {
+      console.log("🔐 Attempting login with device:", deviceId);
+
       const res = await axios.post(
-        `${baseurl}/auth2/login`,
-        { email, password },
-        { withCredentials: true }
+        `${BASE_URL}/auth2/login`,
+        {
+          email,
+          password,
+          deviceId: deviceId,
+          deviceType: /Android/.test(navigator.userAgent)
+            ? "Android"
+            : /iPhone|iPad|iPod/.test(navigator.userAgent)
+            ? "iOS"
+            : "Web",
+          deviceFingerprint: deviceId, // Use deviceId as fingerprint too
+        },
+        {
+          withCredentials: true,
+          headers: {
+            "Content-Type": "application/json",
+            "X-Device-ID": deviceId,
+          },
+          timeout: 15000,
+        }
       );
-      if (res.data.accessToken) {
-        login(res.data.user, res.data.accessToken);
+
+      if (res.data.success && res.data.accessToken) {
+        // Store organization code if available
+        if (res.data.organization?.name) {
+          localStorage.setItem("orginizationcode", res.data.organization.name);
+        }
+
+        // Store device binding
+        localStorage.setItem("user_device_binding", `${email}:${deviceId}`);
+
+        console.log(
+          "✅ Login successful, device registered:",
+          res.data.user.deviceRegistered
+        );
+
+        login(res.data.user, res.data.accessToken, res.data.organization);
         toast.success("Login successful!");
-        navigate("/Teacherinfo");
+
+        // Navigate based on role
+        if (res.data.user.role === "organization") {
+          navigate("/admin", { replace: true });
+        } else {
+          navigate("/Teacherinfo", { replace: true });
+        }
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || "Login error");
+      console.error("❌ Login error:", error);
+      const errorData = error.response?.data;
+
+      // Enhanced error handling
+      if (errorData?.code === "DEVICE_NOT_AUTHORIZED") {
+        toast.error(
+          `🚫 Device Not Authorized\n\nThis account is registered to another device.\n\nRegistered Device: ${errorData.registeredDevice}\nCurrent Device: ${errorData.currentDevice}\n\nPlease contact admin to reset your device registration.`,
+          {
+            autoClose: 10000,
+            style: { whiteSpace: "pre-line" },
+          }
+        );
+
+        // Show contact admin option for users
+        if (loginadmin) {
+          setTimeout(() => {
+            if (
+              window.confirm(
+                "Would you like to request device change from admin?"
+              )
+            ) {
+              // You can implement a device change request flow here
+              navigate("/contact-admin");
+            }
+          }, 2000);
+        }
+      } else if (errorData?.requiresDeviceInfo) {
+        toast.error("Device information is required for login");
+      } else {
+        toast.error(errorData?.message || "Login failed. Please try again.");
+      }
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const handleGoogleLogin = () => {
-    // Placeholder for Google login logic
-      const login = (userData, accessToken) => {
-    setUser(userData);
-    localStorage.setItem("accessToken", accessToken);
-    localStorage.setItem("userData", JSON.stringify(userData));
-    console.log(userData);
-  };
-    navigate("/Teacherinfo");
-  };
-
   return (
-    <div className="flex flex-col w-full h-[100dvh]">
-      <ToastContainer />
-      <div className="navbar w-screen h-[110px] flex justify-center items-end p-[16px] ">
-        <img src="/src/assets/logo.svg" alt="atharva logo" />
-      </div>
-
-      <div className="relative h-[100%] w-full px-[22px] py-[28px] inset-0 flex flex-col text-center justify-between">
-        <h1 className="text-[32px] font-bold tracking-tighter">
-          Sign in to your Account
-          <p className="text-[16px] text-[#404142] font-semibold tracking-normal">
-            Staff Login
-          </p>
-        </h1>
-
-        <img className="h-[304px]" src="src/assets/login.svg" alt="" />
-
-        <form onSubmit={handleEmailLogin} className="flex flex-col gap-4">
-          <input
-            type="email"
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-            className="p-3 rounded-lg border"
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            className="p-3 rounded-lg border"
-          />
-          <div className="w-full flex gap-2">
-            <button
-              type="submit"
-              className="flex justify-center items-center rounded-lg font-medium gap-3 bg-[#1D61E7] text-white w-full h-[48px] shadow-[0px_4px_4px_0px_#00000040] active:shadow-[0px_2px_1px_0px_#00000040] transition-all duration-100">
-              Login
-            </button>
-
-            <button
-              onClick={handleGoogleLogin}
-              className="flex justify-center items-center gap-[10px] border border-[#EFF0F6] rounded-[100px] w-[48px]  h-[48px] shadow-[0px_4px_4px_0px_#00000040] active:shadow-[0px_2px_1px_0px_#00000040] transition-all duration-100">
-              <img
-                className="h-[25px] w-[27px] my-[2px] pt-[2px]"
-                src="src/assets/google.png"
-                alt="google"
-              />
-              {/* <p className="text-[14px] text-[#1A1C1E] font-semibold">
-            Continue with Google
-            </p> */}
-            </button>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4">
+      <div className="w-full max-w-md">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-18 h-18  rounded-full mb-4">
+            {/* <span className="text-2xl font-bold text-white">A</span> */}
+            <img className="w-18 h-18" src="/Atharva-logo.svg" alt="" />
           </div>
-        </form>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Welcome Back
+          </h1>
+          <p className="text-gray-600">
+            {loginadmin ? "Staff" : "Admin"} Login
+          </p>
+        </div>
 
-        {/* <h3 className="text-[#6C7278] text-[12px] mt-4">
-          Don’t have an account?{" "}
-          <a className="text-[#4D81E7]" href="/register">
-          Sign Up
-          </a>
-        </h3> */}
+        {/* Login Form Card */}
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
+          <form onSubmit={handleEmailLogin} className="space-y-6">
+            {/* Email Field */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Email Address
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email"
+                required
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-gray-50 focus:bg-white"
+              />
+            </div>
+
+            {/* Password Field */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Password
+              </label>
+              <div className="relative">
+                <input
+                  type={show ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  required
+                  className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-gray-50 focus:bg-white"
+                />
+                <button
+                  type="button"
+                  onClick={handleClick}
+                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                >
+                  {show ? (
+                    <AiOutlineEyeInvisible size={20} />
+                  ) : (
+                    <AiOutlineEye size={20} />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Login Type Toggle */}
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={handleAdminLogin}
+                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Switch to {loginadmin ? "Admin" : "Staff"} Login
+              </button>
+            </div>
+
+            {/* Submit Button */}
+            {/* <Magnet> */}
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-blue-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? "Signing In..." : "Sign In"}
+              </button>
+            {/* </Magnet> */}
+          </form>
+
+          {/* Navigation Links */}
+          <div className="mt-6 text-center space-y-3">
+            <div className="text-sm text-gray-600">
+              Don't have an organization account?{" "}
+              <Link
+                to="/register"
+                className="text-blue-600 hover:text-blue-800 font-medium hover:underline transition-colors"
+              >
+                Register Organization
+              </Link>
+            </div>
+
+            {/* Additional helpful links */}
+            <div className="text-xs text-gray-500">
+              Need help?{" "}
+              <span className="text-blue-600 hover:text-blue-800 cursor-pointer hover:underline">
+                Contact Support
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="text-center mt-8">
+          <p className="text-sm text-gray-500">
+            © 2024 Attendance System. All rights reserved.
+          </p>
+        </div>
       </div>
+
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
     </div>
   );
 };
-export default LoginPage;

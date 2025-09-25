@@ -1,0 +1,8 @@
+{
+  "type": "browser_tts",
+  "text": "**Absent today (Sun Sep 21 2025)**  \n\nAll eight members of your organization have not recorded any attendance for today, so each of them is counted as absent:\n\n- admin9992@company.com  \n- john@example.com  \n- gear@gmail.com  \n- gear33@gmail.com  \n- gear73@gmail.com  \n- cissor@gmail.com  \n- bread@gmail.com  \n- gear93@gmail.com  \n\n**Why the absence?**  \n- The system shows **0 attendance records** for today, which means no one has clocked‑in or clocked‑out.  \n- Consequently, the attendance rate is **0 %**.\n\n**Actionable next steps**\n\n1. **Reminder** – Send a quick reminder (email, Slack, etc.) to the team to log their time for today.  \n2. **Check system** – Verify that the attendance‑capture device or portal is operational (e.g., no login issues, network outage).  \n3. **Manual entry** – If anyone worked off‑site or faced technical problems, consider allowing a manual entry for today, pending manager approval.  \n\nLet me know if you’d like to send a bulk reminder, view the last week’s attendance trends, or set up an automatic notification for missing punches.",
+  "voice": "en-US",
+  "rate": 1,
+  "pitch": 1,
+  "volume": 1
+}

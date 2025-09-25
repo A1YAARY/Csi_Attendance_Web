@@ -9,7 +9,7 @@ function Card() {
   return (
     <>
       <div className="relative  border border-slate-300 overflow-hidden rounded-[16px] py-[18px] px-[16px] flex flex-col transition-all duration-500 shadow-[0px_5px_10px_0px_#00000025] hover:shadow-[0px_5px_10px_0px_#00000040] h-[auto]">
-        <div className="absolute inset-0 bg-[url('/src/assets/bg.jpeg')] bg-cover bg-center opacity-50 w-[100vw]"></div>
+        <div className="absolute inset-0 bg-[url('/bg.jpeg')] bg-cover bg-center opacity-50 w-[100vw]"></div>
 
         <div className="z-10 flex flex-col gap-[10px] overflow-hidden">
           <div className="flex justify-between items-center">
@@ -18,7 +18,7 @@ function Card() {
               className="cursor-pointer transition-transform duration-300"
               onClick={() => setIsExpanded((prev) => !prev)}>
               <motion.img
-                src="src/assets/ic_baseline-arrow-back-ios.png"
+                src="/ic_baseline-arrow-back-ios.png"
                 alt="toggle"
                 animate={{ rotate: isExpanded ? 180 : 360 }}
                 transition={{ duration: 0.4, ease: "easeInOut" }}
