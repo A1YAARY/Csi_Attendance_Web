@@ -52,7 +52,7 @@ function App() {
             />
 
             <Route
-              path="/register-organization"
+              path="/register"
               element={
                 <PublicRoute>
                   <motion.div
