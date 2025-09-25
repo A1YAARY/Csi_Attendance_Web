@@ -193,10 +193,31 @@ const NewQrcode = () => {
       setCurrentStatus(
         nextAction === "check-in" ? "checked-in" : "checked-out"
       );
+      const scanResultData = {
+        success: true,
+        action: nextAction,
+        timestamp: response.data.data?.timestamp || new Date().toISOString(),
+        message: response.data.message,
+        location: {
+          distance: response.data.data?.location?.distance,
+          withinRange: response.data.data?.location?.withinRange,
+        },
+        dailySummary: response.data.data?.dailySummary || {},
+        verified: response.data.data?.verified || false,
+        attendanceId: response.data.data?.attendanceId,
+      };
+
+      // Store in localStorage for animation page
+      localStorage.setItem("scanResult", JSON.stringify(scanResultData));
 
       // Navigate to success
       setTimeout(() => {
-        navigate("/animation");
+        navigate("/animation", {
+          state: {
+            scanData: scanResultData,
+            fromScan: true,
+          },
+        });
       }, 500);
     } catch (error) {
       console.error("❌ Scan failed:", error);
