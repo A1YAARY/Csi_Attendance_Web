@@ -176,8 +176,9 @@ export const LoginPage = () => {
       <div className="w-full max-w-md">
         {/* Header */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mb-4">
-            <span className="text-2xl font-bold text-white">A</span>
+          <div className="inline-flex items-center justify-center w-18 h-18  rounded-full mb-4">
+            {/* <span className="text-2xl font-bold text-white">A</span> */}
+            <img className="w-18 h-18" src="/Atharva-logo.svg" alt="" />
           </div>
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Welcome Back
@@ -245,7 +246,7 @@ export const LoginPage = () => {
             </div>
 
             {/* Submit Button */}
-            <Magnet>
+            {/* <Magnet> */}
               <button
                 type="submit"
                 disabled={isLoading}
@@ -253,7 +254,7 @@ export const LoginPage = () => {
               >
                 {isLoading ? "Signing In..." : "Sign In"}
               </button>
-            </Magnet>
+            {/* </Magnet> */}
           </form>
 
           {/* Navigation Links */}
