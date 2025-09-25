@@ -11,11 +11,10 @@ const getISTDate = (date = new Date()) => {
 };
 
 // Reset user device (allow user to register new device)
-// Reset user device — robust org scoping + self-reset allowed
 const resetUserDevice = async (req, res) => {
   try {
     const { userId } = req.body;
-
+    
     if (!userId) {
       return res.status(400).json({ success: false, message: "User ID is required" });
     }
@@ -41,18 +40,6 @@ const resetUserDevice = async (req, res) => {
       }
       adminOrgId = org._id;
     }
-
-    // Allow if admin is resetting a user in the same org or if self-reset
-    const sameUser = String(req.user._id) === String(targetUser._id);
-    const sameOrg =
-      adminOrgId && targetUser.organizationId && String(targetUser.organizationId) === String(adminOrgId);
-
-    // if (!sameUser && !sameOrg) {
-    //   return res.status(403).json({
-    //     success: false,
-    //     message: "Forbidden to reset device for user outside your organization",
-    //   });
-    // }
 
     // Reset device info
     targetUser.deviceInfo = {
@@ -182,17 +169,17 @@ const getDeviceChangeRequests = async (req, res) => {
     const usersWithRequests = await User.find({
       organizationId: orgId,
       "deviceChangeRequest.status": "pending",
-    }).select("name email deviceInfo deviceChangeRequest");
+    }).select("name email deviceInfo deviceChangeRequest").lean();
 
     const requests = usersWithRequests.map((user) => ({
       userId: user._id,
       userName: user.name,
       userEmail: user.email,
-      currentDevice: user.deviceInfo.deviceId,
-      newDeviceId: user.deviceChangeRequest.newDeviceId,
-      newDeviceType: user.deviceChangeRequest.newDeviceType,
-      requestedAt: user.deviceChangeRequest.requestedAt,
-      requestedAtIST: user.deviceChangeRequest.requestedAt
+      currentDevice: user.deviceInfo?.deviceId,
+      newDeviceId: user.deviceChangeRequest?.newDeviceId,
+      newDeviceType: user.deviceChangeRequest?.newDeviceType,
+      requestedAt: user.deviceChangeRequest?.requestedAt,
+      requestedAtIST: user.deviceChangeRequest?.requestedAt
         ? user.deviceChangeRequest.requestedAt.toLocaleString("en-IN", {
             timeZone: "Asia/Kolkata",
             year: "numeric",
@@ -223,8 +210,8 @@ const getDeviceChangeRequests = async (req, res) => {
 // Handle device change request (approve/reject)
 const handleDeviceChangeRequest = async (req, res) => {
   try {
-    const { userId, action, reason } = req.body; // action: 'approve' or 'reject'
-
+    const { userId, action, reason } = req.body;
+    
     if (!userId || !action || !["approve", "reject"].includes(action)) {
       return res.status(400).json({
         success: false,
@@ -248,10 +235,7 @@ const handleDeviceChangeRequest = async (req, res) => {
       });
     }
 
-    if (
-      !user.deviceChangeRequest ||
-      user.deviceChangeRequest.status !== "pending"
-    ) {
+    if (!user.deviceChangeRequest || user.deviceChangeRequest.status !== "pending") {
       return res.status(400).json({
         success: false,
         message: "No pending device change request found for this user",
@@ -270,8 +254,7 @@ const handleDeviceChangeRequest = async (req, res) => {
     }
 
     // Update request status
-    user.deviceChangeRequest.status =
-      action === "approve" ? "approved" : "rejected";
+    user.deviceChangeRequest.status = action === "approve" ? "approved" : "rejected";
     user.deviceChangeRequest.adminResponse = {
       adminId: req.user._id,
       respondedAt: getISTDate(),
@@ -312,13 +295,13 @@ const records = async (req, res) => {
 
     const attendanceRecords = await Attendance.find({ organizationId: orgId })
       .populate("userId", "name email role department")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: -1 })
+      .lean();
 
     // Process the records to format them according to requirements
     const processedRecords = attendanceRecords
       .map((record) => {
         const checkInRecord = record.type === "check-in" ? record : null;
-        const checkOutRecord = record.type === "check-out" ? record : null;
 
         // Find corresponding check-out for this check-in
         if (checkInRecord) {
@@ -341,13 +324,10 @@ const records = async (req, res) => {
             const checkOutDateTime = new Date(checkOut.createdAt);
             const diffInMillis = checkOutDateTime - checkInTime;
             const hours = Math.floor(diffInMillis / (1000 * 60 * 60));
-            const minutes = Math.floor(
-              (diffInMillis % (1000 * 60 * 60)) / (1000 * 60)
-            );
+            const minutes = Math.floor((diffInMillis % (1000 * 60 * 60)) / (1000 * 60));
             workingHours = `${hours}h ${minutes}m`;
             status = "Complete";
 
-            // Format check-out time in IST
             checkOutTime = checkOutDateTime.toLocaleString("en-IN", {
               timeZone: "Asia/Kolkata",
               hour: "2-digit",
@@ -380,10 +360,9 @@ const records = async (req, res) => {
             verified: record.verified || false,
           };
         }
-
         return null;
       })
-      .filter(Boolean); // Remove null entries
+      .filter(Boolean);
 
     // Remove duplicates based on name and date
     const uniqueRecords = processedRecords.reduce((acc, current) => {
@@ -419,10 +398,11 @@ const getOrganizationQRCodes = async (req, res) => {
       });
     }
 
-    // Get organization with populated QR codes
+    // Get organization with populated QR codes using lean
     const org = await Organization.findById(orgId)
-      .populate("checkInQRCodeId")
-      .populate("checkOutQRCodeId");
+      .populate({ path: "checkInQRCodeId", options: { lean: true } })
+      .populate({ path: "checkOutQRCodeId", options: { lean: true } })
+      .lean();
 
     if (!org) {
       return res.status(404).json({
@@ -466,10 +446,8 @@ const getOrganizationQRCodes = async (req, res) => {
       settings: {
         qrCodeValidityMinutes: org.settings?.qrCodeValidityMinutes || 30,
         locationToleranceMeters: org.settings?.locationToleranceMeters || 100,
-        requireDeviceRegistration:
-          org.settings?.requireDeviceRegistration || true,
-        strictLocationVerification:
-          org.settings?.strictLocationVerification || true,
+        requireDeviceRegistration: org.settings?.requireDeviceRegistration || true,
+        strictLocationVerification: org.settings?.strictLocationVerification || true,
       },
       lastUpdated: new Date().toISOString(),
     };
@@ -483,10 +461,7 @@ const getOrganizationQRCodes = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Failed to fetch QR codes",
-      error:
-        process.env.NODE_ENV === "development"
-          ? error.message
-          : "Internal server error",
+      error: process.env.NODE_ENV === "development" ? error.message : "Internal server error",
     });
   }
 };
@@ -494,9 +469,9 @@ const getOrganizationQRCodes = async (req, res) => {
 // Get QR code by type
 const getQRCodeByType = async (req, res) => {
   try {
-    const { type } = req.params; // 'check-in' or 'check-out'
+    const { type } = req.params;
     const orgId = req.user.organizationId;
-
+    
     if (!orgId) {
       return res.status(400).json({
         success: false,
@@ -511,9 +486,12 @@ const getQRCodeByType = async (req, res) => {
       });
     }
 
-    const org = await Organization.findById(orgId).populate(
-      type === "check-in" ? "checkInQRCodeId" : "checkOutQRCodeId"
-    );
+    const org = await Organization.findById(orgId)
+      .populate({
+        path: type === "check-in" ? "checkInQRCodeId" : "checkOutQRCodeId",
+        options: { lean: true },
+      })
+      .lean();
 
     if (!org) {
       return res.status(404).json({
@@ -522,8 +500,7 @@ const getQRCodeByType = async (req, res) => {
       });
     }
 
-    const qrCode =
-      type === "check-in" ? org.checkInQRCodeId : org.checkOutQRCodeId;
+    const qrCode = type === "check-in" ? org.checkInQRCodeId : org.checkOutQRCodeId;
 
     if (!qrCode) {
       return res.status(404).json({
@@ -568,42 +545,27 @@ const getTodaysAttendance = async (req, res) => {
     }
 
     const now = new Date();
-    const istOffset = 5.5 * 60 * 60 * 1000; // +5:30 hrs
+    const istOffset = 5.5 * 60 * 60 * 1000;
     const istNow = new Date(now.getTime() + istOffset);
-
+    
     const startOfDayIST = new Date(
-      Date.UTC(
-        istNow.getUTCFullYear(),
-        istNow.getUTCMonth(),
-        istNow.getUTCDate(),
-        0,
-        0,
-        0,
-        0
-      )
+      Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate(), 0, 0, 0, 0)
     );
-
     const endOfDayIST = new Date(
-      Date.UTC(
-        istNow.getUTCFullYear(),
-        istNow.getUTCMonth(),
-        istNow.getUTCDate(),
-        23,
-        59,
-        59,
-        999
-      )
+      Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate(), 23, 59, 59, 999)
     );
 
-    // Fetch records
+    // Fetch records with lean
     const records = await Attendance.find({
       organizationId: orgId,
       createdAt: { $gte: startOfDayIST, $lte: endOfDayIST },
-    }).populate("userId", "name email");
+    })
+      .populate("userId", "name email")
+      .lean();
 
     // Add IST time to response
     const formatted = records.map((record) => {
-      const obj = record.toObject();
+      const obj = { ...record };
       obj.timeIST = new Date(record.createdAt.getTime() + istOffset);
       obj.timeISTFormatted = obj.timeIST.toLocaleString("en-IN", {
         timeZone: "Asia/Kolkata",
@@ -638,16 +600,7 @@ const getTodaysAttendance = async (req, res) => {
 const updateUserByAdmin = async (req, res) => {
   try {
     const userId = req.params.id;
-    const {
-      name,
-      email,
-      department,
-      role,
-      phone,
-      institute,
-      workingHours,
-      password,
-    } = req.body;
+    const { name, email, department, role, phone, institute, workingHours, password } = req.body;
 
     // Check if the requesting user is an admin
     if (req.user.role !== "organization") {
@@ -667,9 +620,7 @@ const updateUserByAdmin = async (req, res) => {
     }
 
     // Check if user belongs to same organization
-    if (
-      String(userToUpdate.organizationId) !== String(req.user.organizationId)
-    ) {
+    if (String(userToUpdate.organizationId) !== String(req.user.organizationId)) {
       return res.status(403).json({
         success: false,
         message: "Forbidden to update user outside your organization",
@@ -685,7 +636,7 @@ const updateUserByAdmin = async (req, res) => {
     if (phone) updateData.phone = phone;
     if (institute) updateData.institute = institute;
     if (workingHours) updateData.workingHours = workingHours;
-
+    
     if (password) {
       // Hash password if provided
       const bcrypt = require("bcryptjs");
@@ -698,7 +649,7 @@ const updateUserByAdmin = async (req, res) => {
     const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
       new: true,
       runValidators: true,
-    }).select("-password"); // Exclude password from response
+    }).select("-password");
 
     if (!updatedUser) {
       return res.status(404).json({
@@ -712,7 +663,7 @@ const updateUserByAdmin = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "User updated successfully",
-      data: updatedUser,
+      data: updatedUser.toObject(), // Convert to plain object
     });
   } catch (error) {
     console.error("Update user profile error:", error);
@@ -787,9 +738,11 @@ const deleteUser = async (req, res) => {
 const singleUser = async (req, res) => {
   try {
     const userId = req.params.id;
+    
     const user = await User.findById(userId)
       .select("-password")
-      .populate("organizationId", "name");
+      .populate("organizationId", "name")
+      .lean(); // Use lean to return plain object
 
     if (!user) {
       return res.status(404).json({
