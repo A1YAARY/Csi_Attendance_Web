@@ -248,8 +248,8 @@ export function AuthProvider({ children }) {
   );
   const getdaily = async (token) => {
     try {
-      const todays = new Date()
-      const formateddate  = todays.toISOString().split("T")[0]
+      const todays = new Date();
+      const formateddate = todays.toISOString().split("T")[0];
 
       const response = await axios.get(
         `${BASE_URL}/getdata/daily?date=${formateddate}`,
@@ -260,7 +260,6 @@ export function AuthProvider({ children }) {
           responseType: "blob", // important: receive Excel file as binary
         }
       );
-    
 
       // Create a URL for the blob and trigger download
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -281,18 +280,15 @@ export function AuthProvider({ children }) {
   };
   const getWeek = async (token) => {
     try {
-      const todays = new Date()
+      const todays = new Date();
       // const formateddate  = todays.toISOString().split("T")[0]
 
-      const response = await axios.get(
-        `${BASE_URL}/getdata/weekly`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-          responseType: "blob", // important: receive Excel file as binary
-        }
-      );
+      const response = await axios.get(`${BASE_URL}/getdata/weekly`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        responseType: "blob", // important: receive Excel file as binary
+      });
       // Create a URL for the blob and trigger download
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
@@ -500,6 +496,16 @@ export function AuthProvider({ children }) {
     [makeAuthenticatedRequest]
   );
 
+  // Add this method to check if user is authenticated
+  const isAuthenticated = () => {
+    return !!(user && accessToken);
+  };
+
+  // Add this method to check if user is admin
+  const isAdmin = () => {
+    return user && user.role === "organization";
+  };
+
   // SYSTEM API CALLS
   const getSystemHealth = useCallback(async () => {
     try {
@@ -675,7 +681,8 @@ export function AuthProvider({ children }) {
       // API functions - System
       getSystemHealth,
       getScanLogs,
-
+      isAuthenticated, // ADD this
+      isAdmin, //
       // Utility functions
       getAuthHeaders,
       getFileHeaders,

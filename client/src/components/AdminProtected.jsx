@@ -1,15 +1,29 @@
 import React from "react";
-import { useAdminProtection } from "../hooks/useAdminProtection";
+import { Navigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 
 const AdminProtected = ({ children }) => {
-  const isAdmin = useAdminProtection();
+  const { user, loading } = useAuth();
 
-  if (!isAdmin) {
+  // Show loading while checking auth
+  if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen text-xl font-bold text-red-600">
-        🚫 Access Denied – Admins Only
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
+  }
+
+  const token = localStorage.getItem("accessToken");
+
+  // Check if user is authenticated
+  if (!token || !user) {
+    return <Navigate to="/login" replace />;
+  }
+
+  // Check if user is admin/organization
+  if (user.role !== "organization") {
+    return <Navigate to="/Teacherinfo" replace />;
   }
 
   return children;

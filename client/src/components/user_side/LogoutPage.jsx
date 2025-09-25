@@ -3,16 +3,24 @@ import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
 
 const Logout = () => {
-  const user = JSON.parse(localStorage.getItem("userData"));
+  const user = JSON.parse(localStorage.getItem("user")) || JSON.parse(localStorage.getItem("userData"));
   const { logout } = useAuth();
   const navigate = useNavigate();
 
-  const hidden = () => {
+  const handleLogout = () => {
     logout();
-    navigate("/");
+    // Always redirect to login page after logout
+    navigate("/login", { replace: true });
   };
 
-  const cancel = () => navigate("/TeacherInfo");
+  const cancel = () => {
+    // Check user role to redirect to appropriate page
+    if (user?.role === "organization") {
+      navigate("/admin");
+    } else {
+      navigate("/Teacherinfo");
+    }
+  };
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-red-50 to-white p-4">
@@ -63,7 +71,7 @@ const Logout = () => {
               Cancel
             </button>
             <button
-              onClick={hidden}
+              onClick={handleLogout}
               className="flex-1 px-4 sm:px-6 py-2.5 sm:py-3 bg-red-600 hover:bg-red-700 text-white font-semibold text-[14px] sm:text-[15px] lg:text-[16px] rounded-lg sm:rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl"
             >
               Sign Out
