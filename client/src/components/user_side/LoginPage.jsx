@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { toast, ToastContainer } from "react-toastify";
 import axios from "axios";
 import { useAuth } from "../../context/AuthContext";
@@ -12,7 +12,6 @@ const generateStableDeviceId = () => {
   try {
     // Try to get existing device ID first
     let storedDeviceId = localStorage.getItem("attendance_device_id");
-
     if (storedDeviceId && storedDeviceId.startsWith("device_")) {
       return storedDeviceId;
     }
@@ -44,7 +43,6 @@ const generateStableDeviceId = () => {
     // Store permanently
     localStorage.setItem("attendance_device_id", newDeviceId);
     console.log("🔐 Generated new device ID:", newDeviceId);
-
     return newDeviceId;
   } catch (error) {
     // Fallback device ID
@@ -81,6 +79,7 @@ export const LoginPage = () => {
 
   const handleEmailLogin = async (e) => {
     e.preventDefault();
+
     if (isLoading) return;
 
     setIsLoading(true);
@@ -137,7 +136,6 @@ export const LoginPage = () => {
       }
     } catch (error) {
       console.error("❌ Login error:", error);
-
       const errorData = error.response?.data;
 
       // Enhanced error handling
@@ -174,118 +172,131 @@ export const LoginPage = () => {
   };
 
   return (
-    <div className="flex flex-col min-h-screen w-full">
-      <ToastContainer />
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4">
+      <div className="w-full max-w-md">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full mb-4">
+            <span className="text-2xl font-bold text-white">A</span>
+          </div>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            Welcome Back
+          </h1>
+          <p className="text-gray-600">
+            {loginadmin ? "Staff" : "Admin"} Login
+          </p>
+        </div>
 
-      {/* Navbar */}
-      <div className="navbar w-full h-[80px] sm:h-[100px] lg:h-[110px] flex justify-center items-end p-4 lg:p-[16px]">
-        <img
-          src="/logo.svg"
-          alt="atharva logo"
-          className="h-auto max-h-[50px] sm:max-h-[60px] lg:max-h-[70px]"
-        />
-      </div>
-
-      {/* Main content */}
-      <div className="flex-1 flex items-center justify-center">
-        <div className="w-full max-w-md lg:max-w-6xl mx-auto">
-          <div className="lg:grid lg:grid-cols-2 lg:gap-12 lg:items-center">
-            {/* Left side */}
-            <div className="flex flex-col items-center text-center px-6 sm:px-8 lg:px-0">
-              <h1 className="text-[24px] sm:text-[28px] lg:text-[36px] xl:text-[40px] font-bold tracking-tighter mb-2 lg:mb-6">
-                Sign in to your Account
-                <p className="text-[14px] sm:text-[16px] lg:text-[18px] text-[#404142] font-semibold tracking-normal mt-1">
-                  {loginadmin ? "Staff" : "Admin"} Login
-                </p>
-              </h1>
-              <img
-                className="w-full max-w-[280px] sm:max-w-[320px] lg:max-w-[400px] xl:max-w-[450px] h-auto my-6 lg:my-8"
-                src="/login.svg"
-                alt="Login illustration"
+        {/* Login Form Card */}
+        <div className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8">
+          <form onSubmit={handleEmailLogin} className="space-y-6">
+            {/* Email Field */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Email Address
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="Enter your email"
+                required
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-gray-50 focus:bg-white"
               />
             </div>
 
-            {/* Right side: Form */}
-            <div className="px-6 sm:px-8 lg:px-0 pb-8 lg:pb-0 flex flex-col items-center">
-              <form
-                onSubmit={handleEmailLogin}
-                className="flex flex-col gap-4 lg:gap-6 w-full max-w-md"
-              >
+            {/* Password Field */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Password
+              </label>
+              <div className="relative">
                 <input
-                  type="email"
-                  placeholder="Email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  type={show ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
                   required
-                  disabled={isLoading}
-                  className="p-3 lg:p-4 rounded-lg border border-gray-300 focus:border-[#1D61E7] focus:outline-none focus:ring-2 focus:ring-[#1D61E7]/20 transition-all text-sm sm:text-base disabled:opacity-50"
+                  className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors bg-gray-50 focus:bg-white"
                 />
-
-                <div className="flex items-center justify-between w-full">
-                  <input
-                    type={show ? "text" : "password"}
-                    placeholder="Password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                    disabled={isLoading}
-                    className="p-3 lg:p-4 rounded-lg border border-gray-300 focus:border-[#1D61E7] focus:outline-none focus:ring-2 focus:ring-[#1D61E7]/20 transition-all text-sm sm:text-base flex-1 disabled:opacity-50"
-                  />
-                  <button
-                    type="button"
-                    onClick={handleClick}
-                    className="ml-2 p-3 text-gray-500 hover:text-gray-700"
-                  >
-                    {show ? (
-                      <AiOutlineEyeInvisible size={20} />
-                    ) : (
-                      <AiOutlineEye size={20} />
-                    )}
-                  </button>
-                </div>
-
-                {/* Device Info */}
-                {/* {deviceId && (
-                  <div className="text-xs text-gray-600 bg-blue-50 p-2 rounded-lg">
-                    <div className="font-medium">Device Security:</div>
-                    <div className="truncate">ID: {deviceId}</div>
-                    <div>One account per device • Contact admin to change</div>
-                  </div>
-                )} */}
-
-                <Magnet padding={90} disabled={isLoading} magnetStrength={90}>
-                  <button
-                    type="submit"
-                    disabled={isLoading}
-                    className="flex justify-center items-center rounded-lg font-medium gap-3 bg-[#1D61E7] hover:bg-[#1a56d1] text-white w-full h-[48px] lg:h-[52px] shadow-[0px_4px_4px_0px_#00000040] active:shadow-[0px_2px_1px_0px_#00000040] transition-all duration-200 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isLoading ? (
-                      <>
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                        Logging in...
-                      </>
-                    ) : (
-                      "Login"
-                    )}
-                  </button>
-                </Magnet>
-              </form>
-
-              <div className="text-[#6C7278] text-[12px] mt-4 text-center flex">
-                Or Login as {loginadmin ? "Admin/Organizer" : "Staff"}?{" "}
                 <button
-                  onClick={handleAdminLogin}
-                  className="text-[#4D81E7] hover:underline cursor-pointer ml-1"
+                  type="button"
+                  onClick={handleClick}
+                  className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-700"
                 >
-                  Switch
+                  {show ? (
+                    <AiOutlineEyeInvisible size={20} />
+                  ) : (
+                    <AiOutlineEye size={20} />
+                  )}
                 </button>
               </div>
             </div>
+
+            {/* Login Type Toggle */}
+            <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={handleAdminLogin}
+                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Switch to {loginadmin ? "Admin" : "Staff"} Login
+              </button>
+            </div>
+
+            {/* Submit Button */}
+            <Magnet>
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-blue-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isLoading ? "Signing In..." : "Sign In"}
+              </button>
+            </Magnet>
+          </form>
+
+          {/* Navigation Links */}
+          <div className="mt-6 text-center space-y-3">
+            <div className="text-sm text-gray-600">
+              Don't have an organization account?{" "}
+              <Link
+                to="/register"
+                className="text-blue-600 hover:text-blue-800 font-medium hover:underline transition-colors"
+              >
+                Register Organization
+              </Link>
+            </div>
+
+            {/* Additional helpful links */}
+            <div className="text-xs text-gray-500">
+              Need help?{" "}
+              <span className="text-blue-600 hover:text-blue-800 cursor-pointer hover:underline">
+                Contact Support
+              </span>
+            </div>
           </div>
         </div>
+
+        {/* Footer */}
+        <div className="text-center mt-8">
+          <p className="text-sm text-gray-500">
+            © 2024 Attendance System. All rights reserved.
+          </p>
+        </div>
       </div>
+
+      <ToastContainer
+        position="top-right"
+        autoClose={5000}
+        hideProgressBar={false}
+        newestOnTop={false}
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+      />
     </div>
   );
 };
-
-export default LoginPage;
