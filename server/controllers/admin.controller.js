@@ -11,43 +11,51 @@ const getISTDate = (date = new Date()) => {
 };
 
 // Reset user device (allow user to register new device)
+// Reset user device — robust org scoping + self-reset allowed
 const resetUserDevice = async (req, res) => {
   try {
     const { userId } = req.body;
 
     if (!userId) {
-      return res.status(400).json({
-        success: false,
-        message: "User ID is required",
-      });
+      return res.status(400).json({ success: false, message: "User ID is required" });
     }
 
-    // Check if the requesting user is an admin
     if (req.user.role !== "organization") {
-      return res.status(403).json({
-        success: false,
-        message: "Only admins can reset user devices",
-      });
+      // If not an org admin, allow self-reset only
+      if (String(req.user._id) !== String(userId)) {
+        return res.status(403).json({ success: false, message: "Only admins can reset user devices" });
+      }
     }
 
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
+    const targetUser = await User.findById(userId);
+    if (!targetUser) {
+      return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    // Check if user belongs to same organization
-    if (String(user.organizationId) !== String(req.user.organizationId)) {
+    // Determine admin's organization for scoping
+    let adminOrgId = req.user.organizationId;
+    if (req.user.role === "organization" && !adminOrgId) {
+      const org = await Organization.findOne({ adminId: req.user._id }).select("_id");
+      if (!org) {
+        return res.status(403).json({ success: false, message: "Admin has no organization" });
+      }
+      adminOrgId = org._id;
+    }
+
+    // Allow if admin is resetting a user in the same org or if self-reset
+    const sameUser = String(req.user._id) === String(targetUser._id);
+    const sameOrg =
+      adminOrgId && targetUser.organizationId && String(targetUser.organizationId) === String(adminOrgId);
+
+    if (!sameUser && !sameOrg) {
       return res.status(403).json({
         success: false,
         message: "Forbidden to reset device for user outside your organization",
       });
     }
 
-    // Reset device info - allow user to register new device
-    user.deviceInfo = {
+    // Reset device info
+    targetUser.deviceInfo = {
       isRegistered: false,
       deviceId: null,
       deviceType: null,
@@ -56,26 +64,30 @@ const resetUserDevice = async (req, res) => {
       lastKnownLocation: null,
     };
 
-    await user.save();
+    await targetUser.save();
 
-    console.log(
-      `✅ Device reset for user ${user.email} by admin ${req.user.email}`
-    );
-
-    res.json({
+    return res.json({
       success: true,
-      message:
-        "User device reset successfully. User can now register a new device.",
+      message: "User device reset successfully. User can now register a new device.",
       data: {
-        userId: user._id,
-        userName: user.name,
-        userEmail: user.email,
+        userId: targetUser._id,
+        userName: targetUser.name,
+        userEmail: targetUser.email,
+        deviceInfo: targetUser.deviceInfo,
         resetAt: getISTDate(),
+        resetAtFormatted: getISTDate().toLocaleDateString("en-IN", {
+          timeZone: "Asia/Kolkata",
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+        }),
       },
     });
   } catch (error) {
     console.error("Error resetting user device:", error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to reset user device",
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
@@ -83,44 +95,71 @@ const resetUserDevice = async (req, res) => {
   }
 };
 
-// Get all users in organization
 const getusers = async (req, res) => {
   try {
-    // Validate user authentication
     if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        message: "User not authenticated",
-      });
+      return res.status(401).json({ success: false, message: "User not authenticated" });
     }
 
-    const orgId = req.user.organizationId;
+    // Resolve organizationId robustly for admins or scoped users
+    let orgId = req.user.organizationId;
+    if (req.user.role === "organization" && !orgId) {
+      const org = await Organization.findOne({ adminId: req.user._id }).select("_id");
+      if (!org) {
+        return res.status(403).json({ success: false, message: "Admin has no organization" });
+      }
+      orgId = org._id;
+    }
+
     if (!orgId) {
-      return res.status(400).json({
-        success: false,
-        message: "User not associated with any organization",
-      });
+      return res.status(400).json({ success: false, message: "No organization scope" });
     }
 
-    console.log("Fetching users for organization:", orgId);
-
-    // Find all users in the organization
-    const allusers = await User.find({ organizationId: orgId })
-      .select("-password") // Exclude password field for security
+    // Use lean() to avoid cache/clone issues and format for frontend
+    const users = await User.find({ organizationId: orgId })
+      .select("-password -refreshToken")
+      .lean()
       .sort({ createdAt: -1 });
 
-    console.log(`Found ${allusers.length} users for organization ${orgId}`);
+    const formatted = users.map(u => ({
+      _id: u._id,
+      id: u._id,
+      name: u.name,
+      email: u.email,
+      role: u.role || "user",
+      department: u.department || "cmpn",
+      phone: u.phone || "",
+      institute: u.institute || "",
+      workingHours: u.workingHours || { start: "09:00", end: "17:00" },
+      deviceInfo: u.deviceInfo || {
+        isRegistered: false,
+        deviceId: null,
+        deviceType: null,
+        deviceFingerprint: null,
+        registeredAt: null,
+      },
+      organizationId: u.organizationId,
+      createdAt: u.createdAt,
+      updatedAt: u.updatedAt,
+      createdAtFormatted: u.createdAt
+        ? new Date(u.createdAt).toLocaleDateString("en-IN", {
+            timeZone: "Asia/Kolkata",
+            year: "numeric",
+            month: "short",
+            day: "numeric",
+          })
+        : "N/A",
+    }));
 
-    // Return consistent response format
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
       message: "Users fetched successfully",
-      data: allusers,
-      count: allusers.length,
+      data: formatted,
+      count: formatted.length,
     });
   } catch (error) {
     console.error("Error getting users:", error);
-    res.status(500).json({
+    return res.status(500).json({
       success: false,
       message: "Failed to fetch all users",
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
