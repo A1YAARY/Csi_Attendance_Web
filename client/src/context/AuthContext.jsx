@@ -498,7 +498,7 @@ export function AuthProvider({ children }) {
 
   // Add this method to check if user is authenticated
   const isAuthenticated = () => {
-    return !!(user && accessToken);
+    return !!(user && getToken());
   };
 
   // Add this method to check if user is admin
