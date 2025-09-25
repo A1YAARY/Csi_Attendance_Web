@@ -7,123 +7,128 @@ import "react-toastify/dist/ReactToastify.css";
 import Magnet from "../../reactbitscomponents/Magnet";
 import { AiOutlineEye, AiOutlineEyeInvisible } from "react-icons/ai";
 
-// Enhanced device ID generation - MORE STRICT
-const generateDeviceId = () => {
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  ctx.textBaseline = "top";
-  ctx.font = "14px Arial";
-  ctx.fillText("Device fingerprint", 2, 2);
+// Enhanced device ID generation - MORE RELIABLE
+const generateStableDeviceId = () => {
+  try {
+    // Try to get existing device ID first
+    let storedDeviceId = localStorage.getItem("attendance_device_id");
 
-  const fingerprint = [
-    navigator.userAgent,
-    navigator.language,
-    screen.width + "x" + screen.height,
-    screen.colorDepth,
-    new Date().getTimezoneOffset(),
-    navigator.platform,
-    navigator.hardwareConcurrency || "unknown",
-    navigator.deviceMemory || "unknown",
-    canvas.toDataURL(),
-    navigator.cookieEnabled.toString(),
-    typeof Storage !== "undefined" ? "storage" : "no-storage",
-  ].join("|");
+    if (storedDeviceId && storedDeviceId.startsWith("device_")) {
+      return storedDeviceId;
+    }
 
-  let hash = 0;
-  for (let i = 0; i < fingerprint.length; i++) {
-    const char = fingerprint.charCodeAt(i);
-    hash = (hash << 5) - hash + char;
-    hash = hash & hash;
+    // Generate new device ID with multiple fingerprints
+    const fingerprints = [
+      navigator.userAgent,
+      navigator.language,
+      screen.width + "x" + screen.height,
+      screen.colorDepth,
+      new Date().getTimezoneOffset().toString(),
+      navigator.platform,
+      navigator.hardwareConcurrency || "unknown",
+      navigator.deviceMemory || "unknown",
+      navigator.maxTouchPoints || "unknown",
+    ].join("|");
+
+    // Create hash
+    let hash = 0;
+    for (let i = 0; i < fingerprints.length; i++) {
+      const char = fingerprints.charCodeAt(i);
+      hash = (hash << 5) - hash + char;
+      hash = hash & hash;
+    }
+
+    const newDeviceId =
+      "device_" + Math.abs(hash).toString(36) + "_" + Date.now().toString(36);
+
+    // Store permanently
+    localStorage.setItem("attendance_device_id", newDeviceId);
+    console.log("🔐 Generated new device ID:", newDeviceId);
+
+    return newDeviceId;
+  } catch (error) {
+    // Fallback device ID
+    const fallbackId = "device_fallback_" + Date.now();
+    localStorage.setItem("attendance_device_id", fallbackId);
+    return fallbackId;
   }
-
-  return (
-    "strict_device_" +
-    Math.abs(hash).toString(36) +
-    "_" +
-    Date.now().toString(36)
-  );
 };
 
 export const LoginPage = () => {
   const navigate = useNavigate();
-  const { login, BASE_URL, setorginization } = useAuth();
+  const { login, BASE_URL } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [show, setshow] = useState(false);
   const [loginadmin, setloginadmin] = useState(true);
   const [deviceId, setDeviceId] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
 
-  // Generate device ID - STRICT MODE
+  // Generate stable device ID on component mount
   useEffect(() => {
-    let storedDeviceId = localStorage.getItem("strict_deviceId");
-
-    // ALWAYS regenerate to ensure uniqueness per browser session
-    const newDeviceId = generateDeviceId();
-
-    // Only use stored device ID if it exists AND matches current session
-    if (storedDeviceId && storedDeviceId.startsWith("strict_device_")) {
-      setDeviceId(storedDeviceId);
-    } else {
-      localStorage.setItem("strict_deviceId", newDeviceId);
-      setDeviceId(newDeviceId);
-    }
+    const id = generateStableDeviceId();
+    setDeviceId(id);
+    console.log("📱 Device ID ready:", id);
   }, []);
 
   const handleClick = () => {
     setshow(!show);
   };
+
   const handleAdminLogin = () => {
     setloginadmin(!loginadmin);
   };
 
   const handleEmailLogin = async (e) => {
-    const BASE_URL =
-      import.meta.env.VITE_BACKEND_BASE_URL ||
-      "https://csi-attendance-web.onrender.com";
     e.preventDefault();
+    if (isLoading) return;
+
+    setIsLoading(true);
 
     try {
+      console.log("🔐 Attempting login with device:", deviceId);
+
       const res = await axios.post(
         `${BASE_URL}/auth2/login`,
         {
           email,
           password,
-          // STRICT DEVICE TRACKING
           deviceId: deviceId,
           deviceType: /Android/.test(navigator.userAgent)
             ? "Android"
             : /iPhone|iPad|iPod/.test(navigator.userAgent)
             ? "iOS"
             : "Web",
-          deviceFingerprint: [
-            navigator.userAgent,
-            screen.width + "x" + screen.height,
-            navigator.platform,
-            navigator.language,
-            new Date().getTimezoneOffset().toString(),
-          ].join("|||"), // Triple pipe for extra uniqueness
+          deviceFingerprint: deviceId, // Use deviceId as fingerprint too
         },
         {
           withCredentials: true,
           headers: {
-            Accept: "application/json",
             "Content-Type": "application/json",
             "X-Device-ID": deviceId,
-            "X-Device-Fingerprint": navigator.userAgent, // Additional verification
           },
-          timeout: 10000,
+          timeout: 15000,
         }
       );
 
-      if (res.data.accessToken) {
-        localStorage.setItem("orginizationcode", res.data.organization.name);
-        // Store device ID permanently for this user
-        localStorage.setItem("strict_deviceId", deviceId);
+      if (res.data.success && res.data.accessToken) {
+        // Store organization code if available
+        if (res.data.organization?.name) {
+          localStorage.setItem("orginizationcode", res.data.organization.name);
+        }
+
+        // Store device binding
         localStorage.setItem("user_device_binding", `${email}:${deviceId}`);
 
-        login(res.data.user, res.data.accessToken);
-        toast.success("Device registered and login successful!");
+        console.log(
+          "✅ Login successful, device registered:",
+          res.data.user.deviceRegistered
+        );
 
+        login(res.data.user, res.data.accessToken, res.data.organization);
+        toast.success("Login successful!");
+
+        // Navigate based on role
         if (res.data.user.role === "organization") {
           navigate("/admin", { replace: true });
         } else {
@@ -133,46 +138,46 @@ export const LoginPage = () => {
     } catch (error) {
       console.error("❌ Login error:", error);
 
-      // Enhanced error handling for device restrictions
-      if (error.response?.data?.code === "DEVICE_NOT_AUTHORIZED") {
+      const errorData = error.response?.data;
+
+      // Enhanced error handling
+      if (errorData?.code === "DEVICE_NOT_AUTHORIZED") {
         toast.error(
-          `❌ This account is registered to a different device.\n\n` +
-            `Registered Device: ${error.response.data.registeredDevice?.substring(
-              0,
-              20
-            )}...\n` +
-            `Current Device: ${error.response.data.currentDevice?.substring(
-              0,
-              20
-            )}...\n\n` +
-            `Contact admin to change your registered device.`,
+          `🚫 Device Not Authorized\n\nThis account is registered to another device.\n\nRegistered Device: ${errorData.registeredDevice}\nCurrent Device: ${errorData.currentDevice}\n\nPlease contact admin to reset your device registration.`,
           {
-            autoClose: 8000,
+            autoClose: 10000,
             style: { whiteSpace: "pre-line" },
           }
         );
-      } else {
-        toast.error(error.response?.data?.message || "Login error");
-      }
-    }
-  };
 
-  const handleGoogleLogin = () => {
-    // Placeholder for Google login logic
-    const login = (userData, accessToken) => {
-      setUser(userData);
-      localStorage.setItem("accessToken", accessToken);
-      localStorage.setItem("userData", JSON.stringify(userData));
-      console.log(userData);
-    };
-    navigate("/Teacherinfo");
+        // Show contact admin option for users
+        if (loginadmin) {
+          setTimeout(() => {
+            if (
+              window.confirm(
+                "Would you like to request device change from admin?"
+              )
+            ) {
+              // You can implement a device change request flow here
+              navigate("/contact-admin");
+            }
+          }, 2000);
+        }
+      } else if (errorData?.requiresDeviceInfo) {
+        toast.error("Device information is required for login");
+      } else {
+        toast.error(errorData?.message || "Login failed. Please try again.");
+      }
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="flex flex-col min-h-screen w-full">
       <ToastContainer />
 
-      {/* Navbar - responsive height and padding */}
+      {/* Navbar */}
       <div className="navbar w-full h-[80px] sm:h-[100px] lg:h-[110px] flex justify-center items-end p-4 lg:p-[16px]">
         <img
           src="/logo.svg"
@@ -181,12 +186,11 @@ export const LoginPage = () => {
         />
       </div>
 
-      {/* Main content container */}
+      {/* Main content */}
       <div className="flex-1 flex items-center justify-center">
         <div className="w-full max-w-md lg:max-w-6xl mx-auto">
-          {/* Desktop layout: side by side, Mobile: stacked */}
           <div className="lg:grid lg:grid-cols-2 lg:gap-12 lg:items-center">
-            {/* Left side: Title and Image */}
+            {/* Left side */}
             <div className="flex flex-col items-center text-center px-6 sm:px-8 lg:px-0">
               <h1 className="text-[24px] sm:text-[28px] lg:text-[36px] xl:text-[40px] font-bold tracking-tighter mb-2 lg:mb-6">
                 Sign in to your Account
@@ -194,7 +198,6 @@ export const LoginPage = () => {
                   {loginadmin ? "Staff" : "Admin"} Login
                 </p>
               </h1>
-
               <img
                 className="w-full max-w-[280px] sm:max-w-[320px] lg:max-w-[400px] xl:max-w-[450px] h-auto my-6 lg:my-8"
                 src="/login.svg"
@@ -206,7 +209,7 @@ export const LoginPage = () => {
             <div className="px-6 sm:px-8 lg:px-0 pb-8 lg:pb-0 flex flex-col items-center">
               <form
                 onSubmit={handleEmailLogin}
-                className="flex flex-col gap-4 lg:gap-6"
+                className="flex flex-col gap-4 lg:gap-6 w-full max-w-md"
               >
                 <input
                   type="email"
@@ -214,69 +217,69 @@ export const LoginPage = () => {
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="p-3 lg:p-4 rounded-lg border border-gray-300 focus:border-[#1D61E7] focus:outline-none focus:ring-2 focus:ring-[#1D61E7]/20 transition-all text-sm sm:text-base"
+                  disabled={isLoading}
+                  className="p-3 lg:p-4 rounded-lg border border-gray-300 focus:border-[#1D61E7] focus:outline-none focus:ring-2 focus:ring-[#1D61E7]/20 transition-all text-sm sm:text-base disabled:opacity-50"
                 />
-                <div className="flex items-center justify-between w-[95%]">
+
+                <div className="flex items-center justify-between w-full">
                   <input
                     type={show ? "text" : "password"}
                     placeholder="Password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     required
-                    className="p-3 rounded-lg border w-[348px]"
+                    disabled={isLoading}
+                    className="p-3 lg:p-4 rounded-lg border border-gray-300 focus:border-[#1D61E7] focus:outline-none focus:ring-2 focus:ring-[#1D61E7]/20 transition-all text-sm sm:text-base flex-1 disabled:opacity-50"
                   />
-                  <p onClick={handleClick} className="ml-[-30px] h-[20px]">
+                  <button
+                    type="button"
+                    onClick={handleClick}
+                    className="ml-2 p-3 text-gray-500 hover:text-gray-700"
+                  >
                     {show ? (
-                      <AiOutlineEyeInvisible></AiOutlineEyeInvisible>
+                      <AiOutlineEyeInvisible size={20} />
                     ) : (
-                      <AiOutlineEye></AiOutlineEye>
+                      <AiOutlineEye size={20} />
                     )}
-                  </p>
+                  </button>
                 </div>
 
-                {/* Device Security Notice */}
-                {deviceId && (
-                  <div className="text-xs text-gray-500 bg-blue-50 p-2 rounded-lg">
-                    🔒 Secure Device: {deviceId.substring(0, 15)}...
-                    <br />
-                    One account per device policy active
+                {/* Device Info */}
+                {/* {deviceId && (
+                  <div className="text-xs text-gray-600 bg-blue-50 p-2 rounded-lg">
+                    <div className="font-medium">Device Security:</div>
+                    <div className="truncate">ID: {deviceId}</div>
+                    <div>One account per device • Contact admin to change</div>
                   </div>
-                )}
+                )} */}
 
-                <Magnet padding={90} disabled={false} magnetStrength={90}>
-                  <div className="w-full flex gap-3 lg:gap-4">
-                    <button
-                      type="submit"
-                      className="flex justify-center items-center rounded-lg font-medium gap-3 bg-[#1D61E7] hover:bg-[#1a56d1] text-white flex-1 h-[48px] lg:h-[52px] shadow-[0px_4px_4px_0px_#00000040] active:shadow-[0px_2px_1px_0px_#00000040] transition-all duration-200 text-sm sm:text-base"
-                    >
-                      Login
-                    </button>
-
-                    {/* <button
-                      type="button"
-                      onClick={handleGoogleLogin}
-                      className="flex justify-center items-center gap-[10px] border border-[#EFF0F6] hover:border-gray-300 rounded-full w-[48px] lg:w-[52px] h-[48px] lg:h-[52px] shadow-[0px_4px_4px_0px_#00000040] active:shadow-[0px_2px_1px_0px_#00000040] transition-all duration-200"
-                    >
-                      <img
-                        className="h-[20px] w-[22px] sm:h-[24px] sm:w-[26px]"
-                        src="/google.png"
-                        alt="google"
-                      />
-                    </button> */}
-                  </div>
+                <Magnet padding={90} disabled={isLoading} magnetStrength={90}>
+                  <button
+                    type="submit"
+                    disabled={isLoading}
+                    className="flex justify-center items-center rounded-lg font-medium gap-3 bg-[#1D61E7] hover:bg-[#1a56d1] text-white w-full h-[48px] lg:h-[52px] shadow-[0px_4px_4px_0px_#00000040] active:shadow-[0px_2px_1px_0px_#00000040] transition-all duration-200 text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        Logging in...
+                      </>
+                    ) : (
+                      "Login"
+                    )}
+                  </button>
                 </Magnet>
               </form>
 
-              {/* Uncomment if needed */}
-              <h3 className="text-[#6C7278] text-[12px] mt-4 text-center lg:text-left flex ">
-                Or Login as {loginadmin ? "Admin/Oraganizer" : "Staff"}?{"  "}
-                <p
-                  className="text-[#4D81E7] hover:underline cursor-pointer"
+              <div className="text-[#6C7278] text-[12px] mt-4 text-center flex">
+                Or Login as {loginadmin ? "Admin/Organizer" : "Staff"}?{" "}
+                <button
                   onClick={handleAdminLogin}
+                  className="text-[#4D81E7] hover:underline cursor-pointer ml-1"
                 >
-                  Login
-                </p>
-              </h3>
+                  Switch
+                </button>
+              </div>
             </div>
           </div>
         </div>

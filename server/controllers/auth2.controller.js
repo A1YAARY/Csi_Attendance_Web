@@ -338,6 +338,7 @@ const register_orginization = async (req, res) => {
 };
 
 // Enhanced user registration
+// Enhanced user registration with password reset email
 const register_user = async (req, res) => {
   try {
     const { email, name, organizationCode, institute, department, password } =
@@ -366,16 +367,62 @@ const register_user = async (req, res) => {
       });
     }
 
+    // Create user with temporary password
     const user = new User({
       email,
-      password,
+      password: password || "pass123", // Default temp password
       name,
       role: "user",
       institute,
       department,
       organizationId: organization._id,
+      deviceInfo: {
+        isRegistered: false,
+      },
     });
     await user.save();
+
+    // Send password reset email if no password provided
+    if (!password) {
+      try {
+        const resetToken = jwt.sign(
+          { userId: user._id },
+          process.env.JWT_RESET_SECRET,
+          { expiresIn: "24h" } // 24 hours for initial setup
+        );
+
+        const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}&newUser=true`;
+
+        await sendMail(
+          user.email,
+          "Welcome to Attendance System - Set Your Password",
+          `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+            <h2 style="color: #1D61E7;">Welcome to the Attendance System!</h2>
+            <p>Hello ${name},</p>
+            <p>Your account has been created successfully. Please set your password using the link below:</p>
+            <div style="text-align: center; margin: 30px 0;">
+              <a href="${resetLink}" 
+                 style="background-color: #1D61E7; color: white; padding: 12px 24px; 
+                        text-decoration: none; border-radius: 6px; display: inline-block;">
+                Set Your Password
+              </a>
+            </div>
+            <p><strong>This link will expire in 24 hours.</strong></p>
+            <p>If you didn't request this, please ignore this email.</p>
+            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+            <p style="color: #666; font-size: 12px;">
+              Organization: ${organization.name}<br>
+              Email: ${email}
+            </p>
+          </div>`
+        );
+
+        console.log(`✅ Password reset email sent to ${email}`);
+      } catch (emailError) {
+        console.error("❌ Failed to send welcome email:", emailError);
+        // Continue with registration even if email fails
+      }
+    }
 
     const { accessToken, refreshToken } = generateTokens(user._id);
 
@@ -388,14 +435,16 @@ const register_user = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message:
-        "User registered successfully. Please register your device on first login.",
+      message: password
+        ? "User registered successfully. Please register your device on first login."
+        : "User registered successfully. Password setup email sent.",
       user: {
         id: user._id,
         email: user.email,
         name: user.name,
         role: user.role,
         deviceRegistered: false,
+        requiresPasswordSetup: !password,
       },
       organization: {
         id: organization._id,
@@ -408,11 +457,12 @@ const register_user = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Server error during registration",
+      error: process.env.NODE_ENV === "development" ? err.message : undefined,
     });
   }
 };
 
-// Enhanced login with device registration check
+// Enhanced login with device registration check - FIXED VERSION
 const login = async (req, res) => {
   try {
     const { email, password, deviceId, deviceType, deviceFingerprint } =
@@ -455,16 +505,16 @@ const login = async (req, res) => {
       if (!user.deviceInfo.isRegistered) {
         // First time login - register device
         user.deviceInfo = {
-          deviceId,
+          deviceId: deviceId,
           deviceType: deviceType || "unknown",
           deviceFingerprint: deviceFingerprint || "",
           isRegistered: true,
           registeredAt: getISTDate(),
+          lastKnownLocation: null,
         };
-        user.lastLogin = getISTDate();
-        await user.save();
+        console.log(`✅ Device registered for user ${user.email}: ${deviceId}`);
       } else {
-        // Check if same device
+        // Check if same device - ENHANCED VALIDATION
         if (user.deviceInfo.deviceId !== deviceId) {
           return res.status(403).json({
             success: false,
@@ -473,6 +523,7 @@ const login = async (req, res) => {
             code: "DEVICE_NOT_AUTHORIZED",
             registeredDevice: user.deviceInfo.deviceId,
             currentDevice: deviceId,
+            requiresAdminReset: true,
           });
         }
       }
@@ -499,8 +550,7 @@ const login = async (req, res) => {
         email: user.email,
         name: user.name,
         role: user.role,
-        deviceRegistered:
-          user.deviceInfo.isRegistered || user.role === "organization",
+        deviceRegistered: user.deviceInfo?.isRegistered || false,
       },
       organization: user.organizationId
         ? {
@@ -519,7 +569,6 @@ const login = async (req, res) => {
     });
   }
 };
-
 // Device change request
 const requestDeviceChange = async (req, res) => {
   try {

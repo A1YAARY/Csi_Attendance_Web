@@ -1,76 +1,131 @@
-import React, { useEffect , useState , useRef} from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { toast } from "react-toastify";
 
-export const EmployeeData = ({ allusers }) => {
+export const EmployeeData = ({ allusers, onUsersUpdate }) => {
   const navigate = useNavigate();
-  const [isOpen, setIsOpen] = useState(false);
-  const dropdownRef = useRef(null);
+  const { deleteUser, makeAuthenticatedRequest, BASE_URL } = useAuth();
+  const [users, setUsers] = useState(allusers || []);
   const [openDropdownUserId, setOpenDropdownUserId] = useState(null);
-  const { deleteUser } = useAuth();
-  const [users, setUsers] = useState(allusers); // Local state
+  const [actionLoading, setActionLoading] = useState(null);
+
   useEffect(() => {
-  setUsers(allusers);
-}, [allusers]);
+    setUsers(allusers || []);
+  }, [allusers]);
 
+  // Reset user device (allow them to register new device)
+  const handleResetDevice = async (userId, userEmail) => {
+    setActionLoading(`reset-${userId}`);
 
+    try {
+      const response = await makeAuthenticatedRequest(
+        `${BASE_URL}/admin/reset-user-device`,
+        {
+          method: "POST",
+          body: JSON.stringify({ userId }),
+        }
+      );
 
+      if (response.success) {
+        toast.success(
+          `Device reset for ${userEmail}. They can now register a new device.`
+        );
 
-  const toggleDropdown = (userId) => {
-  setOpenDropdownUserId((prev) => (prev === userId ? null : userId));
-};
+        // Update local state
+        setUsers((prevUsers) =>
+          prevUsers.map((user) =>
+            user._id === userId
+              ? {
+                  ...user,
+                  deviceInfo: {
+                    isRegistered: false,
+                    deviceId: null,
+                    deviceType: null,
+                    deviceFingerprint: null,
+                    registeredAt: null,
+                  },
+                }
+              : user
+          )
+        );
 
-
-  const handleReset = () => {
-    // alert('Reset clicked');
-    setIsOpen(false);
+        if (onUsersUpdate) {
+          onUsersUpdate();
+        }
+      }
+    } catch (error) {
+      console.error("Error resetting device:", error);
+      toast.error("Failed to reset device. Please try again.");
+    } finally {
+      setActionLoading(null);
+      setOpenDropdownUserId(null);
+    }
   };
 
-  // const handleDelete = (userId) => {
-  //   // alert('Delete clicked');
-  //   setIsOpen(false);
-  //   deleteUser(userId);
-  // };
-  const handleDelete = (userId) => {
-  try {
-    deleteUser(userId); // API call
-    setUsers((prev) => prev.filter((user) => (user._id || user.id) !== userId)); // Remove from local state
-    setOpenDropdownUserId(null); // Close dropdown
-  } catch (error) {
-    console.error("Error deleting user:", error);
-    alert("Failed to delete user.");
-  }
-};
+  // Send password reset email to user
+  const handleSendResetEmail = async (userId, userEmail) => {
+    setActionLoading(`reset-password-${userId}`);
 
+    try {
+      const response = await makeAuthenticatedRequest(
+        `${BASE_URL}/password/request-reset`,
+        {
+          method: "POST",
+          body: JSON.stringify({ email: userEmail }),
+        }
+      );
 
-  // Close dropdown if clicked outside
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false);
+      if (response.message) {
+        toast.success(`Password reset email sent to ${userEmail}`);
       }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
+    } catch (error) {
+      console.error("Error sending reset email:", error);
+      toast.error("Failed to send reset email. Please try again.");
+    } finally {
+      setActionLoading(null);
+      setOpenDropdownUserId(null);
+    }
+  };
 
-  // useEffect(() => {
-  //   console.log("EmployeeData received allusers:", allusers);
-  //   console.log("allusers type:", typeof allusers);
-  //   console.log("allusers is array:", Array.isArray(allusers));
-  //   console.log("allusers length:", allusers?.length);
-  // }, [allusers]);
+  const handleDelete = async (userId, userEmail) => {
+    if (
+      !window.confirm(
+        `Are you sure you want to delete ${userEmail}? This action cannot be undone.`
+      )
+    ) {
+      return;
+    }
 
-  // Handle clicking on user row to navigate to single user page
-  const handleUserClick = (userId, userEmail) => {
-    // console.log("Navigating to user ID:", userId);
-    // console.log("User email:", userEmail);
+    setActionLoading(`delete-${userId}`);
+
+    try {
+      await deleteUser(userId);
+      setUsers((prev) =>
+        prev.filter((user) => (user._id || user.id) !== userId)
+      );
+      toast.success(`User ${userEmail} deleted successfully`);
+
+      if (onUsersUpdate) {
+        onUsersUpdate();
+      }
+    } catch (error) {
+      console.error("Error deleting user:", error);
+      toast.error("Failed to delete user. Please try again.");
+    } finally {
+      setActionLoading(null);
+      setOpenDropdownUserId(null);
+    }
+  };
+
+  const toggleDropdown = (userId) => {
+    setOpenDropdownUserId((prev) => (prev === userId ? null : userId));
+  };
+
+  const handleUserClick = (userId) => {
     navigate(`/admin/user/${userId}`);
   };
 
-  // Format working hours display
   const formatWorkingHours = (workingHours) => {
     if (!workingHours) return "N/A";
     if (typeof workingHours === "object") {
@@ -78,41 +133,15 @@ export const EmployeeData = ({ allusers }) => {
         workingHours.end || "17:00"
       }`;
     }
-    if (typeof workingHours === "string") {
-      return workingHours;
-    }
-    return "N/A";
+    return workingHours;
   };
 
-  // Handle checkbox change
-  const handleCheckboxChange = (event, userId) => {
-    event.stopPropagation();
-    // console.log("Checkbox changed for user:", userId);
+  const getDeviceStatus = (user) => {
+    if (!user.deviceInfo) return "Not Registered";
+    return user.deviceInfo.isRegistered ? "Registered" : "Not Registered";
   };
 
-  // Handle three dots menu click
-  const handleMenuClick = (event, userId) => {
-    event.stopPropagation();
-    // console.log("Menu clicked for user:", userId);
-  };
-
-  // Check if allusers is valid and has data
-  if (!allusers || !Array.isArray(allusers)) {
-    console.error("allusers is not a valid array:", allusers);
-    return (
-      <div className="bg-white rounded-lg shadow-sm p-6 sm:p-8 text-center">
-        <div className="text-red-500 text-4xl sm:text-6xl mb-4">⚠️</div>
-        <h3 className="text-lg sm:text-xl font-semibold text-gray-800 mb-2">
-          Invalid user data
-        </h3>
-        <p className="text-sm sm:text-base text-gray-600">
-          Please check the data format
-        </p>
-      </div>
-    );
-  }
-
-  if (allusers.length === 0) {
+  if (!users || users.length === 0) {
     return (
       <div className="bg-white rounded-lg shadow-sm p-6 sm:p-8 text-center">
         <div className="text-gray-400 text-4xl sm:text-6xl mb-4">👥</div>
@@ -129,28 +158,21 @@ export const EmployeeData = ({ allusers }) => {
   return (
     <div className="bg-white rounded-b-lg lg:rounded-t-none shadow-sm overflow-hidden">
       <div className="divide-y divide-gray-200">
-        {users.map((record, index) => {
-          const userId = record._id || record.id || `user-${index}`;
-          const userName = record.name || record.fullName || "Unknown User";
-          const userEmail = record.email || "No email provided";
-          const userDepartment = record.department || "N/A";
-          const userRole = record.role || "N/A";
+        {users.map((user, index) => {
+          const userId = user._id || user.id || `user-${index}`;
+          const userName = user.name || user.fullName || "Unknown User";
+          const userEmail = user.email || "No email provided";
+          const userDepartment = user.department || "N/A";
+          const userRole = user.role || "N/A";
+          const deviceStatus = getDeviceStatus(user);
 
           return (
             <div
               key={userId}
-              onClick={() => handleUserClick(userId, userEmail)}
-              className="cursor-pointer hover:bg-gray-50 transition-colors duration-200"
+              className="cursor-pointer hover:bg-gray-50 transition-colors duration-200 relative"
             >
-              {/* Desktop Layout - Hidden on mobile */}
+              {/* Desktop Layout */}
               <div className="hidden lg:grid lg:grid-cols-12 lg:gap-4 lg:p-4 lg:items-center">
-                <div className="col-span-1 flex justify-center">
-                  <input
-                    type="checkbox"
-                    onClick={(e) => handleCheckboxChange(e, userId)}
-                    className="rounded w-4 h-4"
-                  />
-                </div>
                 <div className="col-span-4">
                   <div className="flex items-center">
                     <div className="h-10 w-10 flex-shrink-0 bg-blue-500 rounded-full flex items-center justify-center text-white font-medium text-sm">
@@ -166,10 +188,13 @@ export const EmployeeData = ({ allusers }) => {
                       <p className="text-xs text-gray-500 truncate max-w-[200px]">
                         {userEmail}
                       </p>
+                      <p className="text-xs text-gray-400">
+                        Device: {deviceStatus}
+                      </p>
                     </div>
                   </div>
                 </div>
-                <div className="col-span-3">
+                <div className="col-span-2">
                   <span className="inline-flex px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded-full">
                     {userDepartment}
                   </span>
@@ -181,68 +206,70 @@ export const EmployeeData = ({ allusers }) => {
                 </div>
                 <div className="col-span-2 text-center">
                   <span className="text-sm text-gray-600">
-                    {formatWorkingHours(record.workingHours)}
+                    {formatWorkingHours(user.workingHours)}
                   </span>
-                    {/* <svg
-                      className="w-4 h-4"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                    </svg> */}
-          
+                </div>
+                <div className="col-span-2 text-right">
                   <div className="relative inline-block">
-  <button
-    onClick={(e) => {
-      e.stopPropagation();
-      toggleDropdown(userId);
-    }}
-    className="px-2 py-1 text-xl text-gray-700 hover:text-black focus:outline-none"
-  >
-    ⋮
-  </button>
-  </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleDropdown(userId);
+                      }}
+                      className="px-3 py-1 text-gray-700 hover:text-black focus:outline-none"
+                      disabled={actionLoading}
+                    >
+                      {actionLoading && actionLoading.includes(userId) ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                      ) : (
+                        "⋮"
+                      )}
+                    </button>
 
-  {openDropdownUserId === userId && (
-    <div className="absolute right-15 mt-2 w-36 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
-      <div className="py-1">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleReset(userId);
-            setOpenDropdownUserId(null);
-          }}
-          className="block w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 text-left"
-        >
-          Reset
-        </button>
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            handleDelete(userId);
-            setOpenDropdownUserId(null);
-          }}
-          className="block w-full px-4 py-2 text-sm text-red-600 hover:bg-red-100 text-left border-t border-black"
-        >
-          Delete
-        </button>
-      </div>
-    </div>
-  )}
-
-
+                    {openDropdownUserId === userId && (
+                      <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
+                        <div className="py-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSendResetEmail(userId, userEmail);
+                            }}
+                            disabled={actionLoading}
+                            className="block w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 text-left disabled:opacity-50"
+                          >
+                            Send Password Reset
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleResetDevice(userId, userEmail);
+                            }}
+                            disabled={actionLoading}
+                            className="block w-full px-4 py-2 text-sm text-blue-600 hover:bg-blue-100 text-left disabled:opacity-50"
+                          >
+                            Reset Device
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(userId, userEmail);
+                            }}
+                            disabled={actionLoading}
+                            className="block w-full px-4 py-2 text-sm text-red-600 hover:bg-red-100 text-left border-t border-gray-200 disabled:opacity-50"
+                          >
+                            Delete User
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {/* Mobile/Tablet Layout - Hidden on desktop */}
+              {/* Mobile Layout */}
               <div className="lg:hidden p-4 space-y-3">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center flex-1 min-w-0">
-                    <input
-                      type="checkbox"
-                      onClick={(e) => handleCheckboxChange(e, userId)}
-                      className="rounded w-4 h-4 mr-3 mt-1 flex-shrink-0"
-                    />
                     <div className="h-12 w-12 flex-shrink-0 bg-blue-500 rounded-full flex items-center justify-center text-white font-medium">
                       {userName.charAt(0).toUpperCase()}
                     </div>
@@ -254,26 +281,67 @@ export const EmployeeData = ({ allusers }) => {
                         {userEmail}
                       </p>
                       <p className="text-xs text-gray-400">
-                        ID: {userId.slice(-6)}
+                        Device: {deviceStatus}
                       </p>
                     </div>
                   </div>
-                  <button
-                    onClick={(e) => handleMenuClick(e, userId)}
-                    className="text-gray-400 hover:text-gray-600 p-1 flex-shrink-0"
-                  >
-                    <svg
-                      className="w-5 h-5"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
+
+                  <div className="relative">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleDropdown(userId);
+                      }}
+                      className="p-2 text-gray-400 hover:text-gray-600"
+                      disabled={actionLoading}
                     >
-                      <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
-                    </svg>
-                  </button>
+                      {actionLoading && actionLoading.includes(userId) ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                      ) : (
+                        "⋮"
+                      )}
+                    </button>
+
+                    {openDropdownUserId === userId && (
+                      <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
+                        <div className="py-1">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleSendResetEmail(userId, userEmail);
+                            }}
+                            disabled={actionLoading}
+                            className="block w-full px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 text-left disabled:opacity-50"
+                          >
+                            Send Password Reset
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleResetDevice(userId, userEmail);
+                            }}
+                            disabled={actionLoading}
+                            className="block w-full px-4 py-2 text-sm text-blue-600 hover:bg-blue-100 text-left disabled:opacity-50"
+                          >
+                            Reset Device
+                          </button>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(userId, userEmail);
+                            }}
+                            disabled={actionLoading}
+                            className="block w-full px-4 py-2 text-sm text-red-600 hover:bg-red-100 text-left border-t border-gray-200 disabled:opacity-50"
+                          >
+                            Delete User
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {/* Mobile Info Cards */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-16 sm:pl-0">
+                <div className="grid grid-cols-2 gap-3 pl-15">
                   <div className="bg-gray-50 p-3 rounded-lg">
                     <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
                       Department
@@ -282,7 +350,6 @@ export const EmployeeData = ({ allusers }) => {
                       {userDepartment}
                     </span>
                   </div>
-
                   <div className="bg-gray-50 p-3 rounded-lg">
                     <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
                       Role
@@ -290,15 +357,6 @@ export const EmployeeData = ({ allusers }) => {
                     <span className="inline-flex px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded-full">
                       {userRole}
                     </span>
-                  </div>
-
-                  <div className="bg-gray-50 p-3 rounded-lg sm:col-span-2">
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">
-                      Work Hours
-                    </p>
-                    <p className="text-sm text-gray-700">
-                      {formatWorkingHours(record.workingHours)}
-                    </p>
                   </div>
                 </div>
               </div>

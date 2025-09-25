@@ -10,6 +10,78 @@ const getISTDate = (date = new Date()) => {
   return new Date(utc + istOffset);
 };
 
+// Reset user device (allow user to register new device)
+const resetUserDevice = async (req, res) => {
+  try {
+    const { userId } = req.body;
+
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: "User ID is required",
+      });
+    }
+
+    // Check if the requesting user is an admin
+    if (req.user.role !== "organization") {
+      return res.status(403).json({
+        success: false,
+        message: "Only admins can reset user devices",
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    // Check if user belongs to same organization
+    if (String(user.organizationId) !== String(req.user.organizationId)) {
+      return res.status(403).json({
+        success: false,
+        message: "Forbidden to reset device for user outside your organization",
+      });
+    }
+
+    // Reset device info - allow user to register new device
+    user.deviceInfo = {
+      isRegistered: false,
+      deviceId: null,
+      deviceType: null,
+      deviceFingerprint: null,
+      registeredAt: null,
+      lastKnownLocation: null,
+    };
+
+    await user.save();
+
+    console.log(
+      `✅ Device reset for user ${user.email} by admin ${req.user.email}`
+    );
+
+    res.json({
+      success: true,
+      message:
+        "User device reset successfully. User can now register a new device.",
+      data: {
+        userId: user._id,
+        userName: user.name,
+        userEmail: user.email,
+        resetAt: getISTDate(),
+      },
+    });
+  } catch (error) {
+    console.error("Error resetting user device:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to reset user device",
+    });
+  }
+};
+
 // Get all users in organization
 const getusers = async (req, res) => {
   try {
@@ -30,14 +102,14 @@ const getusers = async (req, res) => {
     }
 
     console.log("Fetching users for organization:", orgId);
-    
+
     // Find all users in the organization
     const allusers = await User.find({ organizationId: orgId })
       .select("-password") // Exclude password field for security
       .sort({ createdAt: -1 });
-    
+
     console.log(`Found ${allusers.length} users for organization ${orgId}`);
-    
+
     // Return consistent response format
     res.status(200).json({
       success: true,
@@ -69,10 +141,10 @@ const getDeviceChangeRequests = async (req, res) => {
     // Get all users with pending device change requests
     const usersWithRequests = await User.find({
       organizationId: orgId,
-      "deviceChangeRequest.status": "pending"
+      "deviceChangeRequest.status": "pending",
     }).select("name email deviceInfo deviceChangeRequest");
 
-    const requests = usersWithRequests.map(user => ({
+    const requests = usersWithRequests.map((user) => ({
       userId: user._id,
       userName: user.name,
       userEmail: user.email,
@@ -81,29 +153,29 @@ const getDeviceChangeRequests = async (req, res) => {
       newDeviceType: user.deviceChangeRequest.newDeviceType,
       requestedAt: user.deviceChangeRequest.requestedAt,
       requestedAtIST: user.deviceChangeRequest.requestedAt
-        ? user.deviceChangeRequest.requestedAt.toLocaleString("en-IN", { 
+        ? user.deviceChangeRequest.requestedAt.toLocaleString("en-IN", {
             timeZone: "Asia/Kolkata",
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
+            year: "numeric",
+            month: "2-digit",
+            day: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
           })
-        : null
+        : null,
     }));
 
     res.json({
       success: true,
       message: "Device change requests fetched successfully",
       data: requests,
-      count: requests.length
+      count: requests.length,
     });
   } catch (error) {
     console.error("Error fetching device change requests:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to fetch device change requests"
+      message: "Failed to fetch device change requests",
     });
   }
 };
@@ -112,11 +184,11 @@ const getDeviceChangeRequests = async (req, res) => {
 const handleDeviceChangeRequest = async (req, res) => {
   try {
     const { userId, action, reason } = req.body; // action: 'approve' or 'reject'
-    
-    if (!userId || !action || !['approve', 'reject'].includes(action)) {
+
+    if (!userId || !action || !["approve", "reject"].includes(action)) {
       return res.status(400).json({
         success: false,
-        message: "User ID and valid action (approve/reject) are required"
+        message: "User ID and valid action (approve/reject) are required",
       });
     }
 
@@ -124,7 +196,7 @@ const handleDeviceChangeRequest = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User not found"
+        message: "User not found",
       });
     }
 
@@ -132,34 +204,38 @@ const handleDeviceChangeRequest = async (req, res) => {
     if (user.organizationId.toString() !== req.user.organizationId.toString()) {
       return res.status(403).json({
         success: false,
-        message: "Unauthorized to handle this request"
+        message: "Unauthorized to handle this request",
       });
     }
 
-    if (!user.deviceChangeRequest || user.deviceChangeRequest.status !== 'pending') {
+    if (
+      !user.deviceChangeRequest ||
+      user.deviceChangeRequest.status !== "pending"
+    ) {
       return res.status(400).json({
         success: false,
-        message: "No pending device change request found for this user"
+        message: "No pending device change request found for this user",
       });
     }
 
-    if (action === 'approve') {
+    if (action === "approve") {
       // Update device info with new device
       user.deviceInfo = {
         deviceId: user.deviceChangeRequest.newDeviceId,
         deviceType: user.deviceChangeRequest.newDeviceType,
         deviceFingerprint: user.deviceChangeRequest.newDeviceFingerprint,
         isRegistered: true,
-        registeredAt: getISTDate()
+        registeredAt: getISTDate(),
       };
     }
 
     // Update request status
-    user.deviceChangeRequest.status = action === 'approve' ? 'approved' : 'rejected';
+    user.deviceChangeRequest.status =
+      action === "approve" ? "approved" : "rejected";
     user.deviceChangeRequest.adminResponse = {
       adminId: req.user._id,
       respondedAt: getISTDate(),
-      reason: reason || ''
+      reason: reason || "",
     };
 
     await user.save();
@@ -170,15 +246,15 @@ const handleDeviceChangeRequest = async (req, res) => {
       data: {
         userId: user._id,
         action,
-        newDeviceId: action === 'approve' ? user.deviceInfo.deviceId : null,
-        respondedAt: user.deviceChangeRequest.adminResponse.respondedAt
-      }
+        newDeviceId: action === "approve" ? user.deviceInfo.deviceId : null,
+        respondedAt: user.deviceChangeRequest.adminResponse.respondedAt,
+      },
     });
   } catch (error) {
     console.error("Error handling device change request:", error);
     res.status(500).json({
       success: false,
-      message: "Failed to handle device change request"
+      message: "Failed to handle device change request",
     });
   }
 };
@@ -188,9 +264,9 @@ const records = async (req, res) => {
   try {
     const orgId = req.user.organizationId;
     if (!orgId) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "User not associated with any organization" 
+        message: "User not associated with any organization",
       });
     }
 
@@ -230,7 +306,7 @@ const records = async (req, res) => {
             );
             workingHours = `${hours}h ${minutes}m`;
             status = "Complete";
-            
+
             // Format check-out time in IST
             checkOutTime = checkOutDateTime.toLocaleString("en-IN", {
               timeZone: "Asia/Kolkata",
@@ -278,15 +354,15 @@ const records = async (req, res) => {
       return acc;
     }, []);
 
-    res.json({ 
+    res.json({
       success: true,
-      attendanceRecords: uniqueRecords 
+      attendanceRecords: uniqueRecords,
     });
   } catch (error) {
     console.error("Error getting records:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: "Failed to fetch records" 
+      message: "Failed to fetch records",
     });
   }
 };
@@ -350,15 +426,17 @@ const getOrganizationQRCodes = async (req, res) => {
       settings: {
         qrCodeValidityMinutes: org.settings?.qrCodeValidityMinutes || 30,
         locationToleranceMeters: org.settings?.locationToleranceMeters || 100,
-        requireDeviceRegistration: org.settings?.requireDeviceRegistration || true,
-        strictLocationVerification: org.settings?.strictLocationVerification || true,
+        requireDeviceRegistration:
+          org.settings?.requireDeviceRegistration || true,
+        strictLocationVerification:
+          org.settings?.strictLocationVerification || true,
       },
       lastUpdated: new Date().toISOString(),
     };
 
     res.json({
       success: true,
-      data: response
+      data: response,
     });
   } catch (error) {
     console.error("Error fetching organization's QR codes:", error);
@@ -398,9 +476,9 @@ const getQRCodeByType = async (req, res) => {
     );
 
     if (!org) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "Organization not found" 
+        message: "Organization not found",
       });
     }
 
@@ -427,13 +505,13 @@ const getQRCodeByType = async (req, res) => {
         organizationLocation: org.location,
         createdAt: qrCode.createdAt,
         createdAtIST: qrCode.createdAtIST,
-      }
+      },
     });
   } catch (error) {
     console.error(`Error fetching ${req.params.type} QR code:`, error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: "Failed to fetch QR code" 
+      message: "Failed to fetch QR code",
     });
   }
 };
@@ -443,16 +521,16 @@ const getTodaysAttendance = async (req, res) => {
   try {
     const orgId = req.user.organizationId;
     if (!orgId) {
-      return res.status(400).json({ 
+      return res.status(400).json({
         success: false,
-        message: "User not associated with any organization" 
+        message: "User not associated with any organization",
       });
     }
 
     const now = new Date();
     const istOffset = 5.5 * 60 * 60 * 1000; // +5:30 hrs
     const istNow = new Date(now.getTime() + istOffset);
-    
+
     const startOfDayIST = new Date(
       Date.UTC(
         istNow.getUTCFullYear(),
@@ -464,7 +542,7 @@ const getTodaysAttendance = async (req, res) => {
         0
       )
     );
-    
+
     const endOfDayIST = new Date(
       Date.UTC(
         istNow.getUTCFullYear(),
@@ -487,31 +565,31 @@ const getTodaysAttendance = async (req, res) => {
     const formatted = records.map((record) => {
       const obj = record.toObject();
       obj.timeIST = new Date(record.createdAt.getTime() + istOffset);
-      obj.timeISTFormatted = obj.timeIST.toLocaleString("en-IN", { 
+      obj.timeISTFormatted = obj.timeIST.toLocaleString("en-IN", {
         timeZone: "Asia/Kolkata",
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
       });
       return obj;
     });
 
-    res.json({ 
+    res.json({
       success: true,
       records: formatted,
       count: formatted.length,
-      date: startOfDayIST.toLocaleDateString("en-IN", { 
-        timeZone: "Asia/Kolkata" 
-      })
+      date: startOfDayIST.toLocaleDateString("en-IN", {
+        timeZone: "Asia/Kolkata",
+      }),
     });
   } catch (error) {
     console.error("Error fetching today's attendance:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: "Failed to fetch today's attendance" 
+      message: "Failed to fetch today's attendance",
     });
   }
 };
@@ -567,7 +645,7 @@ const updateUserByAdmin = async (req, res) => {
     if (phone) updateData.phone = phone;
     if (institute) updateData.institute = institute;
     if (workingHours) updateData.workingHours = workingHours;
-    
+
     if (password) {
       // Hash password if provided
       const bcrypt = require("bcryptjs");
@@ -674,21 +752,21 @@ const singleUser = async (req, res) => {
       .populate("organizationId", "name");
 
     if (!user) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "User not found" 
+        message: "User not found",
       });
     }
 
     res.json({
       success: true,
-      data: user
+      data: user,
     });
   } catch (error) {
     console.error("Error fetching single user:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
-      message: "Failed to fetch user" 
+      message: "Failed to fetch user",
     });
   }
 };
@@ -702,6 +780,7 @@ module.exports = {
   getQRCodeByType,
   getusers,
   updateUserByAdmin,
+  resetUserDevice,
   getDeviceChangeRequests,
   handleDeviceChangeRequest,
 };

@@ -9,6 +9,12 @@ const cache = require("../middleware/cache.middleware");
 // Existing routes
 router.get("/records", auth, role(["organization"]), adminController.records);
 router.get("/allusers", auth, role(["organization"]), adminController.getusers);
+router.post(
+  "/reset-user-device",
+  auth,
+  role(["organization"]),
+  adminController.resetUserDevice
+);
 router.get(
   "/singleUser/:id",
   auth,
@@ -21,8 +27,18 @@ router.patch(
   role(["organization"]),
   adminController.updateUserByAdmin
 );
-router.get("/device-change-requests", auth, role(["organization"]),adminController.getDeviceChangeRequests);
-router.post("/handle-device-change-request", auth, role(["organization"]),adminController.handleDeviceChangeRequest);
+router.get(
+  "/device-change-requests",
+  auth,
+  role(["organization"]),
+  adminController.getDeviceChangeRequests
+);
+router.post(
+  "/handle-device-change-request",
+  auth,
+  role(["organization"]),
+  adminController.handleDeviceChangeRequest
+);
 
 router.get(
   "/qrcodes",
