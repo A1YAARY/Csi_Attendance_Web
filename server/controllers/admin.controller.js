@@ -293,7 +293,30 @@ const records = async (req, res) => {
       });
     }
 
-    const attendanceRecords = await Attendance.find({ organizationId: orgId })
+    // ✅ Get date from query OR default to today
+    const selectedDate = req.query.date
+      ? new Date(req.query.date)
+      : new Date(Date.now());
+
+    // Normalize to YYYY-MM-DD (removes time part)
+    const startOfDay = new Date(
+      selectedDate.getFullYear(),
+      selectedDate.getMonth(),
+      selectedDate.getDate(),
+      0, 0, 0
+    );
+    const endOfDay = new Date(
+      selectedDate.getFullYear(),
+      selectedDate.getMonth(),
+      selectedDate.getDate(),
+      23, 59, 59
+    );
+
+    // ✅ Filter records only for that day
+    const attendanceRecords = await Attendance.find({
+      organizationId: orgId,
+      createdAt: { $gte: startOfDay, $lte: endOfDay },
+    })
       .populate("userId", "name email role department")
       .sort({ createdAt: -1 })
       .lean();
@@ -303,7 +326,6 @@ const records = async (req, res) => {
       .map((record) => {
         const checkInRecord = record.type === "check-in" ? record : null;
 
-        // Find corresponding check-out for this check-in
         if (checkInRecord) {
           const sameDay = attendanceRecords.filter(
             (r) =>
@@ -314,7 +336,6 @@ const records = async (req, res) => {
 
           const checkOut = sameDay.find((r) => r.type === "check-out");
 
-          // Calculate working hours
           let workingHours = "-";
           let status = "Incomplete";
           let checkOutTime = "-";
@@ -324,7 +345,9 @@ const records = async (req, res) => {
             const checkOutDateTime = new Date(checkOut.createdAt);
             const diffInMillis = checkOutDateTime - checkInTime;
             const hours = Math.floor(diffInMillis / (1000 * 60 * 60));
-            const minutes = Math.floor((diffInMillis % (1000 * 60 * 60)) / (1000 * 60));
+            const minutes = Math.floor(
+              (diffInMillis % (1000 * 60 * 60)) / (1000 * 60)
+            );
             workingHours = `${hours}h ${minutes}m`;
             status = "Complete";
 
@@ -340,12 +363,15 @@ const records = async (req, res) => {
             name: record.userId.name,
             role: record.userId.role || "Employee",
             department: record.userId.department || "General",
-            date: new Date(record.createdAt).toLocaleDateString("en-IN", {
-              timeZone: "Asia/Kolkata",
-              day: "2-digit",
-              month: "short",
-              year: "numeric",
-            }),
+            // ✅ Year, Month, Day format
+            date: `${record.createdAt.getFullYear()}-${(
+              record.createdAt.getMonth() + 1
+            )
+              .toString()
+              .padStart(2, "0")}-${record.createdAt
+              .getDate()
+              .toString()
+              .padStart(2, "0")}`,
             status: status,
             checkInTime: new Date(record.createdAt).toLocaleString("en-IN", {
               timeZone: "Asia/Kolkata",
@@ -376,6 +402,11 @@ const records = async (req, res) => {
     res.json({
       success: true,
       attendanceRecords: uniqueRecords,
+      selectedDate: `${selectedDate.getFullYear()}-${(
+        selectedDate.getMonth() + 1
+      )
+        .toString()
+        .padStart(2, "0")}-${selectedDate.getDate().toString().padStart(2, "0")}`,
     });
   } catch (error) {
     console.error("Error getting records:", error);
@@ -385,6 +416,7 @@ const records = async (req, res) => {
     });
   }
 };
+
 
 // Get organization QR codes
 const getOrganizationQRCodes = async (req, res) => {

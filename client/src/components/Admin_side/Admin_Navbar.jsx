@@ -133,7 +133,7 @@ export const Admin_Navbar = () => {
           </div>
 
           {/* Search Section - Adaptive */}
-          <div className="flex-1 max-w-xs xs:max-w-sm sm:max-w-md md:max-w-lg lg:max-w-xl xl:max-w-2xl mx-2 xs:mx-4 sm:mx-6 lg:mx-8">
+          {/* <div className="flex-1 max-w-xs xs:max-w-sm sm:max-w-md md:max-w-lg lg:max-w-xl xl:max-w-2xl mx-2 xs:mx-4 sm:mx-6 lg:mx-8">
             <div className="relative">
               <input
                 type="text"
@@ -143,7 +143,7 @@ export const Admin_Navbar = () => {
                 className="w-full input input-sm sm:input-md bg-white border border-gray-300 rounded-lg text-xs xs:text-sm sm:text-base placeholder:text-center placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
               />
             </div>
-          </div>
+          </div> */}
 
           {/* User Profile Section */}
           <div className="flex items-center gap-2">

@@ -183,7 +183,7 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
       // Convert 24-hour format to 12-hour format
       const [hours, minutes] = time.split(":");
       const hour12 = hours % 12 || 12;
-      const ampm = hours < 12 ? "AM" : "PM";
+      // const ampm = hours < 12 ? "AM" : "PM";
       return `${hour12}:${minutes} ${ampm}`;
     } catch (error) {
       return time; // Return as-is if formatting fails

@@ -13,24 +13,35 @@ const Dashboard = () => {
   const [todayAttendance, setTodayAttendance] = useState(null);
   const [loading, setLoading] = useState(true);
 
+  // Dashboad.jsx — replace only the data handling inside fetchPastAttendance, leave JSX/styles untouched
   useEffect(() => {
     const fetchPastAttendance = async () => {
       try {
         setLoading(true);
         const data = await getPastAttendance();
-        console.log("Past attendance data:", data);
+        if (data?.attendance && Array.isArray(data.attendance)) {
+          // Normalize server items to the shape the components expect
+          const normalized = data.attendance.map((a) => ({
+            ...a,
+            // alias for convenience (keep original too)
+            date: a.createdAt,
+            // ensure sessions have plain timestamps
+            sessions: (a.sessions || []).map((s) => ({
+              checkIn: s?.checkIn || null,
+              checkOut: s?.checkOut || null,
+              duration: typeof s?.duration === "number" ? s.duration : 0,
+            })),
+            // totalWorkingTime and status already exist on the document
+          }));
 
-        if (data && data.attendance && Array.isArray(data.attendance)) {
-          setPastAttendance(data.attendance);
+          setPastAttendance(normalized);
 
-          // Find today's attendance (latest entry)
+          // Today record by date
           const today = new Date().toDateString();
-          const todayRecord = data.attendance.find((record) => {
-            const recordDate = new Date(record.createdAt).toDateString();
-            return recordDate === today;
-          });
-
-          setTodayAttendance(todayRecord);
+          const todayRecord = normalized.find(
+            (r) => new Date(r.date).toDateString() === today
+          );
+          setTodayAttendance(todayRecord || null);
         }
       } catch (error) {
         console.error("Error fetching past attendance:", error);
@@ -38,7 +49,6 @@ const Dashboard = () => {
         setLoading(false);
       }
     };
-
     fetchPastAttendance();
   }, []);
 
@@ -64,7 +74,7 @@ const Dashboard = () => {
           onClick={hidden}
           className="w-full mt-6 bg-[#1D61E7] text-white py-3 rounded-lg flex items-center justify-center gap-2 text-sm font-medium"
         >
-          <span className="text-lg">📱</span>
+          <span className="text-lg"><img src="./qr_icon.svg" className="invert h-4"/></span>
           Scan QR
         </button>
 

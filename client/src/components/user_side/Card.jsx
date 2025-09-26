@@ -62,53 +62,40 @@ function Card({ todayAttendance, loading }) {
     }
   }, [todayAttendance, currentTime]);
 
-  const getEntryTime = () => {
-    if (!todayAttendance?.sessions?.length) return "--";
-
-    const firstSession = todayAttendance.sessions[0];
-    if (firstSession.checkIn) {
-      return new Date(firstSession.checkIn).toLocaleTimeString("en-US", {
+const getEntryTime = () => {
+  if (!todayAttendance?.sessions?.length) return "--";
+  const first = todayAttendance.sessions[0];
+  return first?.checkIn
+    ? new Date(first.checkIn).toLocaleTimeString("en-US", {
         hour: "2-digit",
         minute: "2-digit",
         hour12: true,
-      });
-    }
-    return "--";
-  };
+      })
+    : "--";
+};
 
-  const getExitTime = () => {
-    if (!todayAttendance?.sessions?.length) return "--";
-
-    // Find the latest checkout time
-    const sessionsWithCheckout = todayAttendance.sessions.filter(
-      (s) => s.checkOut
-    );
-    if (sessionsWithCheckout.length === 0) return "--";
-
-    const latestSession = sessionsWithCheckout[sessionsWithCheckout.length - 1];
-    return new Date(latestSession.checkOut).toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
-  };
+const getExitTime = () => {
+  if (!todayAttendance?.sessions?.length) return "--";
+  const sessionsWithCheckout = todayAttendance.sessions.filter((s) => s.checkOut);
+  const last = sessionsWithCheckout[sessionsWithCheckout.length - 1];
+  return last?.checkOut
+    ? new Date(last.checkOut).toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      })
+    : "--";
+};
 
   const getStatus = () => {
     if (!todayAttendance) return "Not Started";
-
-    const hasActiveSession = todayAttendance.sessions?.some(
-      (s) => s.checkIn && !s.checkOut
-    );
-    if (hasActiveSession) return "Ongoing";
-
-    const hasCompletedSessions = todayAttendance.sessions?.some(
-      (s) => s.checkIn && s.checkOut
-    );
-    if (hasCompletedSessions) return "Completed";
-
+    const s = String(todayAttendance.status || "").toLowerCase();
+    if (s === "ongoing") return "Ongoing";
+    if (s === "present") return "Completed"; // Completed day
+    if (s === "half-day") return "Half-day";
+    if (s === "absent") return "Not Started";
     return "Not Started";
   };
-
   const getDetailedCheckInOut = () => {
     if (!todayAttendance?.sessions?.length) {
       return { checkIn: "--", checkOut: "--" };
@@ -154,8 +141,9 @@ function Card({ todayAttendance, loading }) {
 
   return (
     <>
+    {/* bg-gradient-to-r from-pink-100 to-blue-100 */}
       <motion.div
-        className="bg-gradient-to-r from-pink-100 to-blue-100 rounded-2xl p-6 cursor-pointer"
+        className="bg-[url('./cardimage.png')] bg-cover rounded-2xl p-6 cursor-pointer"
         onClick={() => setIsExpanded(!isExpanded)}
         whileTap={{ scale: 0.98 }}
       >
@@ -163,9 +151,10 @@ function Card({ todayAttendance, loading }) {
           <h3 className="text-lg font-semibold">Today's Session</h3>
           <motion.div
             animate={{ rotate: isExpanded ? 180 : 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.3 }}
+            className="font-extrabold"
           >
-            ▼
+            ⮟
           </motion.div>
         </div>
 
@@ -215,7 +204,7 @@ function Card({ todayAttendance, loading }) {
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.3 }}
-            className="bg-white rounded-2xl border border-gray-200 p-6 mt-4"
+            className="bg-[url('./cardimage.png')] bg-cover rounded-2xl border border-gray-200 p-6 mt-4"
           >
             <h4 className="font-semibold mb-4">Session Details</h4>
 
