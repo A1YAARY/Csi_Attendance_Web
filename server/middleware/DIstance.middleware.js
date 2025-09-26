@@ -63,7 +63,7 @@ const antiSpoofingMiddleware = async (req, res, next) => {
 
     // 5. Set defaults
     location.accuracy = location.accuracy || 0;
-    location.radius = location.radius || location.accuracy || 100;
+    location.radius = location.radius || location.accuracy || 500;
 
     console.log("📍 Location data processed:", {
       latitude: location.latitude,
