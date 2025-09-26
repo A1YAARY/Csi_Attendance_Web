@@ -48,9 +48,19 @@ function Previous({ attendanceData }) {
     if (!attendanceData.sessions || attendanceData.sessions.length === 0)
       return "0h 0m";
 
+    // Use totalWorkingTime from backend if available
+    if (attendanceData.totalWorkingTime) {
+      const hours = Math.floor(attendanceData.totalWorkingTime / 60);
+      const minutes = attendanceData.totalWorkingTime % 60;
+      return `${hours}h ${minutes}m`;
+    }
+
+    // Fallback to manual calculation
     let totalMinutes = 0;
     attendanceData.sessions.forEach((session) => {
-      if (session.checkIn && session.checkOut) {
+      if (session.duration) {
+        totalMinutes += session.duration;
+      } else if (session.checkIn && session.checkOut) {
         const checkIn = new Date(session.checkIn);
         const checkOut = new Date(session.checkOut);
         const diffMs = checkOut - checkIn;
@@ -60,19 +70,26 @@ function Previous({ attendanceData }) {
 
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
-
     return `${hours}h ${minutes}m`;
   };
 
   const getAttendanceStatus = () => {
-    if (!attendanceData.sessions || attendanceData.sessions.length === 0)
-      return "Absent";
+    // Use status from backend if available
+    if (attendanceData.status) {
+      const statusMap = {
+        present: "Present",
+        "half-day": "Half-day",
+        absent: "Absent",
+        ongoing: "Ongoing",
+      };
+      return statusMap[attendanceData.status] || attendanceData.status;
+    }
 
+    // Fallback logic for older data
     const totalWorkTime = getTotalWorkTimeInMinutes();
-
     if (totalWorkTime >= 480) return "Present"; // 8 hours
     if (totalWorkTime >= 240) return "Half-day"; // 4 hours
-    return "Present"; // Any attendance counts as present
+    return "Present";
   };
 
   const getTotalWorkTimeInMinutes = () => {

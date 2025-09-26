@@ -473,24 +473,48 @@ exports.getUserPastAttendance = async (req, res) => {
     const { limit = 50, page = 1 } = req.query;
     const skip = (page - 1) * limit;
 
-    const attendance = await Attendance.find({ userId })
-      .populate("qrCodeId", "qrType")
-      .populate("organizationId", "name")
-      .sort({ createdAt: -1 })
-      .limit(parseInt(limit))
-      .skip(skip);
+    // Get daily timesheets instead of raw attendance records
+    const dailyTimesheets = await DailyTimeSheet.find({ 
+      userId,
+      // Only get records with actual attendance (not just absent entries)
+      $or: [
+        { status: { $ne: "absent" } },
+        { "sessions.0": { $exists: true } }
+      ]
+    })
+    .populate("organizationId", "name")
+    .sort({ date: -1 })
+    .limit(parseInt(limit))
+    .skip(skip);
 
-    // Format with IST timestamps
-    const formattedAttendance = attendance.map((record) => {
-      const obj = record.toObject();
-      obj.istTimestampFormatted = formatISTDate(
-        record.istTimestamp || record.createdAt
-      );
-      obj.createdAtISTFormatted = formatISTDate(record.createdAt);
+    // Format with IST timestamps and correct structure
+    const formattedAttendance = dailyTimesheets.map((sheet) => {
+      const obj = sheet.toObject();
+      
+      // Format the date for the frontend
+      obj.createdAt = sheet.date; // Use the date field
+      obj.istTimestampFormatted = formatISTDate(sheet.date);
+      obj.createdAtISTFormatted = formatISTDate(sheet.date);
+      
+      // Format sessions with proper time stamps
+      if (obj.sessions) {
+        obj.sessions = obj.sessions.map(session => ({
+          checkIn: session.checkIn ? session.checkIn.time : null,
+          checkOut: session.checkOut ? session.checkOut.time : null,
+          duration: session.duration || 0
+        }));
+      }
+      
       return obj;
     });
 
-    const total = await Attendance.countDocuments({ userId });
+    const total = await DailyTimeSheet.countDocuments({ 
+      userId,
+      $or: [
+        { status: { $ne: "absent" } },
+        { "sessions.0": { $exists: true } }
+      ]
+    });
 
     res.json({
       success: true,
@@ -498,7 +522,7 @@ exports.getUserPastAttendance = async (req, res) => {
       pagination: {
         current: parseInt(page),
         total: Math.ceil(total / limit),
-        hasNext: skip + attendance.length < total,
+        hasNext: skip + dailyTimesheets.length < total,
       },
     });
   } catch (error) {
