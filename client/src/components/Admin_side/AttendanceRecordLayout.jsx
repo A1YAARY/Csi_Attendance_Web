@@ -26,7 +26,6 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
     setOpen(!open);
   };
 
-  // Close dropdown on outside click
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (menuRef.current && !menuRef.current.contains(event.target)) {
@@ -39,10 +38,8 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
     };
   }, []);
 
-  // Fetch records on component mount or use props
   useEffect(() => {
     if (propRecords && Array.isArray(propRecords)) {
-      // console.log("Using prop records:", propRecords);
       setRecords(propRecords);
       setFilteredRecords(propRecords);
       setLoading(false);
@@ -51,7 +48,7 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
     }
   }, [propRecords]);
 
-  // Filter records based on search term, date, and status (only one filter at a time)
+  // Updated filtering logic for YYYY-MM-DD format
   useEffect(() => {
     let filtered = [...records];
 
@@ -65,38 +62,35 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
       );
     }
 
-    // Date filter (only one active at a time)
+    // Date filter - simplified for YYYY-MM-DD format
     if (dateFilter !== "all") {
       filtered = filtered.filter((record) => {
         try {
-          // Handle different date field names and formats
           const recordDateValue = record.date || record.createdAt;
           if (!recordDateValue) return false;
           
-          // Parse the record date (could be "Sep 26, 2025" or "2025-09-26T06:24:17.996Z")
+          // Direct comparison for YYYY-MM-DD format
+          if (recordDateValue === dateFilter) {
+            return true;
+          }
+          
+          // Fallback for ISO strings or other formats
           const recordDate = new Date(recordDateValue);
+          const selectedDate = new Date(dateFilter);
           
-          // Parse the selected date from DD-MM-YYYY format
-          const selectedDate = parseDateFromDDMMYYYY(dateFilter);
+          if (isNaN(recordDate) || isNaN(selectedDate)) return false;
           
-          if (!selectedDate) return false;
-          
-          // Compare dates by converting both to YYYY-MM-DD format for accurate comparison
           const recordDateString = recordDate.toISOString().split("T")[0];
           const selectedDateString = selectedDate.toISOString().split("T")[0];
           
           return recordDateString === selectedDateString;
         } catch (error) {
-          console.error("Date comparison error:", error, {
-            recordDate: record.date,
-            recordCreatedAt: record.createdAt,
-            selectedDate: dateFilter
-          });
+          console.error("Date comparison error:", error);
           return false;
         }
       });
     }
-    // Status filter (only one active at a time)
+    // Status filter
     else if (statusFilter !== "all") {
       filtered = filtered.filter((record) => 
         record.status?.toLowerCase() === statusFilter.toLowerCase()
@@ -111,31 +105,19 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
       setLoading(true);
       setError(null);
 
-      // console.log("Fetching admin records...");
       const response = await getAdminRecords();
-      // console.log("Raw records response:", response);
 
-      // Handle different response formats
       let recordsData = [];
       if (Array.isArray(response)) {
         recordsData = response;
       } else if (response && response.data && Array.isArray(response.data)) {
         recordsData = response.data;
-      } else if (
-        response &&
-        response.records &&
-        Array.isArray(response.records)
-      ) {
+      } else if (response && response.records && Array.isArray(response.records)) {
         recordsData = response.records;
-      } else if (
-        response &&
-        response.attendanceRecords &&
-        Array.isArray(response.attendanceRecords)
-      ) {
+      } else if (response && response.attendanceRecords && Array.isArray(response.attendanceRecords)) {
         recordsData = response.attendanceRecords;
       }
 
-      // console.log("Processed records data:", recordsData);
       setRecords(recordsData);
       setFilteredRecords(recordsData);
     } catch (err) {
@@ -146,55 +128,41 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
     }
   };
 
+  // Simplified date handler - no conversion needed
   const handleDateFilter = (e) => {
-    const newDate = e.target.value; // This will be in DD-MM-YYYY format
+    const newDate = e.target.value; // Already in YYYY-MM-DD format
     setDateFilter(newDate || "all");
-    // Reset status filter when date is selected
     if (newDate && newDate !== "all") {
       setStatusFilter("all");
     }
   };
 
-  // Convert DD-MM-YYYY to Date object
-  const parseDateFromDDMMYYYY = (dateString) => {
-    if (!dateString || dateString === "all") return null;
-    const [day, month, year] = dateString.split("-");
-    return new Date(year, month - 1, day); // month is 0-indexed
-  };
-
   const handleStatusFilter = (e) => {
     const newStatus = e.target.value;
     setStatusFilter(newStatus);
-    // Reset date filter when status is selected
     if (newStatus !== "all") {
       setDateFilter("all");
     }
   };
 
-  // Format time display
   const formatTime = (time) => {
     if (!time) return "N/A";
     try {
-      // Handle different time formats
       if (time.includes("AM") || time.includes("PM")) {
-        return time; // Already formatted
+        return time;
       }
-
-      // Convert 24-hour format to 12-hour format
       const [hours, minutes] = time.split(":");
       const hour12 = hours % 12 || 12;
-      // const ampm = hours < 12 ? "AM" : "PM";
+      const ampm = hours < 12 ? "AM" : "PM";
       return `${hour12}:${minutes} ${ampm}`;
     } catch (error) {
-      return time; // Return as-is if formatting fails
+      return time;
     }
   };
 
-  // Format date display
   const formatDate = (date) => {
     if (!date) return "N/A";
     try {
-      // Handle both ISO format and readable format
       const dateObj = new Date(date);
       return dateObj.toLocaleDateString("en-US", {
         year: "numeric",
@@ -206,7 +174,6 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
     }
   };
 
-  // Get status color
   const getStatusColor = (status) => {
     switch (status?.toLowerCase()) {
       case "present":
@@ -232,9 +199,7 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
           <div className="bg-white rounded-lg shadow-sm p-8">
             <div className="flex items-center justify-center">
               <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-              <p className="ml-4 text-gray-600">
-                Loading attendance records...
-              </p>
+              <p className="ml-4 text-gray-600">Loading attendance records...</p>
             </div>
           </div>
         </div>
@@ -248,17 +213,8 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
         <div className="max-w-7xl mx-auto">
           <div className="bg-white rounded-lg shadow-sm p-8 text-center">
             <div className="text-red-500 mb-4">
-              <svg
-                className="w-16 h-16 mx-auto"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z"
-                />
+              <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
               </svg>
             </div>
             <p className="text-lg text-red-600 mb-4">Error Loading Records</p>
@@ -273,12 +229,12 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
       </div>
     );
   }
+
   const accesstoken = localStorage.getItem("accessToken");
 
   return (
     <div className="p-4 sm:p-6 bg-gray-50 min-h-[calc(100vh-64px)]">
       <div className="max-w-7xl mx-auto">
-        {/* Header */}
         <div className="mb-6 sm:mb-8">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
             Attendance Records
@@ -288,12 +244,9 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
           </p>
         </div>
 
-        {/* Filters and Actions */}
         <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6 mb-6">
           <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
-            {/* Left side - Filters */}
             <div className="flex flex-col sm:flex-row gap-4 flex-1">
-              {/* Search */}
               <div className="relative flex-1 max-w-md">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Search className="h-4 w-4 text-gray-400" />
@@ -307,75 +260,35 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
                 />
               </div>
 
-              {/* Date Filter */}
+              {/* Simplified date input - no conversion needed */}
               <div className="relative">
                 <input
                   type="date"
-                  value={dateFilter === "all" ? "" : (() => {
-                    // Convert DD-MM-YYYY to YYYY-MM-DD for date input
-                    if (dateFilter && dateFilter !== "all") {
-                      const [day, month, year] = dateFilter.split('-');
-                      return `${year}-${month}-${day}`;
-                    }
-                    return "";
-                  })()}
-                  onChange={(e) => {
-                    const value = e.target.value;
-                    if (value) {
-                      // Convert YYYY-MM-DD to DD-MM-YYYY for internal state
-                      const [year, month, day] = value.split('-');
-                      const formattedDate = `${day}-${month}-${year}`;
-                      setDateFilter(formattedDate);
-                      setStatusFilter("all");
-                    } else {
-                      setDateFilter("all");
-                    }
-                  }}
+                  value={dateFilter === "all" ? "" : dateFilter}
+                  onChange={handleDateFilter}
                   className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm cursor-pointer"
                 />
-                {/* Clear date button */}
-                {dateFilter !== "all" && (
-                  <button
-                    onClick={() => setDateFilter("all")}
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg"
-                    type="button"
-                  >
-                    ×
-                  </button>
-                )}
               </div>
-
-              {/* Status Filter */}
             </div>
 
-            {/* Right side - Actions */}
             <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
               <div className="relative inline-block text-left" ref={menuRef}>
                 <button className="flex items-center px-3 sm:px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm flex-1 sm:flex-initial justify-center">
                   <Download className="w-4 h-4 mr-2" />
-                  <span onClick={toggleDropdown} className="hidden sm:inline">
-                    Export
-                  </span>
-                  <span onClick={toggleDropdown} className="sm:hidden">
-                    Export
-                  </span>
+                  <span onClick={toggleDropdown} className="hidden sm:inline">Export</span>
+                  <span onClick={toggleDropdown} className="sm:hidden">Export</span>
                 </button>
 
                 {open && (
                   <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded shadow-md z-10">
                     <ul className="py-1">
                       <li
-                        onClick={() => {
-                          getdaily(accesstoken); // Pass the access token
-                        }}
+                        onClick={() => { getdaily(accesstoken); }}
                         className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
                         Daily
                       </li>
-
                       <li
-                        onClick={() => {
-                          getWeek(accesstoken); // Pass the access token
-                        }}
+                        onClick={() => { getWeek(accesstoken); }}
                         className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
                         Weekly
                       </li>
@@ -386,7 +299,6 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
             </div>
           </div>
 
-          {/* Results count */}
           <div className="mt-4 pt-4 border-t border-gray-200">
             <p className="text-sm text-gray-600">
               Showing {filteredRecords.length} of {records.length} records
@@ -394,26 +306,16 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
           </div>
         </div>
 
-        {/* Records Table/Cards */}
         {filteredRecords.length > 0 ? (
           <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            {/* Desktop Table View */}
             <div className="hidden lg:block overflow-x-auto">
               <table className="w-full">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">
-                      Name
-                    </th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">
-                      Role
-                    </th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">
-                      Department
-                    </th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">
-                      Date
-                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">Name</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">Role</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">Department</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">Date</th>
                     <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">
                       <select
                         value={statusFilter}
@@ -428,18 +330,10 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
                         <option value="partial">Partial</option>
                       </select>
                     </th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">
-                      Check In
-                    </th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">
-                      Check Out
-                    </th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">
-                      Working Hours
-                    </th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">
-                      Actions
-                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">Check In</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">Check Out</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">Working Hours</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
@@ -455,29 +349,18 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
                             alt={record.name}
                           />
                           <div>
-                            <p className="text-sm font-medium text-gray-900">
-                              {record.name || "N/A"}
-                            </p>
-                            <p className="text-xs text-gray-500">
-                              {record.organizationId?.slice(-6) || "N/A"}
-                            </p>
+                            <p className="text-sm font-medium text-gray-900">{record.name || "N/A"}</p>
+                            <p className="text-xs text-gray-500">{record.organizationId?.slice(-6) || "N/A"}</p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">
-                        {record.role || "N/A"}
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">
-                        {record.department || "N/A"}
-                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">{record.role || "N/A"}</td>
+                      <td className="px-6 py-4 text-sm text-gray-900">{record.department || "N/A"}</td>
                       <td className="px-6 py-4 text-sm text-gray-900">
                         {formatDate(record.date || record.createdAt)}
                       </td>
                       <td className="px-6 py-4">
-                        <span
-                          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(
-                            record.status
-                          )}`}>
+                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(record.status)}`}>
                           {record.status || "N/A"}
                         </span>
                       </td>
@@ -493,9 +376,7 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
                           {formatTime(record.checkOutTime)}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">
-                        {record.workingHours || "N/A"}
-                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">{record.workingHours || "N/A"}</td>
                       <td className="px-6 py-4">
                         <button className="text-blue-600 hover:text-blue-900 text-sm font-medium">
                           <Eye className="w-4 h-4" />
@@ -507,12 +388,9 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
               </table>
             </div>
 
-            {/* Mobile Card View */}
             <div className="lg:hidden">
               {filteredRecords.map((record, index) => (
-                <div
-                  key={record._id || index}
-                  className="p-4 border-b border-gray-200 last:border-b-0">
+                <div key={record._id || index} className="p-4 border-b border-gray-200 last:border-b-0">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center">
                       <img
@@ -523,18 +401,13 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
                         alt={record.name}
                       />
                       <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {record.name || "N/A"}
-                        </p>
+                        <p className="text-sm font-medium text-gray-900">{record.name || "N/A"}</p>
                         <p className="text-xs text-gray-500">
                           {record.role || "N/A"} • {record.department || "N/A"}
                         </p>
                       </div>
                     </div>
-                    <span
-                      className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(
-                        record.status
-                      )}`}>
+                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(record.status)}`}>
                       {record.status || "N/A"}
                     </span>
                   </div>
@@ -546,9 +419,7 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
                     </div>
                     <div>
                       <p className="text-gray-500 mb-1">Working Hours</p>
-                      <p className="font-medium">
-                        {record.workingHours || "N/A"}
-                      </p>
+                      <p className="font-medium">{record.workingHours || "N/A"}</p>
                     </div>
                     <div>
                       <p className="text-gray-500 mb-1">Check In</p>
@@ -570,8 +441,7 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
                     <div className="mt-3 pt-3 border-t border-gray-100">
                       <p className="text-xs text-gray-500 flex items-center">
                         <MapPin className="w-3 h-3 mr-1" />
-                        Location: {record.location.latitude},{" "}
-                        {record.location.longitude}
+                        Location: {record.location.latitude}, {record.location.longitude}
                       </p>
                     </div>
                   )}
@@ -582,22 +452,11 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
         ) : (
           <div className="bg-white rounded-lg shadow-sm p-8 text-center">
             <div className="mx-auto h-24 w-24 text-gray-400 mb-4">
-              <svg
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-                className="w-full h-full">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="1"
-                  d="M9 5H7a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
-                />
+              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="w-full h-full">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 5H7a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
             </div>
-            <p className="text-lg text-gray-600 mb-2">
-              No attendance records found
-            </p>
+            <p className="text-lg text-gray-600 mb-2">No attendance records found</p>
             <p className="text-sm text-gray-400">
               {searchTerm || dateFilter !== "all" || statusFilter !== "all"
                 ? "Try adjusting your filters to see more results"
