@@ -223,7 +223,7 @@ const register_orginization = async (req, res) => {
       location: {
         latitude: geoResult.latitude,
         longitude: geoResult.longitude,
-        radius: 100, // default 100 meters
+        radius: 500, // default 100 meters
         address: geoResult.formatted_address,
         isVerified: true,
         lastUpdated: getISTDate(),

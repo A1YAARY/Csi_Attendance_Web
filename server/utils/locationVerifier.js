@@ -1,6 +1,6 @@
 const geolib = require('geolib');
 
-exports.isLocationWithin = (orgLocation, userLocation, tolerance = 100) => {
+exports.isLocationWithin = (orgLocation, userLocation, tolerance = 500) => {
   const distance = geolib.getDistance(
     { latitude: orgLocation.latitude, longitude: orgLocation.longitude },
     { latitude: userLocation.latitude, longitude: userLocation.longitude }

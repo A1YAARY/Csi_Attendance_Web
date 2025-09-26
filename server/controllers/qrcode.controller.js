@@ -63,7 +63,7 @@ exports.generateNewQRCode = async (req, res) => {
       location: {
         latitude: Number(org.location?.latitude ?? 0),
         longitude: Number(org.location?.longitude ?? 0),
-        radius: Number(org.location?.radius ?? 100),
+        radius: Number(org.location?.radius ?? 500),
       },
       timestamp: istTimestamp,
       active: true,

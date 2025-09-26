@@ -311,8 +311,8 @@ exports.scanQRCode = async (req, res) => {
     };
 
     const distance = geolib.getDistance(orgLocation, userLocation);
-    const allowedRadius = org.settings?.locationToleranceMeters ?? 100;
-    const locationMatch = distance <= allowedRadius;
+    const allowedRadius = org.settings?.locationToleranceMeters ?? 500;
+    const locationMatch = distance <= 500;
 
     if (!locationMatch) {
       return res.status(403).json({
