@@ -62,53 +62,40 @@ function Card({ todayAttendance, loading }) {
     }
   }, [todayAttendance, currentTime]);
 
-  const getEntryTime = () => {
-    if (!todayAttendance?.sessions?.length) return "--";
-
-    const firstSession = todayAttendance.sessions[0];
-    if (firstSession.checkIn) {
-      return new Date(firstSession.checkIn).toLocaleTimeString("en-US", {
+const getEntryTime = () => {
+  if (!todayAttendance?.sessions?.length) return "--";
+  const first = todayAttendance.sessions[0];
+  return first?.checkIn
+    ? new Date(first.checkIn).toLocaleTimeString("en-US", {
         hour: "2-digit",
         minute: "2-digit",
         hour12: true,
-      });
-    }
-    return "--";
-  };
+      })
+    : "--";
+};
 
-  const getExitTime = () => {
-    if (!todayAttendance?.sessions?.length) return "--";
-
-    // Find the latest checkout time
-    const sessionsWithCheckout = todayAttendance.sessions.filter(
-      (s) => s.checkOut
-    );
-    if (sessionsWithCheckout.length === 0) return "--";
-
-    const latestSession = sessionsWithCheckout[sessionsWithCheckout.length - 1];
-    return new Date(latestSession.checkOut).toLocaleTimeString("en-US", {
-      hour: "2-digit",
-      minute: "2-digit",
-      hour12: true,
-    });
-  };
+const getExitTime = () => {
+  if (!todayAttendance?.sessions?.length) return "--";
+  const sessionsWithCheckout = todayAttendance.sessions.filter((s) => s.checkOut);
+  const last = sessionsWithCheckout[sessionsWithCheckout.length - 1];
+  return last?.checkOut
+    ? new Date(last.checkOut).toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      })
+    : "--";
+};
 
   const getStatus = () => {
     if (!todayAttendance) return "Not Started";
-
-    const hasActiveSession = todayAttendance.sessions?.some(
-      (s) => s.checkIn && !s.checkOut
-    );
-    if (hasActiveSession) return "Ongoing";
-
-    const hasCompletedSessions = todayAttendance.sessions?.some(
-      (s) => s.checkIn && s.checkOut
-    );
-    if (hasCompletedSessions) return "Completed";
-
+    const s = String(todayAttendance.status || "").toLowerCase();
+    if (s === "ongoing") return "Ongoing";
+    if (s === "present") return "Completed"; // Completed day
+    if (s === "half-day") return "Half-day";
+    if (s === "absent") return "Not Started";
     return "Not Started";
   };
-
   const getDetailedCheckInOut = () => {
     if (!todayAttendance?.sessions?.length) {
       return { checkIn: "--", checkOut: "--" };
