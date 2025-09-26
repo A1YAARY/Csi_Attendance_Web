@@ -9,7 +9,7 @@ const Navbar = () => {
   };
   return (
     <div>
-      <div className="navbar w-screen h-[110px] flex justify-between items-end p-[16px] border-slate-200 border-b-[1px]">
+      <div className="navbar w-[100%] h-[110px] flex justify-between items-end p-[16px] border-slate-200 border-b-[1px]">
         <img src="/logo.svg" alt="atharva logo" />
         {/* <Link to={"/admin"}>
           <button className="p-[0.4rem] bg-red-600">ADMIN</button>

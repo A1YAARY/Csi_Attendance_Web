@@ -64,7 +64,7 @@ const Dashboard = () => {
           onClick={hidden}
           className="w-full mt-6 bg-[#1D61E7] text-white py-3 rounded-lg flex items-center justify-center gap-2 text-sm font-medium"
         >
-          <span className="text-lg">📱</span>
+          <span className="text-lg"><img src="./qr_icon.svg" className="invert h-4"/></span>
           Scan QR
         </button>
 

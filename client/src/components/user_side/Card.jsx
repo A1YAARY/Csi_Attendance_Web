@@ -154,8 +154,9 @@ function Card({ todayAttendance, loading }) {
 
   return (
     <>
+    {/* bg-gradient-to-r from-pink-100 to-blue-100 */}
       <motion.div
-        className="bg-gradient-to-r from-pink-100 to-blue-100 rounded-2xl p-6 cursor-pointer"
+        className="bg-[url('./cardimage.png')] bg-cover rounded-2xl p-6 cursor-pointer"
         onClick={() => setIsExpanded(!isExpanded)}
         whileTap={{ scale: 0.98 }}
       >
@@ -163,9 +164,10 @@ function Card({ todayAttendance, loading }) {
           <h3 className="text-lg font-semibold">Today's Session</h3>
           <motion.div
             animate={{ rotate: isExpanded ? 180 : 0 }}
-            transition={{ duration: 0.2 }}
+            transition={{ duration: 0.3 }}
+            className="font-extrabold"
           >
-            ▼
+            ⮟
           </motion.div>
         </div>
 
@@ -215,7 +217,7 @@ function Card({ todayAttendance, loading }) {
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.3 }}
-            className="bg-white rounded-2xl border border-gray-200 p-6 mt-4"
+            className="bg-[url('./cardimage.png')] bg-cover rounded-2xl border border-gray-200 p-6 mt-4"
           >
             <h4 className="font-semibold mb-4">Session Details</h4>
 
