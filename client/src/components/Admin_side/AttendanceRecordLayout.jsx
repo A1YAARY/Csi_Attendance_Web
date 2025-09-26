@@ -17,7 +17,7 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [dateFilter, setDateFilter] = useState("");
+  const [dateFilter, setDateFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [open, setOpen] = useState(false);
   const menuRef = useRef();
@@ -51,7 +51,7 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
     }
   }, [propRecords]);
 
-  // Filter records based on search term, date, and status
+  // Filter records based on search term, date, and status (only one filter at a time)
   useEffect(() => {
     let filtered = [...records];
 
@@ -65,17 +65,42 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
       );
     }
 
-    // Date filter
-    if (dateFilter) {
+    // Date filter (only one active at a time)
+    if (dateFilter !== "all") {
       filtered = filtered.filter((record) => {
-        const recordDate = new Date(record.date).toISOString().split("T")[0];
-        return recordDate === dateFilter;
+        try {
+          // Handle different date field names and formats
+          const recordDateValue = record.date || record.createdAt;
+          if (!recordDateValue) return false;
+          
+          // Parse the record date (could be "Sep 26, 2025" or "2025-09-26T06:24:17.996Z")
+          const recordDate = new Date(recordDateValue);
+          
+          // Parse the selected date from DD-MM-YYYY format
+          const selectedDate = parseDateFromDDMMYYYY(dateFilter);
+          
+          if (!selectedDate) return false;
+          
+          // Compare dates by converting both to YYYY-MM-DD format for accurate comparison
+          const recordDateString = recordDate.toISOString().split("T")[0];
+          const selectedDateString = selectedDate.toISOString().split("T")[0];
+          
+          return recordDateString === selectedDateString;
+        } catch (error) {
+          console.error("Date comparison error:", error, {
+            recordDate: record.date,
+            recordCreatedAt: record.createdAt,
+            selectedDate: dateFilter
+          });
+          return false;
+        }
       });
     }
-
-    // Status filter
-    if (statusFilter !== "all") {
-      filtered = filtered.filter((record) => record.status === statusFilter);
+    // Status filter (only one active at a time)
+    else if (statusFilter !== "all") {
+      filtered = filtered.filter((record) => 
+        record.status?.toLowerCase() === statusFilter.toLowerCase()
+      );
     }
 
     setFilteredRecords(filtered);
@@ -121,6 +146,31 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
     }
   };
 
+  const handleDateFilter = (e) => {
+    const newDate = e.target.value; // This will be in DD-MM-YYYY format
+    setDateFilter(newDate || "all");
+    // Reset status filter when date is selected
+    if (newDate && newDate !== "all") {
+      setStatusFilter("all");
+    }
+  };
+
+  // Convert DD-MM-YYYY to Date object
+  const parseDateFromDDMMYYYY = (dateString) => {
+    if (!dateString || dateString === "all") return null;
+    const [day, month, year] = dateString.split("-");
+    return new Date(year, month - 1, day); // month is 0-indexed
+  };
+
+  const handleStatusFilter = (e) => {
+    const newStatus = e.target.value;
+    setStatusFilter(newStatus);
+    // Reset date filter when status is selected
+    if (newStatus !== "all") {
+      setDateFilter("all");
+    }
+  };
+
   // Format time display
   const formatTime = (time) => {
     if (!time) return "N/A";
@@ -144,7 +194,9 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
   const formatDate = (date) => {
     if (!date) return "N/A";
     try {
-      return new Date(date).toLocaleDateString("en-US", {
+      // Handle both ISO format and readable format
+      const dateObj = new Date(date);
+      return dateObj.toLocaleDateString("en-US", {
         year: "numeric",
         month: "short",
         day: "numeric",
@@ -165,6 +217,8 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
       case "late":
         return "bg-yellow-100 text-yellow-800";
       case "partial":
+        return "bg-orange-100 text-orange-800";
+      case "incomplete":
         return "bg-orange-100 text-orange-800";
       default:
         return "bg-gray-100 text-gray-800";
@@ -198,8 +252,7 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
                 className="w-16 h-16 mx-auto"
                 fill="none"
                 stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
+                viewBox="0 0 24 24">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -212,8 +265,7 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
             <p className="text-gray-600 mb-4">{error}</p>
             <button
               onClick={fetchRecords}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors"
-            >
+              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
               Retry
             </button>
           </div>
@@ -221,7 +273,7 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
       </div>
     );
   }
-  const accesstoken = localStorage.getItem("accessToken")
+  const accesstoken = localStorage.getItem("accessToken");
 
   return (
     <div className="p-4 sm:p-6 bg-gray-50 min-h-[calc(100vh-64px)]">
@@ -259,33 +311,45 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
               <div className="relative">
                 <input
                   type="date"
-                  value={dateFilter}
-                  onChange={(e) => setDateFilter(e.target.value)}
-                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  value={dateFilter === "all" ? "" : (() => {
+                    // Convert DD-MM-YYYY to YYYY-MM-DD for date input
+                    if (dateFilter && dateFilter !== "all") {
+                      const [day, month, year] = dateFilter.split('-');
+                      return `${year}-${month}-${day}`;
+                    }
+                    return "";
+                  })()}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value) {
+                      // Convert YYYY-MM-DD to DD-MM-YYYY for internal state
+                      const [year, month, day] = value.split('-');
+                      const formattedDate = `${day}-${month}-${year}`;
+                      setDateFilter(formattedDate);
+                      setStatusFilter("all");
+                    } else {
+                      setDateFilter("all");
+                    }
+                  }}
+                  className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm cursor-pointer"
                 />
+                {/* Clear date button */}
+                {dateFilter !== "all" && (
+                  <button
+                    onClick={() => setDateFilter("all")}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 text-lg"
+                    type="button"
+                  >
+                    ×
+                  </button>
+                )}
               </div>
 
               {/* Status Filter */}
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-              >
-                <option value="all">All Status</option>
-                {/* <option value="present">Present</option>
-                <option value="absent">Absent</option> */}
-                <option value="incomplete">Incomplete</option>
-                <option value="complete">Complete</option>
-              </select>
             </div>
 
             {/* Right side - Actions */}
             <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
-              {/* <button className="flex items-center px-3 sm:px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm flex-1 sm:flex-initial justify-center">
-                <Calendar className="w-4 h-4 mr-2" />
-                <span className="hidden sm:inline">Pick Date</span>
-                <span className="sm:hidden">Date</span>
-              </button> */}
               <div className="relative inline-block text-left" ref={menuRef}>
                 <button className="flex items-center px-3 sm:px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm flex-1 sm:flex-initial justify-center">
                   <Download className="w-4 h-4 mr-2" />
@@ -297,13 +361,6 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
                   </span>
                 </button>
 
-                {/* <button
-        onClick={toggleDropdown}
-        className="p-2 text-gray-600 hover:text-black focus:outline-none"
-      >
-        &#8942; Vertical ellipsis */}
-                {/* </button> */}
-
                 {open && (
                   <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded shadow-md z-10">
                     <ul className="py-1">
@@ -311,21 +368,17 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
                         onClick={() => {
                           getdaily(accesstoken); // Pass the access token
                         }}
-                        className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
-                      >
+                        className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
                         Daily
                       </li>
 
-                      <li 
-                      onClick={() => {
+                      <li
+                        onClick={() => {
                           getWeek(accesstoken); // Pass the access token
                         }}
                         className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
                         Weekly
                       </li>
-                      {/* <li className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
-              Share
-            </li> */}
                     </ul>
                   </div>
                 )}
@@ -362,7 +415,18 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
                       Date
                     </th>
                     <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">
-                      Status
+                      <select
+                        value={statusFilter}
+                        onChange={handleStatusFilter}
+                        className="border-0 rounded-lg focus:ring-0 focus:border-none text-sm bg-transparent font-medium text-gray-600 uppercase tracking-wide">
+                        <option value="all">All Status</option>
+                        <option value="incomplete">Incomplete</option>
+                        <option value="complete">Complete</option>
+                        <option value="present">Present</option>
+                        <option value="absent">Absent</option>
+                        <option value="late">Late</option>
+                        <option value="partial">Partial</option>
+                      </select>
                     </th>
                     <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">
                       Check In
@@ -407,14 +471,13 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
                         {record.department || "N/A"}
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900">
-                        {formatDate(record.date)}
+                        {formatDate(record.date || record.createdAt)}
                       </td>
                       <td className="px-6 py-4">
                         <span
                           className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(
                             record.status
-                          )}`}
-                        >
+                          )}`}>
                           {record.status || "N/A"}
                         </span>
                       </td>
@@ -449,8 +512,7 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
               {filteredRecords.map((record, index) => (
                 <div
                   key={record._id || index}
-                  className="p-4 border-b border-gray-200 last:border-b-0"
-                >
+                  className="p-4 border-b border-gray-200 last:border-b-0">
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center">
                       <img
@@ -472,8 +534,7 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
                     <span
                       className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(
                         record.status
-                      )}`}
-                    >
+                      )}`}>
                       {record.status || "N/A"}
                     </span>
                   </div>
@@ -481,7 +542,7 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
                   <div className="grid grid-cols-2 gap-3 text-xs">
                     <div>
                       <p className="text-gray-500 mb-1">Date</p>
-                      <p className="font-medium">{formatDate(record.date)}</p>
+                      <p className="font-medium">{formatDate(record.date || record.createdAt)}</p>
                     </div>
                     <div>
                       <p className="text-gray-500 mb-1">Working Hours</p>
@@ -525,8 +586,7 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
-                className="w-full h-full"
-              >
+                className="w-full h-full">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -539,19 +599,18 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
               No attendance records found
             </p>
             <p className="text-sm text-gray-400">
-              {searchTerm || dateFilter || statusFilter !== "all"
+              {searchTerm || dateFilter !== "all" || statusFilter !== "all"
                 ? "Try adjusting your filters to see more results"
                 : "Attendance records will appear here once employees start checking in"}
             </p>
-            {(searchTerm || dateFilter || statusFilter !== "all") && (
+            {(searchTerm || dateFilter !== "all" || statusFilter !== "all") && (
               <button
                 onClick={() => {
                   setSearchTerm("");
-                  setDateFilter("");
+                  setDateFilter("all");
                   setStatusFilter("all");
                 }}
-                className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm"
-              >
+                className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm">
                 Clear Filters
               </button>
             )}
