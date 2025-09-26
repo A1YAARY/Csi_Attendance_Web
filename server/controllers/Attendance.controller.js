@@ -522,7 +522,7 @@ exports.getDailyReport = async (req, res) => {
       success: true,
       date: formatISTDate(startOfDay),
       totalEmployees: allUsers.length,
-      present: finalReport.filter((r) => r.status !== "absent").length,
+      present: finalReport.filter((r) => r.status !== "present").length,
       absent: finalReport.filter((r) => r.status === "absent").length,
       fullDay: finalReport.filter((r) => r.status === "full-day").length,
       halfDay: finalReport.filter((r) => r.status === "half-day").length,
