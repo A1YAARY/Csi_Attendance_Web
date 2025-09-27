@@ -1,14 +1,14 @@
 import React, { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { toast, ToastContainer } from "react-toastify";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/authStore";
 import "react-toastify/dist/ReactToastify.css";
 
 const OrganizationRegister = () => {
   const navigate = useNavigate();
   const { registerOrganization } = useAuth();
   const [loading, setLoading] = useState(false);
-  
+
   // Fixed: Changed 'Address' to 'address' to match backend requirements
   const [formData, setFormData] = useState({
     email: "",
@@ -29,8 +29,9 @@ const OrganizationRegister = () => {
 
   const validateForm = () => {
     // Fixed: Updated destructuring to use 'address' instead of 'Address'
-    const { email, password, confirmPassword, name, organizationName, address } = formData;
-    
+    const { email, password, confirmPassword, name, organizationName, address } =
+      formData;
+
     // Fixed: Added address validation - all fields including address are required
     if (
       !email.trim() ||
@@ -65,13 +66,10 @@ const OrganizationRegister = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
     if (!validateForm()) {
       return;
     }
-
     setLoading(true);
-    
     try {
       // Fixed: Added address field to match backend requirements
       const response = await registerOrganization({
@@ -82,10 +80,9 @@ const OrganizationRegister = () => {
         address: formData.address.trim(), // Added address field
       });
 
-      if (response.success) { // Changed to check response.success
-        toast.success(
-          "Organization registered successfully! Please login to continue."
-        );
+      if (response.success) {
+        // Changed to check response.success
+        toast.success("Organization registered successfully! Please login to continue.");
         setTimeout(() => {
           navigate("/login");
         }, 2000);
@@ -94,18 +91,17 @@ const OrganizationRegister = () => {
       }
     } catch (error) {
       console.error("Registration error:", error);
-      
       // Enhanced error handling to show specific backend errors
-      const errorMessage = 
-        error.response?.data?.message || 
-        error.message || 
+      const errorMessage =
+        error.response?.data?.message ||
+        error.message ||
         "Registration failed. Please try again.";
-      
       toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
   };
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">

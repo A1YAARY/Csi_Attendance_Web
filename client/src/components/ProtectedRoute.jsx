@@ -1,12 +1,11 @@
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/authStore";
 
 const ProtectedRoute = ({ children }) => {
   const location = useLocation();
   const { isAuthenticated, loading } = useAuth();
 
-  // Show loading while auth is being checked
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
@@ -18,13 +17,10 @@ const ProtectedRoute = ({ children }) => {
     );
   }
 
-  // Check authentication
   if (!isAuthenticated()) {
-    // Store the attempted location for redirect after login
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  // User is authenticated, render the protected content
   return children;
 };
 

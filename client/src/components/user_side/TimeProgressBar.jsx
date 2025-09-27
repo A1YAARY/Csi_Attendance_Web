@@ -5,46 +5,47 @@ const WORK_END_HOUR = 17;
 const TOTAL_WORK_MINUTES = (WORK_END_HOUR - WORK_START_HOUR) * 60;
 
 const TimeProgressBar = () => {
-  const [checkInTime, setCheckInTime] = useState(
-    localStorage.getItem('checkInTime') ? new Date(localStorage.getItem('checkInTime')) : null
-  );
-  const [checkOutTime, setCheckOutTime] = useState(
-    localStorage.getItem('checkOutTime') ? new Date(localStorage.getItem('checkOutTime')) : null
-  );
   const [progress, setProgress] = useState(0);
 
-  // Calculate progress only when checkIn or checkOut changes
   useEffect(() => {
-    if (!checkInTime) return;
+    const calc = () => {
+      if (!todayAttendance?.sessions?.length) {
+        setProgress(0);
+        return;
+      }
+      // Prefer totalWorkingTime from backend if provided
+      const totalMinutesFromDoc =
+        typeof todayAttendance.totalWorkingTime === "number"
+          ? todayAttendance.totalWorkingTime
+          : null;
 
-    const endTime = checkOutTime ? checkOutTime : new Date();
-    const timeSpentMs = Math.max(0, endTime - checkInTime);
-    const timeSpentMinutes = timeSpentMs / (1000 * 60);
-    const percent = Math.min((timeSpentMinutes / TOTAL_WORK_MINUTES) * 100, 100);
-    setProgress(percent.toFixed(2));
-  }, [checkInTime, checkOutTime]);
-
-  const handleCheckIn = () => {
-    const now = new Date();
-    setCheckInTime(now);
-    setCheckOutTime(null); // reset previous checkout
-    localStorage.setItem('checkInTime', now.toISOString());
-    localStorage.removeItem('checkOutTime');
-  };
-
-  const handleCheckOut = () => {
-    const now = new Date();
-    setCheckOutTime(now);
-    localStorage.setItem('checkOutTime', now.toISOString());
-  };
-
-  const handleReset = () => {
-    setCheckInTime(null);
-    setCheckOutTime(null);
-    setProgress(0);
-    localStorage.removeItem('checkInTime');
-    localStorage.removeItem('checkOutTime');
-  };
+      let totalMinutes = 0;
+      if (totalMinutesFromDoc !== null) {
+        totalMinutes = totalMinutesFromDoc;
+      } else {
+        // Fallback: sum durations or compute from checkIn/checkOut
+        todayAttendance.sessions.forEach((s) => {
+          if (typeof s.duration === "number") {
+            totalMinutes += s.duration;
+          } else if (s.checkIn && s.checkOut) {
+            const start = new Date(s.checkIn);
+            const end = new Date(s.checkOut);
+            totalMinutes += Math.max(0, Math.floor((end - start) / 60000));
+          } else if (s.checkIn && !s.checkOut) {
+            // Ongoing session: up to now
+            const start = new Date(s.checkIn);
+            const now = new Date();
+            totalMinutes += Math.max(0, Math.floor((now - start) / 60000));
+          }
+        });
+      }
+      const pct = Math.min(100, (totalMinutes / TOTAL_WORK_MINUTES) * 100);
+      setProgress(Number.isFinite(pct) ? Number(pct.toFixed(2)) : 0);
+    };
+    calc();
+    const t = setInterval(calc, 60000); // refresh every minute
+    return () => clearInterval(t);
+  }, [todayAttendance]);
 
   return (
     <div>

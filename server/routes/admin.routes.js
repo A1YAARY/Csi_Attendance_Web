@@ -6,95 +6,32 @@ const attendanceController = require("../controllers/Attendance.controller");
 const auth = require("../middleware/Auth.middleware");
 const cache = require("../middleware/cache.middleware");
 
-// Existing routes
-router.get("/records", auth, role(["organization"]), cache(60),adminController.records);
-router.get("/allusers", auth, role(["organization"]), cache(60),adminController.getusers);
-router.post(
-  "/reset-user-device",
-  auth,
-  role(["organization"]),
-  adminController.resetUserDevice
-);
-router.get(
-  "/singleUser/:id",
-  auth,
-  role(["organization"]),
-  cache(30),
-  adminController.singleUser
-);
-router.patch(
-  "/user/:id",
-  auth,
-  role(["organization"]),
-  adminController.updateUserByAdmin
-);
-router.get(
-  "/device-change-requests",
-  auth,
-  role(["organization"]),
-  adminController.getDeviceChangeRequests
-);
-router.post(
-  "/handle-device-change-request",
-  auth,
-  role(["organization"]),
-  adminController.handleDeviceChangeRequest
-);
+// Core admin routes
+router.get("/records", auth, role(["organization"]), cache(60), adminController.records);
+router.get("/allusers", auth, role(["organization"]), cache(60), adminController.getusers);
+router.get("/dashboard", auth, role(["organization"]), cache(30), adminController.getDashboardData);
 
-router.get(
-  "/qrcodes",
-  auth,
-  role(["organization"]),
-  adminController.getOrganizationQRCodes
-);
-router.get(
-  "/todays-attendance",
-  auth,
-  role(["organization"]),
-  cache(30),
-  adminController.getTodaysAttendance
-);
-router.delete(
-  "/user/:id",
-  auth,
-  role(["organization"]),
-  adminController.deleteUser
-);
+// User management
+router.get("/singleUser/:id", auth, role(["organization"]), cache(30), adminController.singleUser);
+router.patch("/user/:id", auth, role(["organization"]), adminController.updateUserByAdmin);
+router.delete("/user/:id", auth, role(["organization"]), adminController.deleteUser);
 
-// 🔥 ENHANCED QR CODE ROUTES
-// Get both check-in and check-out QR codes
-router.get(
-  "/qrcodes",
-  auth,
-  role(["organization"]),
-  cache(300), // Cache for 5 minutes
-  adminController.getOrganizationQRCodes
-);
+// Device management
+router.post("/reset-user-device", auth, role(["organization"]), adminController.resetUserDevice);
+router.get("/device-change-requests", auth, role(["organization"]), adminController.getDeviceChangeRequests);
+router.post("/handle-device-change-request", auth, role(["organization"]), adminController.handleDeviceChangeRequest);
 
-// Get specific QR code by type
-router.get(
-  "/qrcode/:type",
-  auth,
-  role(["organization"]),
-  cache(300),
-  adminController.getQRCodeByType
-);
+// QR Code management
+router.get("/qrcodes", auth, role(["organization"]), cache(300), adminController.getOrganizationQRCodes);
+router.get("/qrcode/:type", auth, role(["organization"]), cache(300), adminController.getQRCodeByType);
 
-// 🔥 NEW: Report routes
-router.get(
-  "/daily-report",
-  auth,
-  cache(60),
-  role(["organization"]),
-  attendanceController.getDailyReport
-);
+// Attendance and reports
+router.get("/todays-attendance", auth, role(["organization"]), cache(30), adminController.getTodaysAttendance);
+router.get("/daily-report", auth, role(["organization"]), cache(60), attendanceController.getDailyReport);
+router.get("/weekly-report", auth, role(["organization"]), cache(300), attendanceController.getWeeklyReport);
+router.get("/monthly-report", auth, role(["organization"]), cache(600), attendanceController.getMonthlyReport);
 
-router.get(
-  "/weekly-report",
-  auth,
-  cache(60),
-  role(["organization"]),
-  attendanceController.getWeeklyReport
-);
+// Holiday management
+router.post("/mark-holiday-attendance", auth, role(["organization"]), adminController.markHolidayAttendance);
 
 module.exports = router;

@@ -1,12 +1,11 @@
 import React from "react";
 import { Navigate, useLocation } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/authStore";
 
 const AdminProtected = ({ children }) => {
   const location = useLocation();
   const { isAuthenticated, isAdmin, loading } = useAuth();
 
-  // Show loading while checking auth
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
@@ -18,18 +17,13 @@ const AdminProtected = ({ children }) => {
     );
   }
 
-  // Check if user is authenticated
   if (!isAuthenticated()) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
-
-  // Check if user is admin
   if (!isAdmin()) {
-    // Regular user trying to access admin routes, redirect to their dashboard
     return <Navigate to="/teacherinfo" replace />;
   }
 
-  // User is authenticated admin, render the admin content
   return children;
 };
 

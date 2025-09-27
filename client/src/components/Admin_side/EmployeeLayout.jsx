@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from "react";
-import { EmployeeData } from "./EmployeeData";
-import { useAuth } from "../../context/AuthContext";
+import  {EmployeeData}  from "./EmployeeData";
+import { useAuth } from "../../context/authStore";
 
-const EmployeeLayout = () => {
-  const { getallusers } = useAuth();
+const EmployeeLayout = ({ emploies }) => {
+  const { getAllUsers } = useAuth();
   const [allusers, setAllUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -34,13 +34,13 @@ const EmployeeLayout = () => {
 
     // Department filter (only one active at a time)
     if (departmentFilter !== "all") {
-      filtered = filtered.filter((user) => 
+      filtered = filtered.filter((user) =>
         user.department?.toLowerCase() === departmentFilter.toLowerCase()
       );
     }
     // Role filter (only one active at a time)
     else if (roleFilter !== "all") {
-      filtered = filtered.filter((user) => 
+      filtered = filtered.filter((user) =>
         user.role?.toLowerCase() === roleFilter.toLowerCase()
       );
     }
@@ -52,7 +52,7 @@ const EmployeeLayout = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await getallusers();
+      const response = await getAllUsers();
 
       // Handle different response formats
       let usersData = [];
@@ -99,6 +99,7 @@ const EmployeeLayout = () => {
       setDepartmentFilter("all");
     }
   };
+
 
   if (loading) {
     return (

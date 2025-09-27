@@ -7,7 +7,7 @@ const corsOptions = {
     const allowedOrigins = [
       "*",
       "https://csi-attendance-frontend.onrender.com",
-      "https://csi-attendance-web-1-40fy.onrender.com", 
+      "https://csi-attendance-web-1-40fy.onrender.com",
       "http://localhost:5173",
       "http://localhost:3000",
       "http://localhost:3001",
@@ -30,16 +30,17 @@ const corsOptions = {
   },
   credentials: true,
   optionsSuccessStatus: 200,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  // ✅ FIXED: Added PATCH method
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
   allowedHeaders: [
     "Content-Type",
-    "Authorization", 
+    "Authorization",
     "X-Requested-With",
     "Accept",
     "Origin",
     "X-HTTP-Method-Override",
-    "X-Device-ID", // ✅ Already added this
-    "X-Device-Fingerprint", // ✅ ADD THIS LINE - This is missing!
+    "X-Device-ID",
+    "X-Device-Fingerprint",
   ],
 };
 

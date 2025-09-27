@@ -1,39 +1,29 @@
 import React, { useEffect } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/authStore";
 
 const PublicRoute = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, loading, isAuthenticated, isAdmin } = useAuth();
+  const { loading, isAuthenticated, isAdmin } = useAuth();
 
   useEffect(() => {
-    // Don't do anything while loading
     if (loading) return;
 
-    // Define public paths that don't require authentication
     const publicPaths = ["/login", "/register", "/reset-password"];
     const isPublicPath = publicPaths.includes(location.pathname);
 
-    // If user is authenticated and trying to access public pages (except reset-password)
     if (isAuthenticated()) {
-      // Allow reset-password even for authenticated users
-      if (location.pathname === "/reset-password") {
-        return; // Don't redirect, allow access to reset password
-      }
+      // Allow reset-password even when authenticated
+      if (location.pathname === "/reset-password") return;
 
-      // For other public paths, redirect authenticated users to their dashboard
       if (isPublicPath) {
-        if (isAdmin()) {
-          navigate("/admin", { replace: true });
-        } else {
-          navigate("/teacherinfo", { replace: true }); // Fixed path casing
-        }
+        if (isAdmin()) navigate("/admin", { replace: true });
+        else navigate("/teacherinfo", { replace: true });
       }
     }
   }, [navigate, location.pathname, loading, isAuthenticated, isAdmin]);
 
-  // Show loading while auth is being checked
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
@@ -45,7 +35,6 @@ const PublicRoute = ({ children }) => {
     );
   }
 
-  // Render the public route content
   return children;
 };
 

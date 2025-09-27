@@ -2,13 +2,14 @@ import React, { useEffect, useState, useCallback } from "react";
 import { Admin_Navbar } from "./Admin_Navbar";
 import EmployeeLayout from "./EmployeeLayout";
 import { AttendanceRecordLayout } from "./AttendanceRecordLayout";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/authStore"; // ✅ FIXED IMPORT
 import QRcodeView from "./QRcodeView";
-import Dashbord from "./Dashbord";
 import AITestPage from "./AITestPage";
 import Reports from "./Reports";
 import VoiceDashboard from "../VoiceInterface/VoiceDashboard";
 import { useAdminProtection } from "../../hooks/useAdminProtection";
+import Dashbord2 from "./Dashbord2";
+import EmployeeLayout2 from "./EmployeeLayout2";
 
 const AdminHome = () => {
   const {
@@ -16,22 +17,39 @@ const AdminHome = () => {
     setAdminView,
     getAdminRecords,
     getTodaysAttendance,
-    getallusers,
+    getAllUsers, // ✅ CORRECTED METHOD NAME (was getallusers)
+    user,
+    getAdminDashboard,
+    loading: authLoading
   } = useAuth();
 
   // State management
   const [records, setRecords] = useState([]);
+  const [emploies, setallemploies] = useState([]);
   const [todaysdata, settodaysdata] = useState([]);
   const [allusers, setallusers] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [dashboard, setDashboard] = useState(null);
   const [error, setError] = useState(null);
+
+  const fetchdashbord = useCallback(async () => {
+    try {
+      const data = await getAdminDashboard();
+      setDashboard(data || {});
+      return data;
+    } catch (err) {
+      console.error("❌ Error fetching admin dashboard:", err)
+      setError("Failed to fetch admin dashboard")
+      throw err
+    }
+  }, [getAdminDashboard]);
+
 
   // Memoized data fetching functions
   const fetchAdminRecords = useCallback(async () => {
     try {
-      console.log("🔍 AdminHome: Fetching admin records...");
       const data = await getAdminRecords();
-      console.log("📊 AdminHome: Raw records response:", data);
+      // console.log("📊 AdminHome: Raw records response:", data);
 
       // Handle different response structures
       let processedRecords = [];
@@ -41,23 +59,19 @@ const AdminHome = () => {
         processedRecords = data.data;
       } else if (data && data.records && Array.isArray(data.records)) {
         processedRecords = data.records;
-      } else if (
-        data &&
-        data.attendanceRecords &&
-        Array.isArray(data.attendanceRecords)
-      ) {
+      } else if (data && data.attendanceRecords && Array.isArray(data.attendanceRecords)) {
         processedRecords = data.attendanceRecords;
       } else if (data && data.result && Array.isArray(data.result)) {
         processedRecords = data.result;
       }
 
-
-
       setRecords(processedRecords || []);
+      return processedRecords;
     } catch (err) {
       console.error("❌ Error fetching admin records:", err);
       setError("Failed to fetch admin records");
-      setRecords([]); // Ensure it's always an array
+      setRecords([]);
+      throw err;
     }
   }, [getAdminRecords]);
 
@@ -69,124 +83,105 @@ const AdminHome = () => {
       let processedTodaysData = [];
       if (Array.isArray(todaysdata)) {
         processedTodaysData = todaysdata;
-      } else if (
-        todaysdata &&
-        todaysdata.data &&
-        Array.isArray(todaysdata.data)
-      ) {
+      } else if (todaysdata && todaysdata.data && Array.isArray(todaysdata.data)) {
         processedTodaysData = todaysdata.data;
-      } else if (
-        todaysdata &&
-        todaysdata.attendance &&
-        Array.isArray(todaysdata.attendance)
-      ) {
+      } else if (todaysdata && todaysdata.attendance && Array.isArray(todaysdata.attendance)) {
         processedTodaysData = todaysdata.attendance;
       }
 
       settodaysdata(processedTodaysData || []);
+      return processedTodaysData;
     } catch (err) {
       console.error("❌ Error fetching today's attendance:", err);
       setError("Failed to fetch today's attendance");
       settodaysdata([]);
+      throw err;
     }
   }, [getTodaysAttendance]);
 
   const fetchAllUsers = useCallback(async () => {
     try {
-      const usersData = await getallusers();
-
+      const usersData = await getAllUsers(); // ✅ CORRECTED METHOD CALL
+      setallemploies(usersData || []);
       let processedUsers = [];
       if (Array.isArray(usersData)) {
         processedUsers = usersData;
       } else if (usersData && usersData.data && Array.isArray(usersData.data)) {
         processedUsers = usersData.data;
-      } else if (
-        usersData &&
-        usersData.users &&
-        Array.isArray(usersData.users)
-      ) {
+      } else if (usersData && usersData.users && Array.isArray(usersData.users)) {
         processedUsers = usersData.users;
-      } else if (
-        usersData &&
-        usersData.allusers &&
-        Array.isArray(usersData.allusers)
-      ) {
+      } else if (usersData && usersData.allusers && Array.isArray(usersData.allusers)) {
         processedUsers = usersData.allusers;
       }
 
-     
-      setallusers(processedUsers);
+      setallusers(processedUsers || []);
+      return processedUsers;
     } catch (err) {
       console.error("❌ Error fetching all users:", err);
       setError("Failed to fetch all users");
       setallusers([]);
+      throw err;
     }
-  }, [getallusers]);
+  }, [getAllUsers]); // ✅ CORRECTED DEPENDENCY
 
-  // Optimized data fetching - fetch all data concurrently
+  // Optimized data fetching
   const fetchAllData = useCallback(async () => {
-    setLoading(true);
+    if (authLoading) return; // Wait for auth to be ready
+
+    setDataLoading(true);
     setError(null);
 
     try {
-      const results = await Promise.allSettled([
+      await Promise.allSettled([
         fetchAdminRecords(),
         fetchTodaysAttendance(),
+        fetchdashbord(),
         fetchAllUsers(),
       ]);
-
-      // Log results for debugging
-      results.forEach((result, index) => {
-        const names = ["Records", "Today's Attendance", "Users"];
-        if (result.status === "rejected") {
-          // console.error(`❌ ${names[index]} fetch failed:`, result.reason);
-        } else {
-          // console.log(`✅ ${names[index]} fetch completed`);
-        }
-      });
     } catch (err) {
       console.error("❌ Error in fetchAllData:", err);
       setError("Failed to fetch data");
     } finally {
-      setLoading(false);
-      // console.log("🏁 AdminHome: Data fetch completed");
+      setDataLoading(false);
     }
-  }, [fetchAdminRecords, fetchTodaysAttendance, fetchAllUsers]);
+  }, [authLoading, fetchAdminRecords, fetchTodaysAttendance, fetchAllUsers]);
 
-  // Single useEffect to fetch all data on component mount
+  // Fetch data when component mounts and auth is ready
   useEffect(() => {
-    fetchAllData();
-  }, [fetchAllData]);
+    if (!authLoading) {
+      fetchAllData();
+    }
+  }, [authLoading, fetchAllData]);
 
-  // // Debug effect to log state changes
-  // useEffect(() => {
-  //   console.log("🔄 AdminHome State Update:");
-  //   console.log("📊 Records:", records);
-  //   console.log("📅 Today's Data:", todaysdata);
-  //   console.log("👥 All Users:", allusers);
-  //   console.log("🎯 Active View:", activeAdminView);
-  // }, [records, todaysdata, allusers, activeAdminView]);
+  // 🔐 Check if user is admin
+  const isAuthorized = user?.role === "organization";
 
-  // 🔐 Apply role-based protection
-  const isAuthorized = useAdminProtection();
-  const { user } = useAuth();
-
-  // Show loading while checking authorization
-  if (!isAuthorized && user !== null) {
+  // Show loading while checking authorization or fetching auth
+  if (authLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500 mx-auto"></div>
-          <h2 className="text-xl font-semibold mt-4">
-            Checking permissions...
-          </h2>
+          <h2 className="text-xl font-semibold mt-4">Checking permissions...</h2>
+        </div>
+      </div>
+    );
+  }
+
+  // Show unauthorized message if user is not admin
+  if (!isAuthorized) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center text-red-600">
+          <h2 className="text-xl font-semibold mb-4">Access Denied</h2>
+          <p>You do not have permission to access this page.</p>
         </div>
       </div>
     );
   }
 
   // Show loading while fetching data
-  if (loading) {
+  if (dataLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
@@ -223,21 +218,13 @@ const AdminHome = () => {
       case "home":
       default:
         return (
-          <Dashbord
-            records={records}
-            todaysdata={todaysdata}
-            allusers={allusers}
+          <Dashbord2
+            dashboard={dashboard}
           />
         );
       case "employees":
-        console.log("👥 Rendering EmployeeLayout with users:", allusers);
-        return <EmployeeLayout allusers={allusers} />;
+        return <EmployeeLayout2 emploies={emploies} />;
       case "records":
-        console.log(
-          "📊 Rendering AttendanceRecordLayout with records:",
-          records
-        );
-        console.log("📊 Records length:", records.length);
         return <AttendanceRecordLayout records={records} />;
       case "reports":
         return <Reports />;
@@ -261,9 +248,6 @@ const AdminHome = () => {
     <div className="min-h-screen bg-gray-50">
       <Admin_Navbar />
       <main className="pt-16">
-        {/* Debug panel - Remove in production */}
-       
-
         {renderContent()}
       </main>
     </div>

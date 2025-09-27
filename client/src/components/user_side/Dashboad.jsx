@@ -5,60 +5,54 @@ import Navbar from "./Navbar";
 import { LoginPage } from "./LoginPage";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../context/AuthContext";
+import { useAuthStore } from "../../context/authStore";
 
 const Dashboard = () => {
   const { getPastAttendance } = useAuth();
   const navigate = useNavigate();
+
   const [pastAttendance, setPastAttendance] = useState([]);
   const [todayAttendance, setTodayAttendance] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Dashboad.jsx — replace only the data handling inside fetchPastAttendance, leave JSX/styles untouched
   useEffect(() => {
     const fetchPastAttendance = async () => {
       try {
         setLoading(true);
         const data = await getPastAttendance();
         if (data?.attendance && Array.isArray(data.attendance)) {
-          // Normalize server items to the shape the components expect
           const normalized = data.attendance.map((a) => ({
             ...a,
-            // alias for convenience (keep original too)
             date: a.createdAt,
-            // ensure sessions have plain timestamps
             sessions: (a.sessions || []).map((s) => ({
               checkIn: s?.checkIn || null,
               checkOut: s?.checkOut || null,
               duration: typeof s?.duration === "number" ? s.duration : 0,
             })),
-            // totalWorkingTime and status already exist on the document
           }));
-
           setPastAttendance(normalized);
 
-          // Today record by date
-          const today = new Date().toDateString();
-          const todayRecord = normalized.find(
-            (r) => new Date(r.date).toDateString() === today
-          );
-          setTodayAttendance(todayRecord || null);
+          const todayStr = new Date().toDateString();
+          const todayRecord =
+            normalized.find((r) => new Date(r.date).toDateString() === todayStr) || null;
+          setTodayAttendance(todayRecord);
+        } else {
+          setPastAttendance([]);
+          setTodayAttendance(null);
         }
-      } catch (error) {
-        console.error("Error fetching past attendance:", error);
+      } catch (e) {
+        console.error("Error fetching past attendance:", e);
+        setPastAttendance([]);
+        setTodayAttendance(null);
       } finally {
         setLoading(false);
       }
     };
     fetchPastAttendance();
-  }, []);
+  }, [getPastAttendance]);
 
-  const hidden = () => {
-    navigate("/ScanQR");
-  };
-
-  const hidden1 = () => {
-    navigate("/ShowLogOut");
-  };
+  const hidden = () => navigate("/ScanQR");
+  const hidden1 = () => navigate("/ShowLogOut");
 
   return (
     <div className="h-[100dvh] bg-white px-4 pb-4">
@@ -72,9 +66,9 @@ const Dashboard = () => {
 
         <button
           onClick={hidden}
-          className="w-full mt-6 bg-[#1D61E7] text-white py-3 rounded-lg flex items-center justify-center gap-2 text-sm font-medium"
+            className="w-full mt-6 bg-[#1D61E7] text-white py-3 rounded-lg flex items-center justify-center gap-2 text-sm font-medium"
         >
-          <span className="text-lg"><img src="./qr_icon.svg" className="invert h-4"/></span>
+          <span className="text-lg"><img src="./qr_icon.svg" className="invert h-4" /></span>
           Scan QR
         </button>
 

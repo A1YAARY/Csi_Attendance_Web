@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { toast, ToastContainer } from "react-toastify";
 import axios from "axios";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/authStore";
 import "react-toastify/dist/ReactToastify.css";
 import Magnet from "../../reactbitscomponents/Magnet";
 import { AiOutlineEye, AiOutlineEyeInvisible } from "react-icons/ai";
@@ -51,10 +51,9 @@ const generateStableDeviceId = () => {
     return fallbackId;
   }
 };
-
 export const LoginPage = () => {
   const navigate = useNavigate();
-  const { login, BASE_URL } = useAuth();
+  const { loginUser, login, BASE_URL } = useAuth(); // ✅ Use new store methods
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [show, setshow] = useState(false);
@@ -79,92 +78,64 @@ export const LoginPage = () => {
 
   const handleEmailLogin = async (e) => {
     e.preventDefault();
-
     if (isLoading) return;
-
     setIsLoading(true);
 
     try {
       console.log("🔐 Attempting login with device:", deviceId);
 
-      const res = await axios.post(
-        `${BASE_URL}/auth2/login`,
-        {
-          email,
-          password,
-          deviceId: deviceId,
-          deviceType: /Android/.test(navigator.userAgent)
-            ? "Android"
-            : /iPhone|iPad|iPod/.test(navigator.userAgent)
+      // ✅ USE THE NEW STORE METHOD
+      const result = await loginUser({
+        email,
+        password,
+        deviceId: deviceId,
+        deviceType: /Android/.test(navigator.userAgent)
+          ? "Android"
+          : /iPhone|iPad|iPod/.test(navigator.userAgent)
             ? "iOS"
             : "Web",
-          deviceFingerprint: deviceId, // Use deviceId as fingerprint too
-        },
-        {
-          withCredentials: true,
-          headers: {
-            "Content-Type": "application/json",
-            "X-Device-ID": deviceId,
-          },
-          timeout: 15000,
-        }
-      );
+        deviceFingerprint: deviceId,
+      });
 
-      if (res.data.success && res.data.accessToken) {
+      if (result.success && result.accessToken) {
         // Store organization code if available
-        if (res.data.organization?.name) {
-          localStorage.setItem("orginizationcode", res.data.organization.name);
+        if (result.organization?.name) {
+          localStorage.setItem("organizationcode", result.organization.name);
         }
 
         // Store device binding
         localStorage.setItem("user_device_binding", `${email}:${deviceId}`);
-
         console.log(
           "✅ Login successful, device registered:",
-          res.data.user.deviceRegistered
+          result.user.deviceRegistered
         );
 
-        login(res.data.user, res.data.accessToken, res.data.organization);
+        // ✅ The store's loginUser already handles state, but we need to ensure navigation
         toast.success("Login successful!");
 
         // Navigate based on role
-        if (res.data.user.role === "organization") {
+        if (result.user.role === "organization") {
           navigate("/admin", { replace: true });
         } else {
-          navigate("/Teacherinfo", { replace: true });
+          navigate("/teacherinfo", { replace: true });
         }
+      } else {
+        toast.error(result.message || "Login failed");
       }
     } catch (error) {
       console.error("❌ Login error:", error);
-      const errorData = error.response?.data;
 
       // Enhanced error handling
-      if (errorData?.code === "DEVICE_NOT_AUTHORIZED") {
+      if (error.message?.includes("DEVICE_NOT_AUTHORIZED")) {
         toast.error(
-          `🚫 Device Not Authorized\n\nThis account is registered to another device.\n\nRegistered Device: ${errorData.registeredDevice}\nCurrent Device: ${errorData.currentDevice}\n\nPlease contact admin to reset your device registration.`,
+          `🚫 Device Not Authorized\n\nThis account is registered to another device.\n\nPlease contact admin to reset your device registration.`,
           {
             autoClose: 10000,
             style: { whiteSpace: "pre-line" },
           }
         );
-
-        // Show contact admin option for users
-        if (loginadmin) {
-          setTimeout(() => {
-            if (
-              window.confirm(
-                "Would you like to request device change from admin?"
-              )
-            ) {
-              // You can implement a device change request flow here
-              navigate("/contact-admin");
-            }
-          }, 2000);
-        }
-      } else if (errorData?.requiresDeviceInfo) {
-        toast.error("Device information is required for login");
       } else {
-        toast.error(errorData?.message || "Login failed. Please try again.");
+        toast.error(error.message || "Login failed. Please try again.");
       }
     } finally {
       setIsLoading(false);
@@ -247,13 +218,13 @@ export const LoginPage = () => {
 
             {/* Submit Button */}
             {/* <Magnet> */}
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-blue-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? "Signing In..." : "Sign In"}
-              </button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-blue-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? "Signing In..." : "Sign In"}
+            </button>
             {/* </Magnet> */}
           </form>
 

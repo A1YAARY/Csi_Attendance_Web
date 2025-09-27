@@ -3,52 +3,40 @@ import React, { useEffect, useState } from "react";
 import Navbar from "./Navbar";
 import { Link, useNavigate } from "react-router-dom";
 import { div } from "framer-motion/client";
-import { useAuth } from "../../context/AuthContext";  
+import { useAuth } from "../../context/authStore";
 
 const TeacherInfo = () => {
   const [loading, setLoading] = useState(true);
   const [userTeacher, setUserTeacher] = useState(null);
   const [records, setRecords] = useState(null);
-  const user = JSON.parse(localStorage.getItem("userData"));
-  const { getPastAttendance } = useAuth();
-  useEffect(() => {
-  const fetchData = async () => {
-    try {
-      const records = await getPastAttendance();
-      console.log("Records:", records);
-      setRecords(records);
-      // Assuming records = { dept, checkInTime, checkOutTime }
-    } catch (error) {
-      console.error("Error fetching records:", error);
-    }
-  };
+  const { getPastAttendance, user } = useAuth(); // ✅ Get user from store
 
-  fetchData();
-}, []);
-  // useEffect(() => {
-  //   if (user) {
-  //     setTimeout(() => {
-  //     setUserTeacher(userData);
-  //     setLoading(false);
-  //   }, 1000); // adjust delay as needed
-  //     console.log(user);
-  //   }
-  // }, [user]);
   useEffect(() => {
-    // Simulate fetching user from localStorage
-    const userData = JSON.parse(localStorage.getItem("userData"));
-    
-    // Optional: simulate delay
-    setTimeout(() => {
+    const fetchData = async () => {
+      try {
+        const recordsData = await getPastAttendance();
+        console.log("Records:", recordsData);
+        setRecords(recordsData);
+      } catch (error) {
+        console.error("Error fetching records:", error);
+      }
+    };
+
+    fetchData();
+  }, [getPastAttendance]);
+
+  useEffect(() => {
+    // ✅ Use store user directly instead of localStorage
+    if (user) {
+      setUserTeacher(user);
+      setLoading(false);
+    } else {
+      // Fallback to localStorage if store user is not available yet
+      const userData = JSON.parse(localStorage.getItem("userData") || "null");
       setUserTeacher(userData);
       setLoading(false);
-    }, 1000); // adjust delay as needed
-  }, []);
-  const Dashboard = () => navigate("/dashboard");
-  const navigate = useNavigate();
-  const hidden = () => {
-    navigate("/ScanQR");
-  };
+    }
+  }, [user]);
   if (loading) {
     return (
       <div className="p-4 sm:p-6 bg-gray-50 min-h-screen flex justify-center items-center">

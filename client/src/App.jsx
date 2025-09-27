@@ -2,7 +2,7 @@ import "./App.css";
 import TeacherInfo from "./components/user_side/TeacherInfo";
 import { motion, AnimatePresence } from "framer-motion";
 import AnimationPage from "./components/user_side/AnimationPage";
-import React, { useEffect, useRef, useState } from "react";
+import React from "react";
 import NewQrcode from "./components/user_side/Newqrcode";
 import { Route, Routes, useLocation, Navigate } from "react-router-dom";
 import Logout from "./components/user_side/LogoutPage";
@@ -12,9 +12,7 @@ import OrganizationRegister from "./components/user_side/OrganizationRegister";
 import AdminHome from "./components/Admin_side/AdminHome";
 import ProtectedRoute from "./components/ProtectedRoute";
 import PublicRoute from "./components/PublicRoute";
-import { useAuth } from "./context/AuthContext";
-import { useAdminProtection } from "./hooks/useAdminProtection";
-import "cally";
+import { useAuth } from "./context/authStore"; // ✅ FIXED IMPORT
 import AdminProtected from "./components/AdminProtected";
 import ClickSpark from "./reactbitscomponents/ClickSpark";
 import ResetPass from "./components/Admin_side/ResetPass";
@@ -22,7 +20,16 @@ import UpdationUser from "./components/Admin_side/UpdationUser";
 
 function App() {
   const location = useLocation();
-  const { isAuthenticated, isAdmin } = useAuth();
+  const { isAuthenticated, isAdmin, user } = useAuth(); // ✅ Now using store
+
+  // Helper function to determine redirect path
+  const getRedirectPath = () => {
+    if (user?.role === "organization") {
+      return "/admin";
+    } else {
+      return "/teacherinfo";
+    }
+  };
 
   return (
     <>
@@ -35,7 +42,7 @@ function App() {
       >
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
-            {/* Public Routes - Accessible without authentication */}
+            {/* Public Routes */}
             <Route
               path="/login"
               element={
@@ -68,7 +75,7 @@ function App() {
               }
             />
 
-            {/* PASSWORD RESET ROUTE - COMPLETELY PUBLIC - No Protection at all */}
+            {/* Password Reset Route */}
             <Route
               path="/reset-password"
               element={
@@ -83,13 +90,12 @@ function App() {
               }
             />
 
-            {/* Alternative route for backward compatibility */}
             <Route
               path="/ResetPass"
               element={<Navigate to="/reset-password" replace />}
             />
 
-            {/* Protected Routes - Require authentication */}
+            {/* Protected Routes */}
             <Route
               path="/teacherinfo"
               element={
@@ -175,64 +181,28 @@ function App() {
               }
             />
 
-              <Route path="/edit" element={<UpdationUser/>} />
+            <Route path="/edit/:userId" element={<UpdationUser />} />
 
-            {/* Root route - redirect based on authentication and role */}
+            {/* Root route - redirect based on authentication */}
             <Route
               path="/"
-              element={(() => {
-                const token = localStorage.getItem("accessToken");
-                if (token) {
-                  // Check user role for proper redirection
-                  const userData = localStorage.getItem("userData");
-                  if (userData) {
-                    try {
-                      const user = JSON.parse(userData);
-                      if (user.role === "organization") {
-                        return <Navigate to="/admin" replace />;
-                      } else {
-                        return <Navigate to="/teacherinfo" replace />;
-                      }
-                    } catch (error) {
-                      console.error("Error parsing userData:", error);
-                      localStorage.removeItem("userData");
-                      localStorage.removeItem("accessToken");
-                      return <Navigate to="/login" replace />;
-                    }
-                  }
-                  // Default to teacherinfo if userData is not available
-                  return <Navigate to="/teacherinfo" replace />;
-                }
-                return <Navigate to="/login" replace />;
-              })()}
+              element={
+                isAuthenticated()
+                  ? (isAdmin() ? <Navigate to="/admin" replace /> : <Navigate to="/teacherinfo" replace />)
+                  : <Navigate to="/login" replace />
+              }
             />
 
-            {/* Catch all - redirect to appropriate page based on authentication */}
+            {/* Catch all route */}
             <Route
               path="*"
-              element={(() => {
-                const token = localStorage.getItem("accessToken");
-                if (token) {
-                  const userData = localStorage.getItem("userData");
-                  if (userData) {
-                    try {
-                      const user = JSON.parse(userData);
-                      if (user.role === "organization") {
-                        return <Navigate to="/admin" replace />;
-                      } else {
-                        return <Navigate to="/teacherinfo" replace />;
-                      }
-                    } catch (error) {
-                      console.error("Error parsing userData:", error);
-                      localStorage.removeItem("userData");
-                      localStorage.removeItem("accessToken");
-                      return <Navigate to="/login" replace />;
-                    }
-                  }
-                  return <Navigate to="/teacherinfo" replace />;
-                }
-                return <Navigate to="/login" replace />;
-              })()}
+              element={
+                isAuthenticated() ? (
+                  <Navigate to={getRedirectPath()} replace />
+                ) : (
+                  <Navigate to="/login" replace />
+                )
+              }
             />
           </Routes>
         </AnimatePresence>

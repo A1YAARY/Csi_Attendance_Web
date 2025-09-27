@@ -6,6 +6,7 @@ const qrGenerator = require("../utils/qrGenerator");
 const QRCode = require("../models/Qrcode.models");
 const { sendMail } = require("../utils/mailer");
 const geocodingService = require("../utils/geocoding"); // NEW: Multi-provider geocoding
+const istUtils = require("../utils/istDateTimeUtils"); // Use unified IST utils
 
 // IST helper function
 const getISTDate = (date = new Date()) => {
@@ -82,9 +83,9 @@ const verifyToken = async (req, res) => {
       },
       organization: user.organizationId
         ? {
-            id: user.organizationId._id,
-            name: user.organizationId.name,
-          }
+          id: user.organizationId._id,
+          name: user.organizationId.name,
+        }
         : null,
     });
   } catch (error) {
@@ -97,7 +98,6 @@ const verifyToken = async (req, res) => {
   }
 };
 
-// Token refresh endpoint
 const refreshToken = async (req, res) => {
   try {
     const { refreshToken } = req.cookies;
@@ -129,9 +129,7 @@ const refreshToken = async (req, res) => {
       });
     }
 
-    const { accessToken, refreshToken: newRefreshToken } = generateTokens(
-      user._id
-    );
+    const { accessToken, refreshToken: newRefreshToken } = generateTokens(user._id);
 
     res.cookie("refreshToken", newRefreshToken, {
       httpOnly: true,
@@ -150,10 +148,7 @@ const refreshToken = async (req, res) => {
         role: user.role,
       },
       organization: user.organizationId
-        ? {
-            id: user.organizationId._id,
-            name: user.organizationId.name,
-          }
+        ? { id: user.organizationId._id, name: user.organizationId.name }
         : null,
       accessToken,
     });
@@ -167,7 +162,7 @@ const refreshToken = async (req, res) => {
   }
 };
 
-// FIXED: Enhanced organization registration with multi-provider geocoding
+
 const register_orginization = async (req, res) => {
   try {
     const { email, password, name, organizationName, address } = req.body;
@@ -181,24 +176,18 @@ const register_orginization = async (req, res) => {
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: "User already exists",
-      });
+      return res.status(400).json({ success: false, message: "User already exists" });
     }
 
-    // FIXED: Use enhanced multi-provider geocoding service
     console.log(`🌍 Starting geocoding for address: "${address}"`);
     const geoResult = await geocodingService.geocodeAddress(address);
-
-    console.log(`📍 Geocoding result:`, {
+    console.log("📍 Geocoding result:", {
       provider: geoResult.provider,
       coordinates: `${geoResult.latitude}, ${geoResult.longitude}`,
       accuracy: geoResult.accuracy,
       confidence: geoResult.confidence,
     });
 
-    // Create user
     const user = new User({
       email,
       password,
@@ -207,10 +196,8 @@ const register_orginization = async (req, res) => {
     });
     await user.save();
 
-    // Parse address components
     const addressComponents = address.split(",").map((part) => part.trim());
 
-    // Create organization with enhanced geocoded location
     const organization = new Organization({
       name: organizationName,
       address: {
@@ -223,27 +210,25 @@ const register_orginization = async (req, res) => {
       location: {
         latitude: geoResult.latitude,
         longitude: geoResult.longitude,
-        radius: 500, // default 100 meters
+        radius: 500,
         address: geoResult.formatted_address,
         isVerified: true,
-        lastUpdated: getISTDate(),
-        // Enhanced location metadata
+        lastUpdated: istUtils.getISTDate(),
         geocoding: {
           provider: geoResult.provider,
           accuracy: geoResult.accuracy,
           confidence: geoResult.confidence,
-          geocodedAt: getISTDate(),
+          geocodedAt: istUtils.getISTDate(),
         },
       },
       adminId: user._id,
     });
+
     await organization.save();
 
-    // Link user to organization
     user.organizationId = organization._id;
     await user.save();
 
-    // Generate QR codes with organization location
     const checkInQR = await qrGenerator.generateQRCode(
       organization._id,
       organization.location,
@@ -284,7 +269,6 @@ const register_orginization = async (req, res) => {
       active: true,
     });
 
-    // Save QR codes in org
     organization.checkInQRCodeId = checkInQRDoc._id;
     organization.checkOutQRCodeId = checkOutQRDoc._id;
     await organization.save();
@@ -337,132 +321,66 @@ const register_orginization = async (req, res) => {
   }
 };
 
-// Enhanced user registration
 const register_user = async (req, res) => {
   try {
-    const { email, name, organizationCode, institute, department, password } =
-      req.body;
+    const { email, name, organizationCode, institute, department, password } = req.body;
 
     if (!email || !organizationCode || !name || !institute || !department) {
-      return res.status(400).json({
-        success: false,
-        message: "All fields are required",
-      });
+      return res.status(400).json({ success: false, message: "All fields are required" });
     }
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(400).json({
-        success: false,
-        message: "User already exists",
-      });
+      return res.status(400).json({ success: false, message: "User already exists" });
     }
 
     const organization = await Organization.findOne({ name: organizationCode });
     if (!organization) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid organization code",
-      });
+      return res.status(400).json({ success: false, message: "Invalid organization code" });
     }
 
-    // Create user with temporary password (always use temp password)
     const user = new User({
       email,
-      password: "pass123", // Always use temporary password
+      password: password,
       name,
       role: "user",
       institute,
       department,
       organizationId: organization._id,
-      deviceInfo: {
-        isRegistered: false,
-      },
+      deviceInfo: { isRegistered: false },
     });
 
     await user.save();
 
-    // ALWAYS send password reset email for every registration
     try {
       const resetToken = jwt.sign(
         { userId: user._id, email: user.email },
         process.env.JWT_RESET_SECRET || process.env.JWT_SECRET,
-        { expiresIn: "24h" } // 24 hours for initial setup
+        { expiresIn: "24h" }
       );
 
       const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}&newUser=true`;
-
       const emailSubject = "Welcome to Attendance System - Set Your Password";
       const emailBody = `
-Hello ${name},
+        Hello ${name},
+        Your account has been created successfully for ${organization.name}.
+        Please set your password using the link below:
+        ${resetLink}
+        This link will expire in 24 hours for security reasons.
+        Account Details:
+        - Email: ${email}
+        - Organization: ${organization.name}
+        - Institute: ${institute}
+        - Department: ${department}
+        If you didn't request this account creation, please contact your administrator.
+        Best regards,
+        Attendance System Team
+      `;
 
-Your account has been created successfully for ${organization.name}.
-
-Please set your password using the link below:
-${resetLink}
-
-This link will expire in 24 hours for security reasons.
-
-Account Details:
-- Email: ${email}
-- Organization: ${organization.name}
-- Institute: ${institute}
-- Department: ${department}
-
-If you didn't request this account creation, please contact your administrator.
-
-Best regards,
-Attendance System Team
-`;
-
-      const htmlBody = `
-<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-  <h2 style="color: #333;">Welcome to Attendance System</h2>
-  
-  <p>Hello <strong>${name}</strong>,</p>
-  
-  <p>Your account has been created successfully for <strong>${organization.name}</strong>.</p>
-  
-  <p>Please set your password by clicking the button below:</p>
-  
-  <div style="text-align: center; margin: 30px 0;">
-    <a href="${resetLink}" style="background-color: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; display: inline-block;">Set Your Password</a>
-  </div>
-  
-  <p style="color: #666; font-size: 14px;">This link will expire in 24 hours for security reasons.</p>
-  
-  <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin: 20px 0;">
-    <h3 style="margin-top: 0; color: #333;">Account Details:</h3>
-    <ul style="margin: 0;">
-      <li><strong>Email:</strong> ${email}</li>
-      <li><strong>Organization:</strong> ${organization.name}</li>
-      <li><strong>Institute:</strong> ${institute}</li>
-      <li><strong>Department:</strong> ${department}</li>
-    </ul>
-  </div>
-  
-  <p style="color: #666; font-size: 12px;">If you didn't request this account creation, please contact your administrator.</p>
-  
-  <p>Best regards,<br>Attendance System Team</p>
-</div>
-`;
-
-      const emailResult = await sendMail(
-        user.email,
-        emailSubject,
-        emailBody,
-        htmlBody
-      );
-
-      if (!emailResult.success) {
-        console.error("Failed to send welcome email:", emailResult.error);
-        // Don't fail registration if email fails, but log it
-      } else {
-        console.log(`✅ Welcome email sent to: ${user.email}`);
-      }
-    } catch (emailError) {
-      console.error("Email sending error during registration:", emailError);
-      // Don't fail registration if email fails
+      await sendMail(email, emailSubject, emailBody);
+    } catch (mailErr) {
+      console.error("Password setup email error:", mailErr);
+      // Continue without failing registration
     }
 
     const { accessToken, refreshToken } = generateTokens(user._id);
@@ -471,37 +389,26 @@ Attendance System Team
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "strict",
-      maxAge: 180 * 24 * 60 * 60 * 1000, // 180 days
+      maxAge: 180 * 24 * 60 * 60 * 1000,
     });
 
     res.status(201).json({
       success: true,
-      message: "User registered successfully. Password reset email sent.",
+      message: "User registered successfully",
       user: {
         id: user._id,
         email: user.email,
         name: user.name,
         role: user.role,
-        institute: user.institute,
-        department: user.department,
-      },
-      organization: {
-        id: organization._id,
-        name: organization.name,
+        organizationId: user.organizationId,
       },
       accessToken,
-      emailSent: true,
-      note: "Please check your email to set your password",
     });
-  } catch (err) {
-    console.error("User registration error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Server error during registration",
-      error: process.env.NODE_ENV === "development" ? err.message : undefined,
-    });
+  } catch (error) {
+    console.error("User registration error:", error);
+    res.status(500).json({ success: false, message: "Server error during user registration" });
   }
-};  
+};
 
 // Enhanced login with device registration check - FIXED VERSION
 const login = async (req, res) => {
@@ -595,10 +502,10 @@ const login = async (req, res) => {
       },
       organization: user.organizationId
         ? {
-            id: user.organizationId._id,
-            name: user.organizationId.name,
-            location: user.organizationId.location,
-          }
+          id: user.organizationId._id,
+          name: user.organizationId.name,
+          location: user.organizationId.location,
+        }
         : null,
       accessToken,
     });

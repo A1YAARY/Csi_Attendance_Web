@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import TextType from "../../reactbitscomponents/TextType";
 
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/authStore";
 import {
   Brain,
   Send,

@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast, ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import Magnet from "../../reactbitscomponents/Magnet";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/authStore";
 import axios from "axios";
 
 export const ResetPass = () => {

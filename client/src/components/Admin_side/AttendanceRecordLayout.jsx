@@ -8,10 +8,11 @@ import {
   Clock,
   MapPin,
 } from "lucide-react";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/authStore";
+
 
 export const AttendanceRecordLayout = ({ records: propRecords }) => {
-  const { getAdminRecords, getdaily, getWeek } = useAuth();
+  const { getAdminRecords, getAdminDashboard } = useAuth();
   const [records, setRecords] = useState([]);
   const [filteredRecords, setFilteredRecords] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,6 +23,10 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
   const [open, setOpen] = useState(false);
   const menuRef = useRef();
 
+  useEffect(() => {
+    const data = getAdminDashboard();
+    console.log("dashboard data", data);
+  },[getAdminDashboard])
   const toggleDropdown = () => {
     setOpen(!open);
   };
@@ -68,21 +73,21 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
         try {
           const recordDateValue = record.date || record.createdAt;
           if (!recordDateValue) return false;
-          
+
           // Direct comparison for YYYY-MM-DD format
           if (recordDateValue === dateFilter) {
             return true;
           }
-          
+
           // Fallback for ISO strings or other formats
           const recordDate = new Date(recordDateValue);
           const selectedDate = new Date(dateFilter);
-          
+
           if (isNaN(recordDate) || isNaN(selectedDate)) return false;
-          
+
           const recordDateString = recordDate.toISOString().split("T")[0];
           const selectedDateString = selectedDate.toISOString().split("T")[0];
-          
+
           return recordDateString === selectedDateString;
         } catch (error) {
           console.error("Date comparison error:", error);
@@ -92,7 +97,7 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
     }
     // Status filter
     else if (statusFilter !== "all") {
-      filtered = filtered.filter((record) => 
+      filtered = filtered.filter((record) =>
         record.status?.toLowerCase() === statusFilter.toLowerCase()
       );
     }
