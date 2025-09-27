@@ -1,40 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import TextType from "../../reactbitscomponents/TextType";
-
 import { useAuth } from "../../context/authStore";
 import {
-  Brain,
-  Send,
-  MessageSquare,
-  Zap,
-  AlertCircle,
-  CheckCircle,
-  RefreshCw,
-  Copy,
-  Trash2,
-  Clock,
-  TrendingUp,
-  Volume2,
-  VolumeX,
-  Mic,
-  MicOff,
-  Sparkles,
-  XCircle,
-  Play,
-  Pause,
-  Loader2,
-  Star,
-  BarChart3,
-  Users,
-  Calendar,
-  Activity,
-  Waves,
-  Bot,
-  Settings,
-  Download,
-  Share2,
-  BookOpen,
-  HelpCircle,
+  Brain, Send, MessageSquare, Zap, AlertCircle, CheckCircle, RefreshCw, Copy, Trash2,
+  Clock, TrendingUp, Volume2, VolumeX, Mic, MicOff, Sparkles, XCircle, Play, Pause,
+  Loader2, Star, BarChart3, Users, Calendar, Activity, Waves, Bot, Settings, Download,
+  Share2, BookOpen, HelpCircle,
 } from "lucide-react";
 import { toast } from "react-toastify";
 
@@ -46,92 +17,25 @@ const AITestPage = () => {
   const [aiCapabilities, setAiCapabilities] = useState(null);
   const [aiHealth, setAiHealth] = useState(null);
   const [queryHistory, setQueryHistory] = useState([]);
-  const [activeTab, setActiveTab] = useState("query");
   const [isVoiceEnabled, setIsVoiceEnabled] = useState(true);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [speechSupported, setSpeechSupported] = useState(false);
 
-  // Enhanced TTS Settings
+  // TTS Settings - Enhanced with multiple options
   const [ttsSettings, setTtsSettings] = useState({
-    voice: "Google UK English Female",
+    voice: "Google UK English Female", // Default voice
     rate: 1.0,
     pitch: 1.0,
     volume: 1.0,
+    useOpenAI: false, // Toggle between browser and OpenAI TTS
   });
+  
   const [availableVoices, setAvailableVoices] = useState([]);
-
   const synthRef = useRef(null);
   const recognitionRef = useRef(null);
   const currentUtteranceRef = useRef(null);
-
-  // Enhanced sample questions with categories and icons
-  const sampleQuestions = [
-    {
-      category: "📊 Daily Reports",
-      icon: BarChart3,
-      color: "from-blue-500 to-cyan-500",
-      gradient: "bg-gradient-to-br from-blue-500/10 to-cyan-500/10",
-      border: "border-blue-500/30",
-      questions: [
-        "Show me today's attendance summary",
-        "How many people attended work today?",
-        "Who was absent today?",
-        "Show me late arrivals today",
-        "What's the attendance percentage for today?",
-        "List all check-ins for today",
-        "Show today's working hours summary",
-      ],
-    },
-    {
-      category: "👥 User Analytics",
-      icon: Users,
-      color: "from-purple-500 to-pink-500",
-      gradient: "bg-gradient-to-br from-purple-500/10 to-pink-500/10",
-      border: "border-purple-500/30",
-      questions: [
-        "Who has perfect attendance this month?",
-        "Show me the most punctual employees",
-        "List users with irregular attendance patterns",
-        "Who worked the most hours this week?",
-        "Show me user attendance trends",
-        "Find employees with low attendance",
-        "Display top performers by attendance",
-      ],
-    },
-    {
-      category: "📅 Date-Specific Queries",
-      icon: Calendar,
-      color: "from-green-500 to-emerald-500",
-      gradient: "bg-gradient-to-br from-green-500/10 to-emerald-500/10",
-      border: "border-green-500/30",
-      questions: [
-        "Was john@example.com present on 2025-09-20?",
-        "Show me absent users on 2025-09-19",
-        "Who worked overtime yesterday?",
-        "Generate attendance report for 2025-09-15",
-        "Compare this week vs last week attendance",
-        "Show attendance for last Monday",
-        "Get weekly report for user@example.com",
-      ],
-    },
-    {
-      category: "📈 Analytics & Insights",
-      icon: Activity,
-      color: "from-orange-500 to-red-500",
-      gradient: "bg-gradient-to-br from-orange-500/10 to-red-500/10",
-      border: "border-orange-500/30",
-      questions: [
-        "Generate weekly report for this week",
-        "Show me monthly attendance statistics",
-        "What are the attendance patterns?",
-        "Average working hours this week",
-        "Identify attendance anomalies",
-        "Show productivity metrics",
-        "Analyze peak working hours",
-      ],
-    },
-  ];
+  const audioRef = useRef(null);
 
   // Initialize TTS and speech recognition
   useEffect(() => {
@@ -140,34 +44,45 @@ const AITestPage = () => {
       synthRef.current = window.speechSynthesis;
       setSpeechSupported(true);
 
-      // Load available voices
       const loadVoices = () => {
         const voices = synthRef.current.getVoices();
         setAvailableVoices(voices);
 
-        // Find a good default voice
-        const preferredVoice =
-          voices.find(
-            (voice) =>
-              voice.name.includes("Google") && voice.lang.includes("en")
-          ) ||
-          voices.find((voice) => voice.lang.includes("en")) ||
-          voices[0];
+        // Find the best default voice
+        const preferredVoices = [
+          "Google UK English Female",
+          "Google US English Female", 
+          "Microsoft Zira - English (United States)",
+          "Alex",
+          "Samantha"
+        ];
 
-        if (preferredVoice) {
-          setTtsSettings((prev) => ({ ...prev, voice: preferredVoice.name }));
+        let selectedVoice = voices.find(voice => 
+          preferredVoices.some(preferred => voice.name.includes(preferred))
+        );
+
+        if (!selectedVoice) {
+          selectedVoice = voices.find(voice => 
+            voice.lang.includes("en") && voice.name.toLowerCase().includes("female")
+          );
+        }
+
+        if (!selectedVoice) {
+          selectedVoice = voices.find(voice => voice.lang.includes("en"));
+        }
+
+        if (selectedVoice) {
+          setTtsSettings(prev => ({ ...prev, voice: selectedVoice.name }));
         }
       };
 
-      // Load voices immediately and on voiceschanged event
       loadVoices();
       synthRef.current.addEventListener("voiceschanged", loadVoices);
     }
 
     // Initialize Speech Recognition
     if ("webkitSpeechRecognition" in window || "SpeechRecognition" in window) {
-      const SpeechRecognition =
-        window.webkitSpeechRecognition || window.SpeechRecognition;
+      const SpeechRecognition = window.webkitSpeechRecognition || window.SpeechRecognition;
       recognitionRef.current = new SpeechRecognition();
       recognitionRef.current.continuous = false;
       recognitionRef.current.interimResults = false;
@@ -195,86 +110,153 @@ const AITestPage = () => {
     checkAIHealth();
     loadQueryHistory();
 
-    // Auto-refresh health status every 30 seconds
     const healthInterval = setInterval(checkAIHealth, 30000);
-
-    return () => clearInterval(healthInterval);
+    return () => {
+      clearInterval(healthInterval);
+      if (synthRef.current) {
+        synthRef.current.removeEventListener("voiceschanged", () => {});
+      }
+    };
   }, []);
 
-  // Enhanced TTS function with multiple voice options
-  const speakText = useCallback(
-    (text) => {
-      try {
-        if (!isVoiceEnabled || !synthRef.current) {
-          return;
-        }
+  // Enhanced TTS function with multiple options
+  const speakText = useCallback(async (text) => {
+    if (!text || isSpeaking) return;
+    
+    setIsSpeaking(true);
 
-        // Stop any current speech
-        if (currentUtteranceRef.current) {
-          synthRef.current.cancel();
-        }
+    if (ttsSettings.useOpenAI) {
+      // OpenAI TTS (if user wants premium quality)
+      await speakWithOpenAI(text);
+    } else {
+      // Browser TTS (default, more reliable)
+      speakWithBrowser(text);
+    }
+  }, [isSpeaking, ttsSettings]);
 
-        // Create new utterance
-        const utterance = new SpeechSynthesisUtterance(text);
-
-        // Find selected voice
-        const voices = synthRef.current.getVoices();
-        const selectedVoice =
-          voices.find((voice) => voice.name === ttsSettings.voice) || voices[0];
-
-        if (selectedVoice) {
-          utterance.voice = selectedVoice;
-        }
-
-        // Apply settings
-        utterance.rate = ttsSettings.rate;
-        utterance.pitch = ttsSettings.pitch;
-        utterance.volume = ttsSettings.volume;
-
-        // Event handlers
-        utterance.onstart = () => {
-          setIsSpeaking(true);
-          currentUtteranceRef.current = utterance;
-          toast.success("🔊 AI is speaking...");
-        };
-
-        utterance.onend = () => {
-          setIsSpeaking(false);
-          currentUtteranceRef.current = null;
-          toast.info("🔇 Speech completed");
-        };
-
-        utterance.onerror = (event) => {
-          console.error("Speech synthesis error:", event);
-          setIsSpeaking(false);
-          currentUtteranceRef.current = null;
-          toast.error("Speech synthesis failed");
-        };
-
-        // Speak the text
-        synthRef.current.speak(utterance);
-      } catch (error) {
-        console.error("TTS Error:", error);
-        toast.error("Text-to-speech failed");
+  // Browser TTS (Primary method)
+  const speakWithBrowser = useCallback((text) => {
+    try {
+      if (!synthRef.current) {
+        toast.error("Speech synthesis not supported");
+        setIsSpeaking(false);
+        return;
       }
-    },
-    [isVoiceEnabled, ttsSettings]
-  );
 
-  // Stop speech function
+      // Stop any current speech
+      synthRef.current.cancel();
+
+      const utterance = new SpeechSynthesisUtterance(text);
+      const voices = synthRef.current.getVoices();
+      const selectedVoice = voices.find(voice => voice.name === ttsSettings.voice);
+
+      if (selectedVoice) {
+        utterance.voice = selectedVoice;
+      }
+
+      utterance.rate = ttsSettings.rate;
+      utterance.pitch = ttsSettings.pitch;
+      utterance.volume = ttsSettings.volume;
+
+      utterance.onstart = () => {
+        currentUtteranceRef.current = utterance;
+        toast.success("🔊 AI is speaking...");
+      };
+
+      utterance.onend = () => {
+        setIsSpeaking(false);
+        currentUtteranceRef.current = null;
+        toast.info("🔇 Speech completed");
+      };
+
+      utterance.onerror = (event) => {
+        console.error("Speech synthesis error:", event);
+        setIsSpeaking(false);
+        currentUtteranceRef.current = null;
+        toast.error("Speech synthesis failed");
+      };
+
+      synthRef.current.speak(utterance);
+    } catch (error) {
+      console.error("Browser TTS Error:", error);
+      setIsSpeaking(false);
+      toast.error("Text-to-speech failed");
+    }
+  }, [ttsSettings]);
+
+  // OpenAI TTS (Premium option)
+  const speakWithOpenAI = useCallback(async (text) => {
+    try {
+      toast.info("🎙️ Generating premium AI voice...");
+
+      // Call your backend to generate OpenAI TTS
+      const response = await fetch('/api/ai/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          text, 
+          voice: 'nova', // or alloy, echo, fable, onyx, shimmer
+          speed: ttsSettings.rate 
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error('OpenAI TTS failed');
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      audioRef.current = audio;
+
+      audio.volume = ttsSettings.volume;
+      audio.onloadeddata = () => toast.success("🔊 AI is speaking...");
+      audio.onended = () => {
+        setIsSpeaking(false);
+        URL.revokeObjectURL(audioUrl);
+        toast.info("🔇 Speech completed");
+      };
+      audio.onerror = () => {
+        setIsSpeaking(false);
+        URL.revokeObjectURL(audioUrl);
+        toast.error("Audio playback failed, using browser TTS");
+        speakWithBrowser(text); // Fallback
+      };
+
+      await audio.play();
+    } catch (error) {
+      console.error("OpenAI TTS Error:", error);
+      toast.info("Using browser TTS instead");
+      speakWithBrowser(text); // Fallback
+    }
+  }, [ttsSettings, speakWithBrowser]);
+
   const stopSpeech = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    
     if (synthRef.current) {
       synthRef.current.cancel();
-      setIsSpeaking(false);
-      currentUtteranceRef.current = null;
-      toast.info("🔇 Speech stopped");
     }
+    
+    if (currentUtteranceRef.current) {
+      currentUtteranceRef.current = null;
+    }
+    
+    setIsSpeaking(false);
+    toast.info("Speech stopped by user.");
   }, []);
 
-  // Start voice recognition
   const startListening = useCallback(() => {
     if (!recognitionRef.current) {
       toast.error("🎤 Speech recognition not supported in this browser");
+      return;
+    }
+
+    if (isListening) {
+      recognitionRef.current.stop();
       return;
     }
 
@@ -287,7 +269,7 @@ const AITestPage = () => {
       setIsListening(false);
       toast.error("🎤 Could not start speech recognition");
     }
-  }, []);
+  }, [isListening]);
 
   const fetchAICapabilities = useCallback(async () => {
     try {
@@ -322,20 +304,16 @@ const AITestPage = () => {
 
     setLoading(true);
     setResponse("");
-    stopSpeech(); // Stop any current speech
+    stopSpeech();
 
     try {
       toast.info("🤖 AI is processing your request...");
-
-      const data = await queryAI({
-        question: question.trim(),
-      });
+      const data = await queryAI({ question: question.trim() });
 
       if (data.success) {
         const aiResponse = data.response || "No response from AI";
         setResponse(aiResponse);
 
-        // Add to query history
         const historyItem = {
           id: Date.now(),
           question: question.trim(),
@@ -350,9 +328,9 @@ const AITestPage = () => {
 
         toast.success("✅ AI response received!");
 
-        // Auto-speak if voice is enabled
+        // Auto-speak response if voice is enabled
         if (isVoiceEnabled) {
-          setTimeout(() => speakText(aiResponse), 1000);
+          setTimeout(() => speakText(aiResponse), 500);
         }
       } else {
         const errorMessage = data.message || "Failed to get AI response";
@@ -361,39 +339,11 @@ const AITestPage = () => {
       }
     } catch (error) {
       console.error("AI query failed:", error);
-      const errorMessage =
-        "Could not connect to AI service. Please check your connection.";
+      const errorMessage = "Could not connect to AI service. Please check your connection.";
       setResponse(`❌ ${errorMessage}`);
       toast.error(`❌ ${errorMessage}`);
     } finally {
       setLoading(false);
-    }
-  };
-
-  const handleSampleQuestion = (sampleQ) => {
-    setQuestion(sampleQ);
-    setActiveTab("query");
-    // Smooth scroll to query section
-    setTimeout(() => {
-      document.querySelector(".query-section")?.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-    }, 100);
-    toast.info(`📝 Sample question selected: "${sampleQ.substring(0, 30)}..."`);
-  };
-
-  const clearResponse = () => {
-    setResponse("");
-    setQuestion("");
-    stopSpeech();
-    toast.info("🗑️ Cleared response");
-  };
-
-  const copyResponse = () => {
-    if (response) {
-      navigator.clipboard.writeText(response);
-      toast.success("📋 Response copied to clipboard!");
     }
   };
 
@@ -416,504 +366,324 @@ const AITestPage = () => {
     }
   };
 
-  const clearHistory = () => {
-    setQueryHistory([]);
-    localStorage.removeItem("ai-query-history");
-    toast.success("🗑️ Query history cleared!");
+  const clearResponse = () => {
+    setResponse("");
+    setQuestion("");
+    stopSpeech();
+    toast.info("🗑️ Cleared response");
   };
 
-  const formatTimestamp = (timestamp) => {
-    return new Date(timestamp).toLocaleString();
+  const copyResponse = () => {
+    if (response) {
+      navigator.clipboard.writeText(response);
+      toast.success("📋 Response copied to clipboard!");
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 text-white">
-      <div className="relative z-10 container mx-auto px-4 py-8">
-        {/* Voice Settings Panel - Show when voice is enabled */}
-        {/* {isVoiceEnabled && (
-          <div className="mb-8 max-w-4xl mx-auto">
-            <div className="bg-white/10 backdrop-blur-md rounded-xl p-4 border border-white/20">
-              <div className="flex items-center gap-4 flex-wrap">
-                <div className="flex items-center gap-2">
-                  <Settings className="w-5 h-5 text-purple-400" />
-                  <span className="text-sm font-semibold">Voice Settings:</span>
-                </div>
-
-                <select
-                  value={ttsSettings.voice}
-                  onChange={(e) =>
-                    setTtsSettings((prev) => ({
-                      ...prev,
-                      voice: e.target.value,
-                    }))
-                  }
-                  className="bg-white/10 border border-white/20 rounded px-3 py-1 text-sm text-white"
-                >
-                  {availableVoices.map((voice, idx) => (
-                    <option
-                      key={idx}
-                      value={voice.name}
-                      className="bg-gray-800"
-                    >
-                      {voice.name} ({voice.lang})
-                    </option>
-                  ))}
-                </select>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">Speed:</span>
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="2"
-                    step="0.1"
-                    value={ttsSettings.rate}
-                    onChange={(e) =>
-                      setTtsSettings((prev) => ({
-                        ...prev,
-                        rate: parseFloat(e.target.value),
-                      }))
-                    }
-                    className="w-20"
-                  />
-                  <span className="text-sm w-8">{ttsSettings.rate}x</span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-sm">Pitch:</span>
-                  <input
-                    type="range"
-                    min="0.5"
-                    max="2"
-                    step="0.1"
-                    value={ttsSettings.pitch}
-                    onChange={(e) =>
-                      setTtsSettings((prev) => ({
-                        ...prev,
-                        pitch: parseFloat(e.target.value),
-                      }))
-                    }
-                    className="w-20"
-                  />
-                  <span className="text-sm w-8">{ttsSettings.pitch}</span>
-                </div>
-              </div>
-            </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100 dark:from-gray-900 dark:via-blue-900 dark:to-indigo-900 p-4 transition-all duration-300">
+      <div className="max-w-7xl mx-auto">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <div className="flex items-center justify-center gap-3 mb-4">
+            <Brain className="h-12 w-12 text-blue-600 dark:text-blue-400" />
+            <TextType
+              text="AI Testing Dashboard"
+              className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent"
+            />
           </div>
-        )} */}
+          <p className="text-gray-600 dark:text-gray-300 text-lg max-w-2xl mx-auto">
+            Advanced AI Query Interface with Voice Integration
+          </p>
+        </div>
 
         {/* AI Health Status */}
-        <div className="mb-8 flex justify-center">
-          <div
-            className={`flex items-center gap-3 px-6 py-4 rounded-2xl backdrop-blur-md border transition-all transform hover:scale-105 ${
-              aiHealth?.status === "healthy"
-                ? "bg-green-500/20 border-green-400/30 text-green-300 shadow-lg shadow-green-500/20"
-                : "bg-red-500/20 border-red-400/30 text-red-300 shadow-lg shadow-red-500/20"
-            }`}
-          >
-            <div className="relative">
-              {aiHealth?.status === "healthy" ? (
-                <CheckCircle className="w-6 h-6" />
-              ) : (
-                <AlertCircle className="w-6 h-6" />
-              )}
-              <div
-                className={`absolute inset-0 rounded-full ${
-                  aiHealth?.status === "healthy" ? "bg-green-400" : "bg-red-400"
-                } opacity-20 animate-ping`}
-              ></div>
-            </div>
-
-            <div className="flex flex-col">
-              <span className="font-semibold">
-                AI System: {aiHealth?.status || "Checking..."}
-              </span>
-              <span className="text-xs opacity-75">Audio: Frontend TTS</span>
-            </div>
-
-            <button
-              onClick={checkAIHealth}
-              className="ml-2 p-2 hover:bg-white/10 rounded-full transition-colors group"
-              title="Refresh health status"
-            >
-              <RefreshCw className="w-5 h-5 group-hover:rotate-180 transition-transform duration-300" />
-            </button>
+        <div className="mb-6 flex justify-center">
+          <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-medium ${
+            aiHealth?.status === 'healthy' 
+              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300'
+              : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300'
+          }`}>
+            {aiHealth?.status === 'healthy' ? (
+              <CheckCircle className="h-4 w-4" />
+            ) : (
+              <AlertCircle className="h-4 w-4" />
+            )}
+            AI Status: {aiHealth?.status || 'Unknown'} • Model: {aiHealth?.model || 'Groq'}
           </div>
         </div>
 
-        {/* Navigation Tabs */}
-        <div className="flex justify-center mb-8">
-          <div className="flex bg-white/10 backdrop-blur-md rounded-2xl p-1 shadow-xl">
-            {[
-              {
-                id: "query",
-                label: "AI Query",
-                icon: MessageSquare,
-                count: null,
-              },
-              {
-                id: "history",
-                label: "History",
-                icon: Clock,
-                count: queryHistory.length,
-              },
-              {
-                id: "capabilities",
-                label: "Capabilities",
-                icon: Zap,
-                count: null,
-              },
-            ].map((tab) => {
-              const Icon = tab.icon;
-              return (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          {/* Voice Settings Panel */}
+          <div className="lg:col-span-4">
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Settings className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+                  <h3 className="font-semibold text-gray-900 dark:text-white">Voice Settings</h3>
+                </div>
                 <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`relative flex items-center gap-2 px-8 py-4 rounded-xl transition-all font-semibold ${
-                    activeTab === tab.id
-                      ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg transform scale-105"
-                      : "text-gray-300 hover:text-white hover:bg-white/10"
+                  onClick={() => setIsVoiceEnabled(!isVoiceEnabled)}
+                  className={`p-2 rounded-lg transition-all duration-200 ${
+                    isVoiceEnabled 
+                      ? 'bg-green-100 text-green-600 dark:bg-green-900 dark:text-green-400'
+                      : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
                   }`}
                 >
-                  <Icon className="w-5 h-5" />
-                  {tab.label}
-                  {tab.count !== null && tab.count > 0 && (
-                    <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center">
-                      {tab.count > 99 ? "99+" : tab.count}
-                    </span>
-                  )}
+                  {isVoiceEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
                 </button>
-              );
-            })}
-          </div>
-        </div>
+              </div>
 
-        {/* Main Content */}
-        <div className="max-w-7xl mx-auto">
-          {activeTab === "query" && (
-            <div className="grid lg:grid-cols-3 gap-8">
-              {/* Sample Questions Sidebar */}
-              <div className="space-y-6">
-                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 shadow-xl">
-                  <div className="flex items-center gap-2 mb-6">
-                    <Star className="text-yellow-400 w-6 h-6" />
-                    <h3 className="text-xl font-bold">Sample Questions</h3>
+              {isVoiceEnabled && (
+                <div className="space-y-4">
+                  {/* TTS Method Toggle */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Voice Quality
+                    </label>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setTtsSettings(prev => ({ ...prev, useOpenAI: false }))}
+                        className={`flex-1 px-3 py-2 text-xs rounded-lg transition-all ${
+                          !ttsSettings.useOpenAI
+                            ? 'bg-blue-500 text-white'
+                            : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                        }`}
+                      >
+                        Browser (Fast)
+                      </button>
+                      <button
+                        onClick={() => setTtsSettings(prev => ({ ...prev, useOpenAI: true }))}
+                        className={`flex-1 px-3 py-2 text-xs rounded-lg transition-all ${
+                          ttsSettings.useOpenAI
+                            ? 'bg-purple-500 text-white'
+                            : 'bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-400'
+                        }`}
+                      >
+                        AI (Premium)
+                      </button>
+                    </div>
                   </div>
 
-                  <div className="space-y-4">
-                    {sampleQuestions.map((category, idx) => {
-                      const Icon = category.icon;
-                      return (
-                        <div key={idx} className="space-y-3">
-                          <div
-                            className={`flex items-center gap-3 p-3 rounded-xl ${category.gradient} border ${category.border}`}
-                          >
-                            <Icon className="w-5 h-5" />
-                            <h4 className="font-semibold text-sm">
-                              {category.category}
-                            </h4>
-                          </div>
+                  {/* Voice Selection */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Voice
+                    </label>
+                    <select
+                      value={ttsSettings.voice}
+                      onChange={(e) => setTtsSettings(prev => ({ ...prev, voice: e.target.value }))}
+                      className="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                    >
+                      {availableVoices.map((voice) => (
+                        <option key={voice.name} value={voice.name}>
+                          {voice.name} ({voice.lang})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                          <div className="grid gap-2 pl-2">
-                            {category.questions.slice(0, 4).map((q, qIdx) => (
-                              <button
-                                key={qIdx}
-                                onClick={() => handleSampleQuestion(q)}
-                                className="group text-left p-3 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-gray-300 hover:text-white transition-all border border-transparent hover:border-purple-400/30 hover:shadow-lg"
-                                disabled={loading}
-                              >
-                                <div className="flex items-center gap-2">
-                                  <div className="w-1 h-1 bg-purple-400 rounded-full group-hover:w-2 group-hover:h-2 transition-all"></div>
-                                  {q}
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        </div>
-                      );
-                    })}
+                  {/* Speed Control */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Speed: {ttsSettings.rate}x
+                    </label>
+                    <input
+                      type="range"
+                      min="0.5"
+                      max="2.0"
+                      step="0.1"
+                      value={ttsSettings.rate}
+                      onChange={(e) => setTtsSettings(prev => ({ ...prev, rate: parseFloat(e.target.value) }))}
+                      className="w-full"
+                    />
+                  </div>
+
+                  {/* Volume Control */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                      Volume: {Math.round(ttsSettings.volume * 100)}%
+                    </label>
+                    <input
+                      type="range"
+                      min="0"
+                      max="1"
+                      step="0.1"
+                      value={ttsSettings.volume}
+                      onChange={(e) => setTtsSettings(prev => ({ ...prev, volume: parseFloat(e.target.value) }))}
+                      className="w-full"
+                    />
+                  </div>
+
+                  {/* Test Voice Button */}
+                  <button
+                    onClick={() => speakText("Hello! This is how your AI assistant sounds.")}
+                    disabled={isSpeaking}
+                    className="w-full px-4 py-2 bg-blue-100 text-blue-700 rounded-lg hover:bg-blue-200 dark:bg-blue-900 dark:text-blue-300 transition-colors duration-200 disabled:opacity-50"
+                  >
+                    {isSpeaking ? "Speaking..." : "Test Voice"}
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Main Query Interface */}
+          <div className="lg:col-span-8 space-y-6">
+            {/* Query Form */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center gap-3 mb-6">
+                <MessageSquare className="h-6 w-6 text-blue-600" />
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                  AI Query Interface
+                </h3>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="relative">
+                  <textarea
+                    value={question}
+                    onChange={(e) => setQuestion(e.target.value)}
+                    placeholder="Ask anything about your attendance data..."
+                    className="w-full p-4 border border-gray-300 dark:border-gray-600 rounded-xl bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-500 dark:placeholder-gray-400 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200 resize-none"
+                    rows="4"
+                    disabled={loading}
+                  />
+                  <div className="absolute bottom-4 right-4 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={startListening}
+                      disabled={loading || !speechSupported}
+                      className={`p-2 rounded-lg transition-all duration-200 ${
+                        isListening
+                          ? 'bg-red-100 text-red-600 dark:bg-red-900 dark:text-red-400 animate-pulse'
+                          : 'bg-blue-100 text-blue-600 dark:bg-blue-900 dark:text-blue-400 hover:bg-blue-200 dark:hover:bg-blue-800'
+                      } ${!speechSupported ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+                    </button>
                   </div>
                 </div>
 
-                {/* Voice Controls Card */}
-                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 shadow-xl">
-                  <div className="flex items-center gap-2 mb-4">
-                    <Waves className="text-purple-400 w-5 h-5" />
-                    <h3 className="text-lg font-bold">Voice Controls</h3>
-                  </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="submit"
+                    disabled={loading || !question.trim()}
+                    className="flex-1 flex items-center justify-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 transform hover:scale-[1.02]"
+                  >
+                    {loading ? (
+                      <>
+                        <Loader2 className="h-5 w-5 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <Send className="h-5 w-5" />
+                        Ask AI
+                      </>
+                    )}
+                  </button>
 
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-300">Voice Input</span>
+                  <button
+                    type="button"
+                    onClick={clearResponse}
+                    className="px-4 py-3 bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400 rounded-xl hover:bg-gray-200 dark:hover:bg-gray-600 transition-all duration-200"
+                  >
+                    <Trash2 className="h-5 w-5" />
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Response Section */}
+            <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-6 border border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <Bot className="h-6 w-6 text-green-600" />
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white">
+                    AI Response
+                  </h3>
+                </div>
+                <div className="flex items-center gap-2">
+                  {response && isVoiceEnabled && (
+                    <div className="flex items-center gap-2">
                       <button
-                        onClick={startListening}
-                        disabled={isListening || loading}
-                        className={`p-2 rounded-lg transition-colors ${
-                          isListening
-                            ? "bg-red-500 text-white animate-pulse"
-                            : "bg-purple-500/20 hover:bg-purple-500/30 text-purple-300"
-                        }`}
+                        onClick={() => speakText(response)}
+                        disabled={isSpeaking}
+                        className="p-2 bg-green-100 dark:bg-green-900 text-green-600 dark:text-green-400 rounded-lg hover:bg-green-200 dark:hover:bg-green-800 transition-all duration-200"
+                        title="Speak Response"
                       >
-                        {isListening ? (
-                          <MicOff className="w-4 h-4" />
-                        ) : (
-                          <Mic className="w-4 h-4" />
-                        )}
+                        <Volume2 className="h-4 w-4" />
                       </button>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-gray-300">
-                        Voice Response
-                      </span>
-                      <button
-                        onClick={() => setIsVoiceEnabled(!isVoiceEnabled)}
-                        className={`p-2 rounded-lg transition-colors ${
-                          isVoiceEnabled
-                            ? "bg-green-500/20 hover:bg-green-500/30 text-green-300"
-                            : "bg-gray-500/20 hover:bg-gray-500/30 text-gray-300"
-                        }`}
-                      >
-                        {isVoiceEnabled ? (
-                          <Volume2 className="w-4 h-4" />
-                        ) : (
-                          <VolumeX className="w-4 h-4" />
-                        )}
-                      </button>
-                    </div>
-
-                    {isSpeaking && (
-                      <div className="flex items-center justify-between p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
-                        <div className="flex items-center gap-2">
-                          <Volume2 className="w-4 h-4 text-green-400 animate-pulse" />
-                          <span className="text-sm text-green-300">
-                            AI Speaking...
-                          </span>
-                        </div>
+                      {isSpeaking && (
                         <button
                           onClick={stopSpeech}
-                          className="p-1 bg-red-500/20 hover:bg-red-500/30 rounded text-red-300"
+                          className="p-2 bg-red-100 dark:bg-red-900 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-200 dark:hover:bg-red-800 transition-all duration-200"
+                          title="Stop Speech"
                         >
-                          <XCircle className="w-4 h-4" />
+                          <Pause className="h-4 w-4" />
                         </button>
-                      </div>
-                    )}
-
-                    <div className="text-xs text-gray-400 p-2 bg-blue-500/10 rounded">
-                      💡 Uses high-quality browser TTS with customizable voice
-                      settings
+                      )}
                     </div>
-                  </div>
+                  )}
+                  {response && (
+                    <button
+                      onClick={copyResponse}
+                      className="p-2 bg-blue-100 dark:bg-blue-900 text-blue-600 dark:text-blue-400 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-800 transition-all duration-200"
+                      title="Copy Response"
+                    >
+                      <Copy className="h-4 w-4" />
+                    </button>
+                  )}
                 </div>
               </div>
 
-              {/* Query Section */}
-              <div className="lg:col-span-2 space-y-6 query-section">
-                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 shadow-xl">
-                  <div className="flex items-center gap-3 mb-6">
-                    <Sparkles className="text-purple-400 w-7 h-7 animate-spin-slow" />
-                    <h2 className="text-2xl font-bold">Ask AI Assistant</h2>
-                  </div>
-
-                  <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="min-h-[200px] max-h-[400px] overflow-y-auto">
+                {loading ? (
+                  <div className="flex flex-col items-center justify-center py-12 text-center">
                     <div className="relative">
-                      <textarea
-                        value={question}
-                        onChange={(e) => setQuestion(e.target.value)}
-                        placeholder="Ask me anything about attendance data..."
-                        className="w-full p-6 bg-white/10 border border-white/20 rounded-xl text-white placeholder-gray-400 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-400/20 resize-none transition-all text-lg"
-                        rows={5}
-                        disabled={loading}
-                      />
-                      <div className="absolute bottom-4 right-4 flex gap-2">
-                        {speechSupported && (
-                          <button
-                            type="button"
-                            onClick={startListening}
-                            disabled={isListening || loading}
-                            className={`p-3 rounded-lg transition-colors shadow-lg ${
-                              isListening
-                                ? "bg-red-500 text-white animate-pulse shadow-red-500/25"
-                                : "bg-purple-500/20 hover:bg-purple-500/30 text-purple-300 hover:shadow-purple-500/25"
-                            }`}
-                            title={isListening ? "Listening..." : "Voice input"}
-                          >
-                            {isListening ? (
-                              <MicOff className="w-5 h-5" />
-                            ) : (
-                              <Mic className="w-5 h-5" />
-                            )}
-                          </button>
-                        )}
-                      </div>
+                      <Loader2 className="h-12 w-12 text-blue-600 animate-spin" />
                     </div>
-
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-6">
-                        <label className="flex items-center gap-3 cursor-pointer group">
-                          <input
-                            type="checkbox"
-                            checked={isVoiceEnabled}
-                            onChange={(e) =>
-                              setIsVoiceEnabled(e.target.checked)
-                            }
-                            className="w-4 h-4 rounded border-gray-300"
-                          />
-                          <span className="text-gray-300 group-hover:text-white transition-colors">
-                            Enable voice response
-                          </span>
-                          {isVoiceEnabled ? (
-                            <Volume2 className="w-5 h-5 text-green-400" />
-                          ) : (
-                            <VolumeX className="w-5 h-5 text-gray-400" />
-                          )}
-                        </label>
-
-                        <div className="text-sm text-gray-400">
-                          {question.length}/1000 characters
-                        </div>
-                      </div>
-
-                      <div className="flex gap-3">
-                        <button
-                          type="button"
-                          onClick={clearResponse}
-                          className="px-4 py-2 bg-gray-500/20 hover:bg-gray-500/30 rounded-lg text-gray-300 hover:text-white transition-colors shadow-lg"
-                          disabled={loading}
-                        >
-                          <XCircle className="w-5 h-5" />
-                        </button>
-
-                        <button
-                          type="submit"
-                          disabled={loading || !question.trim()}
-                          className="px-8 py-3 bg-gradient-to-r from-purple-500 to-pink-500 hover:from-purple-600 hover:to-pink-600 rounded-lg font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-xl transform hover:scale-105"
-                        >
-                          {loading ? (
-                            <>
-                              <Loader2 className="w-5 h-5 animate-spin" />
-                              Processing...
-                            </>
-                          ) : (
-                            <>
-                              <Send className="w-5 h-5" />
-                              Ask AI
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    </div>
-                  </form>
-                </div>
-
-                {/* Response Section */}
-                <div className="bg-white/10 backdrop-blur-md rounded-2xl p-6 border border-white/20 min-h-[500px] shadow-xl">
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-3">
-                      <Brain className="text-blue-400 w-7 h-7" />
-                      <h2 className="text-2xl font-bold">AI Response</h2>
-                    </div>
-
-                    {response && (
-                      <div className="flex gap-2">
-                        {isVoiceEnabled && (
-                          <button
-                            onClick={() =>
-                              isSpeaking ? stopSpeech() : speakText(response)
-                            }
-                            className={`p-3 rounded-lg transition-colors shadow-lg ${
-                              isSpeaking
-                                ? "bg-red-500/20 hover:bg-red-500/30 text-red-300 shadow-red-500/25"
-                                : "bg-green-500/20 hover:bg-green-500/30 text-green-300 shadow-green-500/25"
-                            }`}
-                            title={
-                              isSpeaking ? "Stop speaking" : "Speak response"
-                            }
-                          >
-                            {isSpeaking ? (
-                              <Pause className="w-5 h-5" />
-                            ) : (
-                              <Play className="w-5 h-5" />
-                            )}
-                          </button>
-                        )}
-
-                        <button
-                          onClick={copyResponse}
-                          className="p-3 bg-blue-500/20 hover:bg-blue-500/30 rounded-lg text-blue-300 hover:text-blue-200 transition-colors shadow-lg"
-                          title="Copy response"
-                        >
-                          <Copy className="w-5 h-5" />
-                        </button>
-                      </div>
-                    )}
+                    <h4 className="text-lg font-semibold text-gray-900 dark:text-white mt-4">
+                      Groq AI is analyzing your request...
+                    </h4>
+                    <p className="text-gray-600 dark:text-gray-400 mt-2">
+                      Using advanced analytics
+                    </p>
                   </div>
-
-                  <div className="min-h-[350px] bg-black/30 rounded-xl p-6 font-mono text-sm overflow-auto border border-white/10">
-                    {loading ? (
-                      <div className="flex items-center justify-center h-full">
-                        <div className="text-center">
-                          <div className="relative mb-6">
-                            <Loader2 className="w-12 h-12 animate-spin mx-auto text-purple-400" />
-                            <div className="absolute inset-0 bg-purple-400 rounded-full opacity-20 animate-ping"></div>
-                          </div>
-                          <p className="text-gray-300 text-lg mb-2">
-                            AI is analyzing your request...
-                          </p>
-                          <p className="text-gray-500 text-sm">
-                            This may take a few seconds
-                          </p>
-                          <div className="flex justify-center gap-1 mt-4">
-                            <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce"></div>
-                            <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce animation-delay-100"></div>
-                            <div className="w-2 h-2 bg-purple-400 rounded-full animate-bounce animation-delay-200"></div>
-                          </div>
-                        </div>
-                      </div>
-                    ) : response ? (
-                      <div className="space-y-4">
-                        <div className="whitespace-pre-wrap text-gray-200 leading-relaxed">
-                          <TextType
-                            text={[response]}
-                            typingSpeed={20}
-                            pauseDuration={1500}
-                            showCursor={true}
-                            cursorCharacter="|"
-                          />
-                        </div>
-
-                        <div className="flex items-center gap-4 pt-4 border-t border-white/10 text-xs text-gray-400">
-                          <span>
-                            Response generated at{" "}
-                            {new Date().toLocaleTimeString()}
-                          </span>
-                          <span>•</span>
-                          <span>{response.split(" ").length} words</span>
-                          <span>•</span>
-                          <span>Frontend TTS Ready</span>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-center h-full text-gray-500">
-                        <div className="text-center">
-                          <MessageSquare className="w-16 h-16 mx-auto mb-6 opacity-50" />
-                          <p className="text-xl mb-2">
-                            Ask a question to see AI response here
-                          </p>
-                          <p className="text-sm opacity-75">
-                            Try one of the sample questions on the left
-                          </p>
-                        </div>
-                      </div>
-                    )}
+                ) : response ? (
+                  <div className="prose prose-gray dark:prose-invert max-w-none">
+                    <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 whitespace-pre-wrap">
+                      {response}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="flex items-center justify-center py-12 text-gray-500 dark:text-gray-400">
+                    <div className="text-center">
+                      <MessageSquare className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p className="text-lg">Ask a question to see AI response here</p>
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          )}
 
-          {/* History and Capabilities tabs remain the same... */}
-          {/* ... (keeping the existing history and capabilities code) ... */}
+              {/* Speech Status */}
+              {isSpeaking && (
+                <div className="mt-4 flex items-center gap-2 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-700">
+                  <Waves className="h-5 w-5 text-blue-600 dark:text-blue-400 animate-pulse" />
+                  <span className="text-blue-700 dark:text-blue-300 font-medium">
+                    AI is speaking...
+                  </span>
+                  <button
+                    onClick={stopSpeech}
+                    className="ml-auto px-3 py-1 bg-blue-600 text-white text-sm rounded-md hover:bg-blue-700 transition-colors duration-200"
+                  >
+                    Stop
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     </div>

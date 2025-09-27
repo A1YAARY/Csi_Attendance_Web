@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useAuth } from "../../context/authStore";
 import { toast } from "react-toastify";
 import SuccessPopup from "./SuccessPopUp";
@@ -8,8 +8,17 @@ const Reports = () => {
   const [loading, setLoading] = useState(false);
   const { user, getAuthHeaders } = useAuth();
   const [showPopup, setShowPopup] = useState(false);
+  const [orginizationcodemain, setOrginizationcodemain] = useState(localStorage.getItem("organizationcode") || "");
+  useEffect(() => {
+    console.log(user,orginizationcodemain);
+
+
+
+  }, [user])
+
 
   const handleSuccess = async () => {
+
     // Simulate successful action (upload/register)
     await new Promise((res) => setTimeout(res, 1000));
 
@@ -20,7 +29,8 @@ const Reports = () => {
   // Fixed: Corrected the typo and logic for organization code
   const getOrganizationCode = () => {
     // Try localStorage first, then fall back to user object
-    const storedOrgCode = localStorage.getItem("orginizationcode");
+    const storedOrgCode = localStorage.getItem("organizationcode");
+
     if (storedOrgCode) return storedOrgCode;
 
     // Fall back to user's organization information
@@ -270,21 +280,19 @@ const Reports = () => {
             <nav className="-mb-px flex space-x-8">
               <button
                 onClick={() => setActiveTab("single")}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === "single"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === "single"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  }`}
               >
                 Single User
               </button>
               <button
                 onClick={() => setActiveTab("bulk")}
-                className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                  activeTab === "bulk"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-                }`}
+                className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === "bulk"
+                  ? "border-blue-500 text-blue-600"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
+                  }`}
               >
                 Bulk Upload
               </button>
@@ -386,8 +394,8 @@ const Reports = () => {
                 </div>
               </div>
               <div className="p-4">
-      <SuccessPopup show={showPopup} message="Registered Successful!" />
-    </div>
+                <SuccessPopup show={showPopup} message="Registered Successful!" />
+              </div>
               <div className="flex justify-end">
                 <button
                   type="submit"
@@ -449,11 +457,10 @@ const Reports = () => {
 
             {/* File Upload Area */}
             <div
-              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-                dragActive
-                  ? "border-blue-400 bg-blue-50"
-                  : "border-gray-300 hover:border-gray-400"
-              }`}
+              className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${dragActive
+                ? "border-blue-400 bg-blue-50"
+                : "border-gray-300 hover:border-gray-400"
+                }`}
               onDragEnter={handleDrag}
               onDragLeave={handleDrag}
               onDragOver={handleDrag}
