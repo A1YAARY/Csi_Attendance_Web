@@ -18,6 +18,7 @@ export const Admin_Navbar = () => {
       "nav-reports",
       "nav-qr",
       "nav-ai",
+      "nav-voice",
     ];
     navIds.forEach((id) => {
       const radio = document.getElementById(id);
@@ -42,6 +43,8 @@ export const Admin_Navbar = () => {
           id === "nav-ai" &&
           (activeAdminView === "ai" || activeAdminView === "ai-test")
         ) {
+          radio.checked = true;
+        } else if (id === "nav-voice" && activeAdminView === "voice") {
           radio.checked = true;
         } else {
           radio.checked = false;
@@ -107,6 +110,21 @@ export const Admin_Navbar = () => {
       ),
       label: "AI Analytics",
     },
+    {
+      id: "nav-voice",
+      view: "voice",
+      icon: (
+        <svg
+          className="w-4 h-4 sm:w-5 sm:h-5"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+        </svg>
+      ),
+      label: "Voice Assistant",
+    },
   ];
 
   const isActiveView = (view) => {
@@ -115,6 +133,8 @@ export const Admin_Navbar = () => {
       return activeAdminView === "qr" || activeAdminView === "qrcodes";
     if (view === "ai")
       return activeAdminView === "ai" || activeAdminView === "ai-test";
+    if (view === "voice")
+      return activeAdminView === "voice";
     return activeAdminView === view;
   };
 

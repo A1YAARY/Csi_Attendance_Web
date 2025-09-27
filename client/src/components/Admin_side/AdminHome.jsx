@@ -7,6 +7,7 @@ import QRcodeView from "./QRcodeView";
 import Dashbord from "./Dashbord";
 import AITestPage from "./AITestPage";
 import Reports from "./Reports";
+import VoiceDashboard from "../VoiceInterface/VoiceDashboard";
 import { useAdminProtection } from "../../hooks/useAdminProtection";
 
 const AdminHome = () => {
@@ -246,6 +247,13 @@ const AdminHome = () => {
       case "ai":
       case "ai-test":
         return <AITestPage />;
+      case "voice":
+        return (
+          <VoiceDashboard 
+            organizationId={user?.organizationId?._id || user?.organizationId}
+            userId={user?._id}
+          />
+        );
     }
   };
 
