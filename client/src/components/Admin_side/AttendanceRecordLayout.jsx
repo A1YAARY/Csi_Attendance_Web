@@ -8,25 +8,18 @@ import {
   Clock,
   MapPin,
 } from "lucide-react";
-import { useAuth } from "../../context/authStore";
 
-
-export const AttendanceRecordLayout = ({ records: propRecords }) => {
-  const { getAdminRecords, getAdminDashboard } = useAuth();
-  const [records, setRecords] = useState([]);
+const AttendanceRecordsLayout = ({ records }) => {
   const [filteredRecords, setFilteredRecords] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
-  const [dateFilter, setDateFilter] = useState("all");
+  const [dateFilter, setDateFilter] = useState(() => {
+    const today = new Date();
+    return today.toISOString().split("T")[0]; // default to today's date YYYY-MM-DD
+  });
   const [statusFilter, setStatusFilter] = useState("all");
   const [open, setOpen] = useState(false);
-  const menuRef = useRef();
+  const menuRef = useRef(null);
 
-  useEffect(() => {
-    const data = getAdminDashboard();
-    console.log("dashboard data", data);
-  },[getAdminDashboard])
   const toggleDropdown = () => {
     setOpen(!open);
   };
@@ -38,131 +31,61 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   useEffect(() => {
-    if (propRecords && Array.isArray(propRecords)) {
-      setRecords(propRecords);
-      setFilteredRecords(propRecords);
-      setLoading(false);
-    } else {
-      fetchRecords();
-    }
-  }, [propRecords]);
-
-  // Updated filtering logic for YYYY-MM-DD format
-  useEffect(() => {
     let filtered = [...records];
 
-    // Search filter
     if (searchTerm.trim() !== "") {
+      const term = searchTerm.toLowerCase();
       filtered = filtered.filter(
         (record) =>
-          record.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          record.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          record.role?.toLowerCase().includes(searchTerm.toLowerCase())
+          record.name?.toLowerCase().includes(term) ||
+          record.department?.toLowerCase().includes(term) ||
+          record.role?.toLowerCase().includes(term)
       );
     }
 
-    // Date filter - simplified for YYYY-MM-DD format
-    if (dateFilter !== "all") {
+    if (dateFilter && dateFilter !== "all") {
       filtered = filtered.filter((record) => {
         try {
           const recordDateValue = record.date || record.createdAt;
           if (!recordDateValue) return false;
-
-          // Direct comparison for YYYY-MM-DD format
-          if (recordDateValue === dateFilter) {
-            return true;
-          }
-
-          // Fallback for ISO strings or other formats
-          const recordDate = new Date(recordDateValue);
-          const selectedDate = new Date(dateFilter);
-
-          if (isNaN(recordDate) || isNaN(selectedDate)) return false;
-
-          const recordDateString = recordDate.toISOString().split("T")[0];
-          const selectedDateString = selectedDate.toISOString().split("T")[0];
-
-          return recordDateString === selectedDateString;
-        } catch (error) {
-          console.error("Date comparison error:", error);
+          const recordDateString = recordDateValue.split("T")[0];
+          return recordDateString === dateFilter;
+        } catch {
           return false;
         }
       });
     }
-    // Status filter
-    else if (statusFilter !== "all") {
-      filtered = filtered.filter((record) =>
-        record.status?.toLowerCase() === statusFilter.toLowerCase()
+
+    if (statusFilter !== "all") {
+      filtered = filtered.filter(
+        (record) => record.status?.toLowerCase() === statusFilter.toLowerCase()
       );
     }
 
     setFilteredRecords(filtered);
-  }, [searchTerm, dateFilter, statusFilter, records]);
-
-  const fetchRecords = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const response = await getAdminRecords();
-
-      let recordsData = [];
-      if (Array.isArray(response)) {
-        recordsData = response;
-      } else if (response && response.data && Array.isArray(response.data)) {
-        recordsData = response.data;
-      } else if (response && response.records && Array.isArray(response.records)) {
-        recordsData = response.records;
-      } else if (response && response.attendanceRecords && Array.isArray(response.attendanceRecords)) {
-        recordsData = response.attendanceRecords;
-      }
-
-      setRecords(recordsData);
-      setFilteredRecords(recordsData);
-    } catch (err) {
-      console.error("Error fetching records:", err);
-      setError("Failed to fetch attendance records");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Simplified date handler - no conversion needed
-  const handleDateFilter = (e) => {
-    const newDate = e.target.value; // Already in YYYY-MM-DD format
-    setDateFilter(newDate || "all");
-    if (newDate && newDate !== "all") {
-      setStatusFilter("all");
-    }
-  };
-
-  const handleStatusFilter = (e) => {
-    const newStatus = e.target.value;
-    setStatusFilter(newStatus);
-    if (newStatus !== "all") {
-      setDateFilter("all");
-    }
-  };
+  }, [records, searchTerm, dateFilter, statusFilter]);
 
   const formatTime = (time) => {
     if (!time) return "N/A";
     try {
-      if (time.includes("AM") || time.includes("PM")) {
+      if (typeof time === "object" && time.start) return formatTime(time.start);
+      if (typeof time === "string" && (time.includes("AM") || time.includes("PM")))
         return time;
+      if (typeof time === "string") {
+        const [hoursStr, minutes] = time.split(":");
+        let hours = parseInt(hoursStr, 10);
+        const ampm = hours >= 12 ? "PM" : "AM";
+        hours = hours % 12 || 12;
+        return `${hours}:${minutes} ${ampm}`;
       }
-      const [hours, minutes] = time.split(":");
-      const hour12 = hours % 12 || 12;
-      const ampm = hours < 12 ? "AM" : "PM";
-      return `${hour12}:${minutes} ${ampm}`;
-    } catch (error) {
-      return time;
+    } catch {
+      return String(time);
     }
+    return String(time);
   };
 
   const formatDate = (date) => {
@@ -174,9 +97,15 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
         month: "short",
         day: "numeric",
       });
-    } catch (error) {
+    } catch {
       return date;
     }
+  };
+
+  const formatWorkingHours = (wh) => {
+    if (!wh || typeof wh !== "object") return "N/A";
+    return `${wh.start || "--"} - ${wh.end || "--"}${wh.timezone ? " (" + wh.timezone + ")" : ""
+      }`;
   };
 
   const getStatusColor = (status) => {
@@ -189,7 +118,6 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
       case "late":
         return "bg-yellow-100 text-yellow-800";
       case "partial":
-        return "bg-orange-100 text-orange-800";
       case "incomplete":
         return "bg-orange-100 text-orange-800";
       default:
@@ -197,57 +125,15 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="p-4 sm:p-6 bg-gray-50 min-h-[calc(100vh-64px)]">
-        <div className="max-w-7xl mx-auto">
-          <div className="bg-white rounded-lg shadow-sm p-8">
-            <div className="flex items-center justify-center">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-              <p className="ml-4 text-gray-600">Loading attendance records...</p>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="p-4 sm:p-6 bg-gray-50 min-h-[calc(100vh-64px)]">
-        <div className="max-w-7xl mx-auto">
-          <div className="bg-white rounded-lg shadow-sm p-8 text-center">
-            <div className="text-red-500 mb-4">
-              <svg className="w-16 h-16 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
-              </svg>
-            </div>
-            <p className="text-lg text-red-600 mb-4">Error Loading Records</p>
-            <p className="text-gray-600 mb-4">{error}</p>
-            <button
-              onClick={fetchRecords}
-              className="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors">
-              Retry
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const accesstoken = localStorage.getItem("accessToken");
-
   return (
     <div className="p-4 sm:p-6 bg-gray-50 min-h-[calc(100vh-64px)]">
       <div className="max-w-7xl mx-auto">
-        <div className="mb-6 sm:mb-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">
-            Attendance Records
-          </h1>
-          <p className="text-sm sm:text-base text-gray-600">
-            Track and manage employee attendance
-          </p>
-        </div>
+        <h1 className="mb-4 text-2xl sm:text-3xl font-bold text-gray-900">
+          Attendance Records
+        </h1>
+        <p className="mb-6 text-sm sm:text-base text-gray-600">
+          Track and manage employee attendance
+        </p>
 
         <div className="bg-white rounded-lg shadow-sm p-4 sm:p-6 mb-6">
           <div className="flex flex-col lg:flex-row gap-4 items-start lg:items-center justify-between">
@@ -258,133 +144,180 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
                 </div>
                 <input
                   type="text"
-                  placeholder="Search by name, department..."
+                  placeholder="Search by name, department, role..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                 />
               </div>
 
-              {/* Simplified date input - no conversion needed */}
               <div className="relative">
                 <input
                   type="date"
-                  value={dateFilter === "all" ? "" : dateFilter}
-                  onChange={handleDateFilter}
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
                   className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm cursor-pointer"
                 />
               </div>
-            </div>
 
-            <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
               <div className="relative inline-block text-left" ref={menuRef}>
-                <button className="flex items-center px-3 sm:px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm flex-1 sm:flex-initial justify-center">
-                  <Download className="w-4 h-4 mr-2" />
-                  <span onClick={toggleDropdown} className="hidden sm:inline">Export</span>
-                  <span onClick={toggleDropdown} className="sm:hidden">Export</span>
-                </button>
-
-                {open && (
-                  <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded shadow-md z-10">
-                    <ul className="py-1">
-                      <li
-                        onClick={() => { getdaily(accesstoken); }}
-                        className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
-                        Daily
-                      </li>
-                      <li
-                        onClick={() => { getWeek(accesstoken); }}
-                        className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer">
-                        Weekly
-                      </li>
-                    </ul>
-                  </div>
-                )}
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="border-0 rounded-lg focus:ring-0 focus:border-none text-sm bg-transparent font-medium text-gray-600 uppercase tracking-wide"
+                >
+                  <option value="all">All Status</option>
+                  <option value="incomplete">Incomplete</option>
+                  <option value="complete">Complete</option>
+                  <option value="present">Present</option>
+                  <option value="absent">Absent</option>
+                  <option value="late">Late</option>
+                  <option value="partial">Partial</option>
+                </select>
               </div>
             </div>
-          </div>
 
-          <div className="mt-4 pt-4 border-t border-gray-200">
-            <p className="text-sm text-gray-600">
-              Showing {filteredRecords.length} of {records.length} records
-            </p>
+            <div className="relative inline-block text-left" ref={menuRef}>
+              <button
+                onClick={toggleDropdown}
+                className="flex items-center px-3 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export
+              </button>
+              {open && (
+                <div className="absolute right-0 mt-2 w-40 bg-white border border-gray-200 rounded shadow-md z-10">
+                  <ul className="py-1">
+                    <li
+                      className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                      onClick={() => {
+                        alert("Download Daily Report");
+                        setOpen(false);
+                      }}
+                    >
+                      Daily
+                    </li>
+                    <li
+                      className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                      onClick={() => {
+                        alert("Download Weekly Report");
+                        setOpen(false);
+                      }}
+                    >
+                      Weekly
+                    </li>
+                  </ul>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
-        {filteredRecords.length > 0 ? (
+        <p className="mb-4 text-sm text-gray-600">
+          Showing {filteredRecords.length} of {records.length} records
+        </p>
+
+        {filteredRecords.length === 0 ? (
+          <div className="bg-white rounded-lg shadow-sm overflow-hidden p-8 text-center text-gray-600">
+            No attendance records found. Try adjusting your filters to see
+            results.
+          </div>
+        ) : (
           <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-            <div className="hidden lg:block overflow-x-auto">
-              <table className="w-full">
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50 border-b border-gray-200">
                   <tr>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">Name</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">Role</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">Department</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">Date</th>
                     <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">
-                      <select
-                        value={statusFilter}
-                        onChange={handleStatusFilter}
-                        className="border-0 rounded-lg focus:ring-0 focus:border-none text-sm bg-transparent font-medium text-gray-600 uppercase tracking-wide">
-                        <option value="all">All Status</option>
-                        <option value="incomplete">Incomplete</option>
-                        <option value="complete">Complete</option>
-                        <option value="present">Present</option>
-                        <option value="absent">Absent</option>
-                        <option value="late">Late</option>
-                        <option value="partial">Partial</option>
-                      </select>
+                      Name
                     </th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">Check In</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">Check Out</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">Working Hours</th>
-                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">Actions</th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">
+                      Role
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">
+                      Department
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">
+                      Date
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">
+                      Status
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">
+                      Check In
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">
+                      Check Out
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">
+                      Working Hours
+                    </th>
+                    <th className="px-6 py-4 text-left text-sm font-medium text-gray-600">
+                      Actions
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
                   {filteredRecords.map((record, index) => (
-                    <tr key={record._id || index} className="hover:bg-gray-50">
+                    <tr
+                      key={record.userId || record.id || index}
+                      className="hover:bg-gray-50 cursor-pointer"
+                    >
                       <td className="px-6 py-4">
                         <div className="flex items-center">
                           <img
-                            className="h-10 w-10 rounded-full mr-3"
                             src={`https://ui-avatars.com/api/?name=${encodeURIComponent(
                               record.name || "User"
                             )}&size=40&background=4F46E5&color=fff&rounded=true`}
-                            alt={record.name}
+                            alt={record.name || "User"}
+                            className="h-10 w-10 rounded-full mr-3"
                           />
                           <div>
-                            <p className="text-sm font-medium text-gray-900">{record.name || "N/A"}</p>
-                            <p className="text-xs text-gray-500">{record.organizationId?.slice(-6) || "N/A"}</p>
+                            <p className="text-sm font-medium text-gray-900">
+                              {record.name || "N/A"}
+                            </p>
+                            <p className="text-xs text-gray-500">
+                              {record.email || "N/A"}
+                            </p>
                           </div>
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">{record.role || "N/A"}</td>
-                      <td className="px-6 py-4 text-sm text-gray-900">{record.department || "N/A"}</td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {record.role || "N/A"}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {record.department || "N/A"}
+                      </td>
                       <td className="px-6 py-4 text-sm text-gray-900">
                         {formatDate(record.date || record.createdAt)}
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(record.status)}`}>
+                        <span
+                          className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(
+                            record.status
+                          )}`}
+                        >
                           {record.status || "N/A"}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900">
                         <div className="flex items-center">
                           <Clock className="w-4 h-4 mr-1 text-gray-400" />
-                          {formatTime(record.checkInTime)}
+                          {formatTime(record.firstCheckInIST || record.firstCheckIn)}
                         </div>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-900">
                         <div className="flex items-center">
                           <Clock className="w-4 h-4 mr-1 text-gray-400" />
-                          {formatTime(record.checkOutTime)}
+                          {formatTime(record.lastCheckOutIST || record.lastCheckOut)}
                         </div>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-900">{record.workingHours || "N/A"}</td>
-                      <td className="px-6 py-4">
-                        <button className="text-blue-600 hover:text-blue-900 text-sm font-medium">
-                          <Eye className="w-4 h-4" />
+                      <td className="px-6 py-4 text-sm text-gray-900">
+                        {formatWorkingHours(record.workingHours)}
+                      </td>
+                      <td className="px-6 py-4 text-sm text-blue-600 hover:text-blue-900 font-medium">
+                        <button>
+                          <Eye className="w-4 h-4" title="View Details" />
                         </button>
                       </td>
                     </tr>
@@ -392,95 +325,11 @@ export const AttendanceRecordLayout = ({ records: propRecords }) => {
                 </tbody>
               </table>
             </div>
-
-            <div className="lg:hidden">
-              {filteredRecords.map((record, index) => (
-                <div key={record._id || index} className="p-4 border-b border-gray-200 last:border-b-0">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center">
-                      <img
-                        className="h-10 w-10 rounded-full mr-3"
-                        src={`https://ui-avatars.com/api/?name=${encodeURIComponent(
-                          record.name || "User"
-                        )}&size=40&background=4F46E5&color=fff&rounded=true`}
-                        alt={record.name}
-                      />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">{record.name || "N/A"}</p>
-                        <p className="text-xs text-gray-500">
-                          {record.role || "N/A"} • {record.department || "N/A"}
-                        </p>
-                      </div>
-                    </div>
-                    <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${getStatusColor(record.status)}`}>
-                      {record.status || "N/A"}
-                    </span>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-3 text-xs">
-                    <div>
-                      <p className="text-gray-500 mb-1">Date</p>
-                      <p className="font-medium">{formatDate(record.date || record.createdAt)}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500 mb-1">Working Hours</p>
-                      <p className="font-medium">{record.workingHours || "N/A"}</p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500 mb-1">Check In</p>
-                      <p className="font-medium flex items-center">
-                        <Clock className="w-3 h-3 mr-1" />
-                        {formatTime(record.checkInTime)}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-500 mb-1">Check Out</p>
-                      <p className="font-medium flex items-center">
-                        <Clock className="w-3 h-3 mr-1" />
-                        {formatTime(record.checkOutTime)}
-                      </p>
-                    </div>
-                  </div>
-
-                  {record.location && (
-                    <div className="mt-3 pt-3 border-t border-gray-100">
-                      <p className="text-xs text-gray-500 flex items-center">
-                        <MapPin className="w-3 h-3 mr-1" />
-                        Location: {record.location.latitude}, {record.location.longitude}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : (
-          <div className="bg-white rounded-lg shadow-sm p-8 text-center">
-            <div className="mx-auto h-24 w-24 text-gray-400 mb-4">
-              <svg fill="none" stroke="currentColor" viewBox="0 0 24 24" className="w-full h-full">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="1" d="M9 5H7a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-              </svg>
-            </div>
-            <p className="text-lg text-gray-600 mb-2">No attendance records found</p>
-            <p className="text-sm text-gray-400">
-              {searchTerm || dateFilter !== "all" || statusFilter !== "all"
-                ? "Try adjusting your filters to see more results"
-                : "Attendance records will appear here once employees start checking in"}
-            </p>
-            {(searchTerm || dateFilter !== "all" || statusFilter !== "all") && (
-              <button
-                onClick={() => {
-                  setSearchTerm("");
-                  setDateFilter("all");
-                  setStatusFilter("all");
-                }}
-                className="mt-4 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm">
-                Clear Filters
-              </button>
-            )}
           </div>
         )}
       </div>
     </div>
   );
 };
+
+export default AttendanceRecordsLayout;

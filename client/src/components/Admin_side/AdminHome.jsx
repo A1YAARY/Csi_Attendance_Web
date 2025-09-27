@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Admin_Navbar } from "./Admin_Navbar";
 import EmployeeLayout from "./EmployeeLayout";
-import { AttendanceRecordLayout } from "./AttendanceRecordLayout";
+import  AttendanceRecordLayout  from "./AttendanceRecordLayout";
 import { useAuth } from "../../context/authStore"; // ✅ FIXED IMPORT
 import QRcodeView from "./QRcodeView";
 import AITestPage from "./AITestPage";
@@ -17,7 +17,6 @@ const AdminHome = () => {
     setAdminView,
     getAdminRecords,
     getTodaysAttendance,
-    getAllUsers, // ✅ CORRECTED METHOD NAME (was getallusers)
     user,
     getAdminDashboard,
     loading: authLoading
@@ -27,7 +26,6 @@ const AdminHome = () => {
   const [records, setRecords] = useState([]);
   const [emploies, setallemploies] = useState([]);
   const [todaysdata, settodaysdata] = useState([]);
-  const [allusers, setallusers] = useState([]);
   const [dataLoading, setDataLoading] = useState(true);
   const [dashboard, setDashboard] = useState(null);
   const [error, setError] = useState(null);
@@ -49,7 +47,7 @@ const AdminHome = () => {
   const fetchAdminRecords = useCallback(async () => {
     try {
       const data = await getAdminRecords();
-      // console.log("📊 AdminHome: Raw records response:", data);
+      console.log("📊 AdminHome: Raw records response:", data);
 
       // Handle different response structures
       let processedRecords = [];
@@ -99,30 +97,6 @@ const AdminHome = () => {
     }
   }, [getTodaysAttendance]);
 
-  const fetchAllUsers = useCallback(async () => {
-    try {
-      const usersData = await getAllUsers(); // ✅ CORRECTED METHOD CALL
-      setallemploies(usersData || []);
-      let processedUsers = [];
-      if (Array.isArray(usersData)) {
-        processedUsers = usersData;
-      } else if (usersData && usersData.data && Array.isArray(usersData.data)) {
-        processedUsers = usersData.data;
-      } else if (usersData && usersData.users && Array.isArray(usersData.users)) {
-        processedUsers = usersData.users;
-      } else if (usersData && usersData.allusers && Array.isArray(usersData.allusers)) {
-        processedUsers = usersData.allusers;
-      }
-
-      setallusers(processedUsers || []);
-      return processedUsers;
-    } catch (err) {
-      console.error("❌ Error fetching all users:", err);
-      setError("Failed to fetch all users");
-      setallusers([]);
-      throw err;
-    }
-  }, [getAllUsers]); // ✅ CORRECTED DEPENDENCY
 
   // Optimized data fetching
   const fetchAllData = useCallback(async () => {
@@ -136,7 +110,6 @@ const AdminHome = () => {
         fetchAdminRecords(),
         fetchTodaysAttendance(),
         fetchdashbord(),
-        fetchAllUsers(),
       ]);
     } catch (err) {
       console.error("❌ Error in fetchAllData:", err);
@@ -144,7 +117,7 @@ const AdminHome = () => {
     } finally {
       setDataLoading(false);
     }
-  }, [authLoading, fetchAdminRecords, fetchTodaysAttendance, fetchAllUsers]);
+  }, [authLoading, fetchAdminRecords, fetchTodaysAttendance]);
 
   // Fetch data when component mounts and auth is ready
   useEffect(() => {
@@ -236,7 +209,7 @@ const AdminHome = () => {
         return <AITestPage />;
       case "voice":
         return (
-          <VoiceDashboard 
+          <VoiceDashboard
             organizationId={user?.organizationId?._id || user?.organizationId}
             userId={user?._id}
           />
