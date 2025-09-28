@@ -4,27 +4,12 @@ import Navbar from "./Navbar";
 import { Link, useNavigate } from "react-router-dom";
 import { div } from "framer-motion/client";
 import { useAuth } from "../../context/authStore";
-
 const TeacherInfo = () => {
+  const { user } = useAuth(); // ✅ Get user from store
   const [loading, setLoading] = useState(true);
   const [userTeacher, setUserTeacher] = useState(null);
   const [records, setRecords] = useState(null);
-  const { getPastAttendance, user } = useAuth(); // ✅ Get user from store
-
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const recordsData = await getPastAttendance();
-        console.log("Records:", recordsData);
-        setRecords(recordsData);
-      } catch (error) {
-        console.error("Error fetching records:", error);
-      }
-    };
-
-    fetchData();
-  }, [getPastAttendance]);
-
+  const navigate = useNavigate();
   useEffect(() => {
     // ✅ Use store user directly instead of localStorage
     if (user) {
@@ -48,15 +33,9 @@ const TeacherInfo = () => {
     );
   }
   return (
-    // <motion.div
-    //     initial = {{ opacity:1 ,x:100}}
-    //     animate = {{ opacity:1 ,x:0}}
-    //     exit={{opacity:0 , x:-100}}
-    //     transition = {{duration:0.2}}
-    // >
     <div className="flex flex-col w-full min-h-screen">
       <Navbar />
-      {user.role !== "user" ? (
+      {userTeacher?.role !== "user" ? (
         <button
           onClick={() => {
             navigate("/admin");
@@ -94,24 +73,24 @@ const TeacherInfo = () => {
               Scan QR to mark attendance
             </span>
 
-            <button
-              onClick={hidden}
-              className="flex justify-center items-center rounded-lg text-sm sm:text-base font-medium gap-3 bg-[#1D61E7] hover:bg-[#1a56d1] text-white w-full h-[48px] sm:h-[52px] lg:h-[56px] shadow-[0px_4px_4px_0px_#00000040] active:shadow-[0px_2px_1px_0px_#00000040] transition-all duration-200"
-            >
-              Scan QR
-              <img
-                src="/Vector.png"
-                className="h-[18px] sm:h-[20px] lg:h-[22px]"
-                alt=""
-              />
-            </button>
+            <Link className="w-full" to="/scanqr">
+              <button
+                className="flex justify-center items-center rounded-lg text-sm sm:text-base font-medium gap-3 bg-[#1D61E7] hover:bg-[#1a56d1] text-white w-full h-[48px] sm:h-[52px] lg:h-[56px] shadow-[0px_4px_4px_0px_#00000040] active:shadow-[0px_2px_1px_0px_#00000040] transition-all duration-200"
+              >
+                Scan QR
+                <img
+                  src="/Vector.png"
+                  className="h-[18px] sm:h-[20px] lg:h-[22px]"
+                  alt=""
+                />
+              </button>
+            </Link>
 
-            <button
-              onClick={Dashboard}
+            <Link className="w-full" to={"/dashboard"}><button
               className="flex justify-center items-center rounded-lg text-sm sm:text-base font-medium border-[1px] border-slate-200 hover:border-slate-300 hover:bg-slate-50 w-full h-[48px] sm:h-[52px] lg:h-[56px] transition-all duration-200"
             >
               View Previous Attendance
-            </button>
+            </button></Link>
           </div>
         </div>
       </div>

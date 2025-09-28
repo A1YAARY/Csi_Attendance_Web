@@ -97,13 +97,12 @@ export const useAuthStore = create((set, get) => {
             try {
                 result = await response.json();
             } catch {
-                // allow non-JSON responses for downloads or empty bodies
                 result = { ok: response.ok, status: response.status };
             }
 
             logAuthContext("API Response", { url, status: response.status, result });
 
-            // Token problems surfaced by API
+            // Token problems surfaced by API - FIX: Add proper closing braces
             if (response.status === 401 && result && result.code) {
                 if (
                     ["TOKEN_EXPIRED", "INVALID_TOKEN", "MALFORMED_TOKEN"].includes(

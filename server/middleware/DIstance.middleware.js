@@ -12,17 +12,17 @@ const getISTDate = (date = new Date()) => {
 const antiSpoofingMiddleware = async (req, res, next) => {
   try {
     // Extract data - handle both formats for compatibility
-    const { 
-      location, 
-      deviceInfo, 
-      code, 
-      qrCode, 
-      type, 
-      latitude, 
-      longitude, 
-      accuracy 
+    const {
+      location,
+      deviceInfo,
+      code,
+      qrCode,
+      type,
+      latitude,
+      longitude,
+      accuracy
     } = req.body;
-    
+
     const user = req.user;
 
     console.log("🔍 Anti-spoofing middleware - Request data:", {
@@ -59,17 +59,17 @@ const antiSpoofingMiddleware = async (req, res, next) => {
 
     // 4. Location validation - handle both formats
     let lat, lng, acc;
-    
+
     if (location && location.latitude !== undefined && location.longitude !== undefined) {
       // Location object format
       lat = location.latitude;
-      lng = location.longitude; 
-      acc = location.accuracy || accuracy || 10;
+      lng = location.longitude;
+      acc = location.accuracy ?? accuracy ?? 10;
     } else if (latitude !== undefined && longitude !== undefined) {
       // Flat format
       lat = latitude;
       lng = longitude;
-      acc = accuracy || 10;
+      acc = accuracy ?? 10;
     } else {
       return res.status(400).json({
         success: false,
@@ -79,11 +79,29 @@ const antiSpoofingMiddleware = async (req, res, next) => {
       });
     }
 
-    // 5. Normalize location data for controller
+    // 5. Coerce to numbers and validate for obvious bad values (0/0, NaN, out-of-bounds)
+    lat = Number(lat);
+    lng = Number(lng);
+    acc = Number(acc) || 10;
+
+    if (
+      (lat === 0 && lng === 0) ||
+      !Number.isFinite(lat) || !Number.isFinite(lng) ||
+      Math.abs(lat) > 90 || Math.abs(lng) > 180
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid current location is required",
+        spoofingDetected: true,
+        code: "LOCATION_REQUIRED",
+      });
+    }
+
+    // 6. Normalize location data for controller
     req.body.latitude = lat;
     req.body.longitude = lng;
     req.body.accuracy = acc;
-    
+
     // Also set location object for any middleware that might need it
     req.body.location = {
       latitude: lat,
@@ -97,7 +115,7 @@ const antiSpoofingMiddleware = async (req, res, next) => {
       accuracy: acc
     });
 
-    // 6. Type validation (optional since QR contains type info)
+    // 7. Type validation (optional since QR contains type info)
     if (type && !["check-in", "check-out"].includes(type)) {
       return res.status(400).json({
         success: false,
@@ -108,7 +126,7 @@ const antiSpoofingMiddleware = async (req, res, next) => {
       });
     }
 
-    // 7. Mock location check
+    // 8. Mock location check
     if (
       deviceInfo &&
       (deviceInfo.isMockLocation === true ||
@@ -124,7 +142,7 @@ const antiSpoofingMiddleware = async (req, res, next) => {
       });
     }
 
-    // 8. Device ID validation for users
+    // 9. Device ID validation for users
     if (user.role === "user") {
       const currentDeviceId = deviceInfo?.deviceId || req.headers['x-device-id'];
       if (!currentDeviceId) {
@@ -148,7 +166,7 @@ const antiSpoofingMiddleware = async (req, res, next) => {
       longitude: req.body.longitude,
       accuracy: req.body.accuracy
     });
-    
+
     next();
 
   } catch (error) {

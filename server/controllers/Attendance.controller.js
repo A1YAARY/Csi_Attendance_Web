@@ -34,10 +34,17 @@ const scanQRCode = async (req, res) => {
       { latitude, longitude },
       { latitude: qrCodeDoc.location.latitude, longitude: qrCodeDoc.location.longitude }
     );
-    if (distance > qrCodeDoc.location.radius) {
+    const withinRange = distance <= qrCodeDoc.location.radius;
+
+    if (!withinRange) {
       return res.status(400).json({
         success: false,
-        message: `Must be within ${qrCodeDoc.location.radius}m, current distance ${distance}m`,
+        message: `Must be within ${qrCodeDoc.location.radius}m`,
+        code: 'LOCATION_OUT_OF_RANGE',
+        data: {
+          currentDistance: distance,
+          allowedRadius: qrCodeDoc.location.radius,
+        },
       });
     }
 
@@ -96,7 +103,10 @@ const scanQRCode = async (req, res) => {
       istTimestamp: nowIST,
       location: { latitude, longitude, accuracy },
       deviceInfo: {
-        deviceId: req.user.deviceInfo?.deviceId,
+        deviceId:
+          req.user.deviceInfo?.deviceId ||
+          req.body.deviceInfo?.deviceId ||
+          req.headers['x-device-id'],
         platform: req.headers['user-agent'],
         ipAddress: req.ip,
       },
@@ -128,8 +138,13 @@ const scanQRCode = async (req, res) => {
         type: qrCodeDoc.qrType,
         timestamp: attendance.istTimestamp,
         timestampIST: formattedTime,
-        location: { latitude, longitude },
-        distance: `${distance}m`,
+        location: {
+          latitude,
+          longitude,
+          accuracy,
+          distance,       // meters (number)
+          withinRange,    // boolean
+        },
         organizationName: qrCodeDoc.organizationId.name,
         sessionNumber: dts.sessions.length,
         totalWorkingTime: dts.totalWorkingTime,
@@ -512,13 +527,7 @@ const getMonthlyReport = async (req, res) => {
           userSummary[userId].presentDays++;
         }
 
-        // Late entry after 09:15 IST and early departure before 17:30 IST
-        if (dayRecord.firstCheckIn && dayRecord.firstCheckIn !== '-') {
-          const firstDate = new Date(report.sessions.find(s => s.checkIn?.time)?.checkIn.time);
-          const h = firstDate.getUTCHours();
-          const m = firstDate.getUTCMinutes();
-          // Use formatted strings for UI; detailed policy evaluation can be refined if needed
-        }
+        // Placeholder for policy checks (late/early) if needed
       }
     });
 

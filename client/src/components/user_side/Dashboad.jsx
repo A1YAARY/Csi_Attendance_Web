@@ -4,8 +4,7 @@ import Previous from "./Previous";
 import Navbar from "./Navbar";
 import { LoginPage } from "./LoginPage";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
-import { useAuthStore } from "../../context/authStore";
+import { useAuth } from "../../context/authStore";
 
 const Dashboard = () => {
   const { getPastAttendance } = useAuth();
