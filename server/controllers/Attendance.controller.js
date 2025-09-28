@@ -686,7 +686,6 @@ module.exports = {
   getDailyReport,
   getWeeklyReport,
   getTodaysAttendance,
-
   getMonthlyReport,
   checkWorkingDay,
 };

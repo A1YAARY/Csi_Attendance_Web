@@ -176,7 +176,10 @@ const register_orginization = async (req, res) => {
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(400).json({ success: false, message: "User already exists" });
+      return res.status(400).json({
+        success: false,
+        message: "User already exists"
+      });
     }
 
     console.log(`🌍 Starting geocoding for address: "${address}"`);
@@ -194,10 +197,10 @@ const register_orginization = async (req, res) => {
       name,
       role: "organization",
     });
+
     await user.save();
 
     const addressComponents = address.split(",").map((part) => part.trim());
-
     const organization = new Organization({
       name: organizationName,
       address: {
@@ -326,17 +329,26 @@ const register_user = async (req, res) => {
     const { email, name, organizationCode, institute, department, password } = req.body;
 
     if (!email || !organizationCode || !name || !institute || !department) {
-      return res.status(400).json({ success: false, message: "All fields are required" });
+      return res.status(400).json({
+        success: false,
+        message: "All fields are required"
+      });
     }
 
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(400).json({ success: false, message: "User already exists" });
+      return res.status(400).json({
+        success: false,
+        message: "User already exists"
+      });
     }
 
     const organization = await Organization.findOne({ name: organizationCode });
     if (!organization) {
-      return res.status(400).json({ success: false, message: "Invalid organization code" });
+      return res.status(400).json({
+        success: false,
+        message: "Invalid organization code"
+      });
     }
 
     const user = new User({
@@ -362,20 +374,26 @@ const register_user = async (req, res) => {
       const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}&newUser=true`;
       const emailSubject = "Welcome to Attendance System - Set Your Password";
       const emailBody = `
-        Hello ${name},
-        Your account has been created successfully for ${organization.name}.
-        Please set your password using the link below:
-        ${resetLink}
-        This link will expire in 24 hours for security reasons.
-        Account Details:
-        - Email: ${email}
-        - Organization: ${organization.name}
-        - Institute: ${institute}
-        - Department: ${department}
-        If you didn't request this account creation, please contact your administrator.
-        Best regards,
-        Attendance System Team
-      `;
+ Hello ${name},
+ 
+ Your account has been created successfully for ${organization.name}.
+ 
+ Please set your password using the link below:
+ ${resetLink}
+ 
+ This link will expire in 24 hours for security reasons.
+ 
+ Account Details:
+ - Email: ${email}
+ - Organization: ${organization.name}
+ - Institute: ${institute}
+ - Department: ${department}
+ 
+ If you didn't request this account creation, please contact your administrator.
+ 
+ Best regards,
+ Attendance System Team
+             `;
 
       await sendMail(email, emailSubject, emailBody);
     } catch (mailErr) {
@@ -406,15 +424,17 @@ const register_user = async (req, res) => {
     });
   } catch (error) {
     console.error("User registration error:", error);
-    res.status(500).json({ success: false, message: "Server error during user registration" });
+    res.status(500).json({
+      success: false,
+      message: "Server error during user registration"
+    });
   }
 };
 
-// Enhanced login with device registration check - FIXED VERSION
+// Enhanced login with device registration check
 const login = async (req, res) => {
   try {
-    const { email, password, deviceId, deviceType, deviceFingerprint } =
-      req.body;
+    const { email, password, deviceId, deviceType, deviceFingerprint } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({
@@ -457,7 +477,7 @@ const login = async (req, res) => {
           deviceType: deviceType || "unknown",
           deviceFingerprint: deviceFingerprint || "",
           isRegistered: true,
-          registeredAt: getISTDate(),
+          registeredAt: istUtils.getISTDate(),
           lastKnownLocation: null,
         };
         console.log(`✅ Device registered for user ${user.email}: ${deviceId}`);
@@ -466,8 +486,7 @@ const login = async (req, res) => {
         if (user.deviceInfo.deviceId !== deviceId) {
           return res.status(403).json({
             success: false,
-            message:
-              "Device not authorized. Please request device change from admin.",
+            message: "Device not authorized. Please request device change from admin.",
             code: "DEVICE_NOT_AUTHORIZED",
             registeredDevice: user.deviceInfo.deviceId,
             currentDevice: deviceId,
@@ -478,7 +497,7 @@ const login = async (req, res) => {
     }
 
     // Update last login
-    user.lastLogin = getISTDate();
+    user.lastLogin = istUtils.getISTDate();
     await user.save();
 
     const { accessToken, refreshToken } = generateTokens(user._id);
@@ -517,62 +536,188 @@ const login = async (req, res) => {
     });
   }
 };
-// Device change request
 const requestDeviceChange = async (req, res) => {
   try {
-    const { newDeviceId, newDeviceType, newDeviceFingerprint, reason } =
-      req.body;
+    const { newDeviceId, newDeviceType, newDeviceFingerprint, reason } = req.body;
 
     if (!newDeviceId) {
       return res.status(400).json({
         success: false,
-        message: "New device ID is required",
+        message: "New device ID is required"
       });
     }
 
-    const user = await User.findById(req.user._id);
+    const user = await User.findById(req.user._id).populate('organizationId');
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User not found",
+        message: "User not found"
       });
     }
 
     // Check if already has pending request
-    if (
-      user.deviceChangeRequest &&
-      user.deviceChangeRequest.status === "pending"
-    ) {
+    if (user.deviceChangeRequest && user.deviceChangeRequest.status === "pending") {
       return res.status(400).json({
         success: false,
         message: "You already have a pending device change request",
+        existingRequest: {
+          newDeviceId: user.deviceChangeRequest.newDeviceId,
+          requestedAt: user.deviceChangeRequest.requestedAt,
+          requestedAtIST: istUtils.formatISTTimestamp(user.deviceChangeRequest.requestedAt),
+          status: user.deviceChangeRequest.status
+        }
       });
     }
 
+    // Create device change request
     user.deviceChangeRequest = {
       newDeviceId,
       newDeviceType: newDeviceType || "unknown",
       newDeviceFingerprint: newDeviceFingerprint || "",
-      requestedAt: getISTDate(),
-      status: "pending",
+      requestedAt: istUtils.getISTDate(),
+      status: "pending"
     };
 
     await user.save();
 
+    // Create notification for admin
+    await Notification.create({
+      type: "devicechangerequest",
+      organizationId: user.organizationId._id,
+      userId: user._id,
+      title: "New Device Change Request",
+      message: `${user.name} (${user.email}) has requested to change device from ${user.deviceInfo?.deviceId || 'Unregistered Device'} to ${newDeviceId}`,
+      data: {
+        currentDevice: user.deviceInfo?.deviceId || null,
+        currentDeviceType: user.deviceInfo?.deviceType || null,
+        newDevice: newDeviceId,
+        newDeviceType: newDeviceType,
+        userEmail: user.email,
+        userName: user.name,
+        reason: reason || "",
+        requestId: user.deviceChangeRequest._id
+      },
+      priority: "high"
+    });
+
+    console.log(`Device change request created for user: ${user.email}, New device: ${newDeviceId}`);
+
     res.json({
       success: true,
-      message: "Device change request submitted successfully",
+      message: "Device change request submitted successfully. Admin will review your request.",
       request: {
         newDeviceId,
+        newDeviceType: newDeviceType || "unknown",
         requestedAt: user.deviceChangeRequest.requestedAt,
-        status: "pending",
-      },
+        requestedAtIST: istUtils.formatISTTimestamp(user.deviceChangeRequest.requestedAt),
+        status: "pending"
+      }
     });
   } catch (error) {
     console.error("Device change request error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to submit device change request",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined
+    });
+  }
+};
+
+const getUserNotifications = async (req, res) => {
+  try {
+    const { limit = 20, onlyUnread = false } = req.query;
+    const userId = req.user._id;
+
+    const query = { userId: userId };
+    if (onlyUnread === 'true') {
+      query.isRead = false;
+    }
+
+    const notifications = await Notification.find(query)
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .lean();
+
+    const formattedNotifications = notifications.map(notification => ({
+      _id: notification._id,
+      type: notification.type,
+      title: notification.title,
+      message: notification.message,
+      data: notification.data,
+      isRead: notification.isRead,
+      priority: notification.priority,
+      createdAt: notification.createdAt,
+      createdAtIST: istUtils.formatISTTimestamp(notification.createdAt),
+      readAt: notification.readAt,
+      readAtIST: notification.readAt ? istUtils.formatISTTimestamp(notification.readAt) : null
+    }));
+
+    const unreadCount = await Notification.countDocuments({ userId: userId, isRead: false });
+
+    res.json({
+      success: true,
+      data: formattedNotifications,
+      count: formattedNotifications.length,
+      unreadCount: unreadCount
+    });
+  } catch (error) {
+    console.error("Get user notifications error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch notifications"
+    });
+  }
+};
+// Get user's device change request status
+const getUserDeviceRequestStatus = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('deviceInfo deviceChangeRequest').lean();
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    const response = {
+      currentDevice: {
+        deviceId: user.deviceInfo?.deviceId || null,
+        deviceType: user.deviceInfo?.deviceType || null,
+        isRegistered: user.deviceInfo?.isRegistered || false,
+        registeredAt: user.deviceInfo?.registeredAt || null,
+        registeredAtIST: user.deviceInfo?.registeredAt ? istUtils.formatISTTimestamp(user.deviceInfo.registeredAt) : null
+      },
+      pendingRequest: null
+    };
+
+    if (user.deviceChangeRequest) {
+      response.pendingRequest = {
+        newDeviceId: user.deviceChangeRequest.newDeviceId,
+        newDeviceType: user.deviceChangeRequest.newDeviceType,
+        requestedAt: user.deviceChangeRequest.requestedAt,
+        requestedAtIST: istUtils.formatISTTimestamp(user.deviceChangeRequest.requestedAt),
+        status: user.deviceChangeRequest.status
+      };
+
+      // If approved or rejected, include admin response
+      if (user.deviceChangeRequest.adminResponse) {
+        response.pendingRequest.adminResponse = {
+          respondedAt: user.deviceChangeRequest.adminResponse.respondedAt,
+          respondedAtIST: istUtils.formatISTTimestamp(user.deviceChangeRequest.adminResponse.respondedAt),
+          reason: user.deviceChangeRequest.adminResponse.reason
+        };
+      }
+    }
+
+    res.json({
+      success: true,
+      data: response
+    });
+  } catch (error) {
+    console.error("Get device request status error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get device request status"
     });
   }
 };
@@ -580,8 +725,8 @@ const requestDeviceChange = async (req, res) => {
 const updateProfile = async (req, res) => {
   try {
     const { name, workingHours, password } = req.body;
-    const updateData = {};
 
+    const updateData = {};
     if (name) updateData.name = name;
     if (workingHours) updateData.workingHours = workingHours;
     if (password) updateData.password = password;
@@ -652,6 +797,7 @@ const logout = (req, res) => {
     secure: process.env.NODE_ENV === "production",
     sameSite: "strict",
   });
+
   res.status(200).json({
     success: true,
     message: "Logged out successfully",
@@ -663,9 +809,12 @@ module.exports = {
   register_user,
   login,
   logout,
+  getUserDeviceRequestStatus,
   updateProfile,
   viewProfile,
   refreshToken,
   verifyToken,
   requestDeviceChange,
+  getUserNotifications,
+
 };

@@ -10,7 +10,10 @@ const {
   updateProfile,
   viewProfile,
   refreshToken,
-  verifyToken, // ✅ Now importing verifyToken
+  verifyToken,
+  requestDeviceChange,
+  getUserDeviceRequestStatus,
+  getUserNotifications,
 } = require("../controllers/auth2.controller");
 
 const authMiddleware = require("../middleware/Auth.middleware");
@@ -41,6 +44,16 @@ router.put(
   role(["organization"]),
   updateProfile
 );
+
+// Device change request (for users)
+router.post("/device-change-request", authMiddleware, role(["user"]), requestDeviceChange);
+
+// Get device request status (for users)
+router.get("/device-request-status", authMiddleware, role(["user"]), getUserDeviceRequestStatus);
+
+// Get user notifications (for users)
+router.get("/notifications", authMiddleware, role(["user"]), getUserNotifications);
+
 
 // View profile (protected route)
 router.get("/viewProfile", authMiddleware, viewProfile);
