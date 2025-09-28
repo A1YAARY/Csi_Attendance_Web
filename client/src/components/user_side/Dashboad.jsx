@@ -11,6 +11,7 @@ const Dashboard = () => {
   const navigate = useNavigate();
 
   const [pastAttendance, setPastAttendance] = useState([]);
+  const [sessions, setsessions] = useState([])
   const [todayAttendance, setTodayAttendance] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -19,26 +20,8 @@ const Dashboard = () => {
       try {
         setLoading(true);
         const data = await getPastAttendance();
-        if (data?.attendance && Array.isArray(data.attendance)) {
-          const normalized = data.attendance.map((a) => ({
-            ...a,
-            date: a.createdAt,
-            sessions: (a.sessions || []).map((s) => ({
-              checkIn: s?.checkIn || null,
-              checkOut: s?.checkOut || null,
-              duration: typeof s?.duration === "number" ? s.duration : 0,
-            })),
-          }));
-          setPastAttendance(normalized);
+        setTodayAttendance(data?.attendance || [])
 
-          const todayStr = new Date().toDateString();
-          const todayRecord =
-            normalized.find((r) => new Date(r.date).toDateString() === todayStr) || null;
-          setTodayAttendance(todayRecord);
-        } else {
-          setPastAttendance([]);
-          setTodayAttendance(null);
-        }
       } catch (e) {
         console.error("Error fetching past attendance:", e);
         setPastAttendance([]);
@@ -49,6 +32,7 @@ const Dashboard = () => {
     };
     fetchPastAttendance();
   }, [getPastAttendance]);
+  console.log(todayAttendance);
 
   const hidden = () => navigate("/ScanQR");
   const hidden1 = () => navigate("/ShowLogOut");
@@ -61,11 +45,11 @@ const Dashboard = () => {
         <h1 className="text-2xl font-semibold mb-6">Welcome</h1>
 
         {/* Card component with today's data */}
-        <Card todayAttendance={todayAttendance} loading={loading} />
+        {/* <Card todayAttendance={todayAttendance} loading={loading} /> */}
 
         <button
           onClick={hidden}
-            className="w-full mt-6 bg-[#1D61E7] text-white py-3 rounded-lg flex items-center justify-center gap-2 text-sm font-medium"
+          className="w-full mt-6 bg-[#1D61E7] text-white py-3 rounded-lg flex items-center justify-center gap-2 text-sm font-medium"
         >
           <span className="text-lg"><img src="./qr_icon.svg" className="invert h-4" /></span>
           Scan QR
@@ -83,7 +67,7 @@ const Dashboard = () => {
           ) : (
             <div className="space-y-3">
               {pastAttendance.slice(0, 5).map((record, index) => (
-                <Previous key={record._id || index} attendanceData={record} />
+                <Previous attendanceData={todayAttendance} />
               ))}
             </div>
           )}

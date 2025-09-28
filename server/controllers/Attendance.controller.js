@@ -165,77 +165,84 @@ const scanQRCode = async (req, res) => {
 const getUserPastAttendance = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { limit = 50, page = 1 } = req.query;
+
+    const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const skip = (page - 1) * limit;
 
     const oneMonthAgo = new Date();
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-    const fromIST = istUtils.getStartOfDayIST(oneMonthAgo);
+    const fromIST = istUtils.getStartOfDayIST(oneMonthAgo); // assumes server stores UTC and formats to IST
 
-    const sheets = await DailyTimeSheet.find({
+    const baseQuery = {
       userId,
       date: { $gte: fromIST },
       $or: [{ status: { $ne: 'absent' } }, { 'sessions.0': { $exists: true } }],
-    })
-      .populate('organizationId', 'name')
-      .sort({ date: -1 })
-      .limit(parseInt(limit))
-      .skip(skip)
-      .lean();
+    };
+
+    const [total, sheets] = await Promise.all([
+      DailyTimeSheet.countDocuments(baseQuery),
+      DailyTimeSheet.find(baseQuery)
+        .populate('organizationId', 'name')
+        .sort({ date: -1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+    ]);
 
     const attendance = sheets.map((s) => {
-      const sessions = (s.sessions || []).map((sess, i) => ({
-        sessionNumber: i + 1,
-        checkIn: sess.checkIn?.time
-          ? { time: sess.checkIn.time, timeIST: istUtils.formatISTTimestamp(sess.checkIn.time) }
-          : null,
-        checkOut: sess.checkOut?.time
-          ? { time: sess.checkOut.time, timeIST: istUtils.formatISTTimestamp(sess.checkOut.time) }
-          : null,
-        duration: sess.duration || 0,
-        durationFormatted: istUtils.formatDuration(sess.duration || 0),
-        isActive: !!(sess.checkIn?.time && !sess.checkOut?.time),
-      }));
+      const sessions = (s.sessions || []).map((sess, i) => {
+        const checkInTime = sess.checkIn?.time || sess.checkIn || null;
+        const checkOutTime = sess.checkOut?.time || sess.checkOut || null;
+        const duration = typeof sess.duration === 'number' ? sess.duration : 0;
+
+        return {
+          sessionNumber: i + 1,
+          checkIn: checkInTime
+            ? { time: checkInTime, timeIST: istUtils.formatISTTimestamp(checkInTime) }
+            : null,
+          checkOut: checkOutTime
+            ? { time: checkOutTime, timeIST: istUtils.formatISTTimestamp(checkOutTime) }
+            : null,
+          duration,
+          durationFormatted: istUtils.formatDuration(duration),
+          isActive: Boolean(checkInTime && !checkOutTime),
+        };
+      });
+
+      const totalWorkingTime = typeof s.totalWorkingTime === 'number'
+        ? s.totalWorkingTime
+        : sessions.reduce((sum, x) => sum + (x.duration || 0), 0);
 
       return {
         _id: s._id,
         date: s.date,
         dateIST: istUtils.formatISTTimestamp(s.date),
         status: s.status,
-        totalWorkingTime: s.totalWorkingTime || 0,
-        totalWorkingTimeFormatted: istUtils.formatDuration(s.totalWorkingTime || 0),
+        totalWorkingTime,
+        totalWorkingTimeFormatted: istUtils.formatDuration(totalWorkingTime),
         sessionsCount: sessions.length,
         sessions,
-        organizationName: s.organizationId?.name,
+        organizationName: s.organizationId?.name || null,
         hasActiveSession: sessions.some(x => x.isActive),
       };
     });
 
-    const total = await DailyTimeSheet.countDocuments({
-      userId,
-      date: { $gte: fromIST },
-      $or: [{ status: { $ne: 'absent' } }, { 'sessions.0': { $exists: true } }],
-    });
-
-    return res.json({
-      success: true,
-      attendance,
-      pagination: {
-        current: parseInt(page),
-        total: Math.ceil(total / limit),
-        hasNext: skip + attendance.length < total,
-        limit: parseInt(limit),
-        totalRecords: total,
-      },
-      timezone: 'Asia/Kolkata (IST)',
-      serverTimeIST: istUtils.formatISTTimestamp(istUtils.getISTDate()),
+    res.json({
+      page,
+      limit,
+      skip,
+      total,
+      totalPages: Math.ceil(total / limit),
+      data: attendance,
     });
   } catch (err) {
-    console.error('getUserPastAttendance error:', err);
-    return res.status(500).json({ success: false, message: 'Failed to fetch attendance history' });
+    res.status(500).json({
+      message: 'Failed to load attendance',
+      error: err?.message || String(err),
+    });
   }
 };
-
 // Daily report (no nulls in first/last; uses "-" if missing)
 const getDailyReport = async (req, res) => {
   try {

@@ -25,6 +25,8 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
           body: JSON.stringify({ userId }),
         }
       );
+      console.log(response, "Reset Device Response");
+      
 
       if (response.success) {
         toast.success(
