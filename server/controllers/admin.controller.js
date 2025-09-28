@@ -5,12 +5,12 @@ const Organization = require("../models/organization.models");
 const DailyTimeSheet = require("../models/DailyTimeSheet.models");
 const holidayService = require("../utils/holidayService");
 const DateTimeUtils = require("../utils/dateTimeUtils");
-
+const istUtils = require("../utils/istDateTimeUtils"); // Using ONLY your IST utils
+const Notification = require("../models/Notification.models");
 // Reset user device (allow user to register new device)
 const resetUserDevice = async (req, res) => {
   try {
     const { userId } = req.body;
-
     if (!userId) {
       return res.status(400).json({ success: false, message: "User ID is required" });
     }
@@ -46,6 +46,7 @@ const resetUserDevice = async (req, res) => {
 
     await targetUser.save();
 
+    const resetTime = istUtils.getISTDate();
     return res.json({
       success: true,
       message: "User device reset successfully. User can now register a new device.",
@@ -54,8 +55,8 @@ const resetUserDevice = async (req, res) => {
         userName: targetUser.name,
         userEmail: targetUser.email,
         deviceInfo: targetUser.deviceInfo,
-        resetAt: DateTimeUtils.getISTDate(),
-        resetAtFormatted: DateTimeUtils.formatIST(DateTimeUtils.getISTDate()),
+        resetAt: resetTime,
+        resetAtFormatted: istUtils.formatISTTimestamp(resetTime),
       },
     });
   } catch (error) {
@@ -114,7 +115,7 @@ const getusers = async (req, res) => {
       organizationId: u.organizationId,
       createdAt: u.createdAt,
       updatedAt: u.updatedAt,
-      createdAtFormatted: u.createdAt ? DateTimeUtils.formatIST(u.createdAt) : "N/A",
+      createdAtFormatted: u.createdAt ? istUtils.formatISTTimestamp(u.createdAt) : "N/A",
     }));
 
     return res.status(200).json({
@@ -136,16 +137,26 @@ const getusers = async (req, res) => {
 // Get device change requests
 const getDeviceChangeRequests = async (req, res) => {
   try {
-    const orgId = req.user.organizationId;
-    if (!orgId) {
-      return res.status(400).json({
-        success: false,
-        message: "User not associated with any organization",
-      });
+    let adminOrgId;
+    if (req.user.organizationId) {
+      if (typeof req.user.organizationId === 'object' && req.user.organizationId._id) {
+        adminOrgId = req.user.organizationId._id;
+      } else {
+        adminOrgId = req.user.organizationId;
+      }
+    } else {
+      const org = await Organization.findOne({ adminId: req.user._id }).select("_id");
+      if (!org) {
+        return res.status(403).json({
+          success: false,
+          message: "Admin has no organization"
+        });
+      }
+      adminOrgId = org._id;
     }
 
     const usersWithRequests = await User.find({
-      organizationId: orgId,
+      organizationId: adminOrgId,
       "deviceChangeRequest.status": "pending",
     }).select("name email deviceInfo deviceChangeRequest").lean();
 
@@ -158,7 +169,7 @@ const getDeviceChangeRequests = async (req, res) => {
       newDeviceType: user.deviceChangeRequest?.newDeviceType,
       requestedAt: user.deviceChangeRequest?.requestedAt,
       requestedAtIST: user.deviceChangeRequest?.requestedAt
-        ? DateTimeUtils.formatIST(user.deviceChangeRequest.requestedAt)
+        ? istUtils.formatISTTimestamp(user.deviceChangeRequest.requestedAt)
         : null,
     }));
 
@@ -176,6 +187,7 @@ const getDeviceChangeRequests = async (req, res) => {
     });
   }
 };
+
 
 // Handle device change request (approve/reject)
 const handleDeviceChangeRequest = async (req, res) => {
@@ -249,6 +261,188 @@ const handleDeviceChangeRequest = async (req, res) => {
   }
 };
 
+
+// Get admin notifications
+const getNotifications = async (req, res) => {
+  try {
+    const { limit = 50, onlyUnread = false, type } = req.query;
+
+    let adminOrgId;
+    if (req.user.organizationId) {
+      if (typeof req.user.organizationId === 'object' && req.user.organizationId._id) {
+        adminOrgId = req.user.organizationId._id;
+      } else {
+        adminOrgId = req.user.organizationId;
+      }
+    } else {
+      const org = await Organization.findOne({ adminId: req.user._id }).select("_id");
+      if (!org) {
+        return res.status(403).json({
+          success: false,
+          message: "Admin has no organization"
+        });
+      }
+      adminOrgId = org._id;
+    }
+
+    const query = { organizationId: adminOrgId };
+    if (onlyUnread === 'true') {
+      query.isRead = false;
+    }
+    if (type) {
+      query.type = type;
+    }
+
+    const notifications = await Notification.find(query)
+      .populate('userId', 'name email department phone')
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .lean();
+
+    const formattedNotifications = notifications.map(notification => ({
+      _id: notification._id,
+      type: notification.type,
+      title: notification.title,
+      message: notification.message,
+      data: notification.data,
+      isRead: notification.isRead,
+      priority: notification.priority,
+      createdAt: notification.createdAt,
+      createdAtIST: istUtils.formatISTTimestamp(notification.createdAt),
+      readAt: notification.readAt,
+      readAtIST: notification.readAt ? istUtils.formatISTTimestamp(notification.readAt) : null,
+      user: notification.userId ? {
+        _id: notification.userId._id,
+        name: notification.userId.name,
+        email: notification.userId.email,
+        department: notification.userId.department,
+        phone: notification.userId.phone
+      } : null
+    }));
+
+    const unreadCount = await Notification.countDocuments({
+      organizationId: adminOrgId,
+      isRead: false
+    });
+
+    res.json({
+      success: true,
+      data: formattedNotifications,
+      count: formattedNotifications.length,
+      unreadCount: unreadCount
+    });
+  } catch (error) {
+    console.error("Get notifications error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch notifications"
+    });
+  }
+};
+
+
+const markNotificationRead = async (req, res) => {
+  try {
+    const { notificationId } = req.params;
+
+    let adminOrgId;
+    if (req.user.organizationId) {
+      if (typeof req.user.organizationId === 'object' && req.user.organizationId._id) {
+        adminOrgId = req.user.organizationId._id;
+      } else {
+        adminOrgId = req.user.organizationId;
+      }
+    } else {
+      const org = await Organization.findOne({ adminId: req.user._id }).select("_id");
+      if (!org) {
+        return res.status(403).json({
+          success: false,
+          message: "Admin has no organization"
+        });
+      }
+      adminOrgId = org._id;
+    }
+
+    const readTime = istUtils.getISTDate();
+    const notification = await Notification.findOneAndUpdate(
+      { _id: notificationId, organizationId: adminOrgId },
+      {
+        isRead: true,
+        readAt: readTime
+      },
+      { new: true }
+    );
+
+    if (!notification) {
+      return res.status(404).json({
+        success: false,
+        message: "Notification not found"
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Notification marked as read",
+      data: {
+        _id: notification._id,
+        isRead: notification.isRead,
+        readAt: notification.readAt,
+        readAtIST: istUtils.formatISTTimestamp(notification.readAt)
+      }
+    });
+  } catch (error) {
+    console.error("Mark notification read error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to mark notification as read"
+    });
+  }
+};
+
+// Mark all notifications as read
+const markAllNotificationsRead = async (req, res) => {
+  try {
+    let adminOrgId;
+    if (req.user.organizationId) {
+      if (typeof req.user.organizationId === 'object' && req.user.organizationId._id) {
+        adminOrgId = req.user.organizationId._id;
+      } else {
+        adminOrgId = req.user.organizationId;
+      }
+    } else {
+      const org = await Organization.findOne({ adminId: req.user._id }).select("_id");
+      if (!org) {
+        return res.status(403).json({
+          success: false,
+          message: "Admin has no organization"
+        });
+      }
+      adminOrgId = org._id;
+    }
+
+    const readTime = istUtils.getISTDate();
+    const result = await Notification.updateMany(
+      { organizationId: adminOrgId, isRead: false },
+      {
+        isRead: true,
+        readAt: readTime
+      }
+    );
+
+    res.json({
+      success: true,
+      message: `Marked ${result.modifiedCount} notifications as read`,
+      modifiedCount: result.modifiedCount
+    });
+  } catch (error) {
+    console.error("Mark all notifications read error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to mark all notifications as read"
+    });
+  }
+};
+
 // Enhanced records function with comprehensive data
 const records = async (req, res) => {
   try {
@@ -261,9 +455,9 @@ const records = async (req, res) => {
     }
 
     const { date, userId } = req.query;
-    const selectedDate = date ? new Date(date) : DateTimeUtils.getISTDate();
-    const startOfDay = DateTimeUtils.getStartOfDayIST(selectedDate);
-    const endOfDay = DateTimeUtils.getEndOfDayIST(selectedDate);
+    const selectedDate = date ? new Date(date) : istUtils.getISTDate();
+    const startOfDay = istUtils.getStartOfDayIST(selectedDate);
+    const endOfDay = istUtils.getEndOfDayIST(selectedDate);
 
     let query = {
       organizationId: orgId,
@@ -274,21 +468,17 @@ const records = async (req, res) => {
       query.userId = userId;
     }
 
-    // Get daily timesheets for comprehensive data
     const dailyTimesheets = await DailyTimeSheet.find(query)
       .populate("userId", "name email department institute role workingHours")
       .sort({ "userId.name": 1 })
       .lean();
 
-    // Get all users in organization for absent count
     const allUsers = await User.find({ organizationId: orgId, role: "user" })
       .select("name email department institute workingHours")
       .lean();
 
-    // Process records with enhanced information
     const userMap = new Map();
 
-    // Create map of all users (for absent tracking)
     allUsers.forEach(user => {
       userMap.set(user._id.toString(), {
         userId: user._id,
@@ -308,14 +498,12 @@ const records = async (req, res) => {
       });
     });
 
-    // Process daily timesheets
     dailyTimesheets.forEach(sheet => {
       const userId = sheet.userId._id.toString();
       if (userMap.has(userId)) {
         const user = userMap.get(userId);
-
-        // Calculate first check-in and last check-out
         const sessions = sheet.sessions || [];
+
         if (sessions.length > 0) {
           const checkIns = sessions.filter(s => s.checkIn?.time).map(s => s.checkIn.time);
           const checkOuts = sessions.filter(s => s.checkOut?.time).map(s => s.checkOut.time);
@@ -328,7 +516,6 @@ const records = async (req, res) => {
         user.totalSessions = sessions.length;
         user.status = sheet.status || "absent";
 
-        // Determine if late (assuming 9 AM start time)
         if (user.firstCheckIn) {
           const expectedStart = new Date(user.firstCheckIn);
           const [startHour, startMinute] = (user.workingHours.start || "09:00").split(':');
@@ -336,7 +523,6 @@ const records = async (req, res) => {
           user.isLate = user.firstCheckIn > expectedStart;
         }
 
-        // Determine if early departure (assuming 5 PM end time)
         if (user.lastCheckOut && user.status !== "absent") {
           const expectedEnd = new Date(user.lastCheckOut);
           const [endHour, endMinute] = (user.workingHours.end || "17:00").split(':');
@@ -344,25 +530,19 @@ const records = async (req, res) => {
           user.isEarlyDeparture = user.lastCheckOut < expectedEnd;
         }
 
-        // Determine if half day (less than 4 hours = 240 minutes)
         user.isHalfDay = user.totalWorkingMinutes > 0 && user.totalWorkingMinutes < 240;
-
         userMap.set(userId, user);
       }
     });
 
-    // Convert map to array for response
     const records = Array.from(userMap.values()).map(user => ({
       ...user,
-      firstCheckInIST: user.firstCheckIn ? DateTimeUtils.formatIST(user.firstCheckIn) : null,
-      lastCheckOutIST: user.lastCheckOut ? DateTimeUtils.formatIST(user.lastCheckOut) : null,
-      totalWorkingHours: user.totalWorkingMinutes > 0
-        ? `${Math.floor(user.totalWorkingMinutes / 60)}h ${user.totalWorkingMinutes % 60}m`
-        : "0h 0m",
+      firstCheckInIST: user.firstCheckIn ? istUtils.formatISTTimestamp(user.firstCheckIn) : null,
+      lastCheckOutIST: user.lastCheckOut ? istUtils.formatISTTimestamp(user.lastCheckOut) : null,
+      totalWorkingHours: istUtils.formatDuration(user.totalWorkingMinutes),
       date: selectedDate.toISOString().split('T')[0],
     }));
 
-    // Calculate summary statistics
     const summary = {
       totalEmployees: allUsers.length,
       present: records.filter(r => r.status !== "absent").length,
@@ -376,7 +556,7 @@ const records = async (req, res) => {
     res.json({
       success: true,
       selectedDate: selectedDate.toISOString().split('T')[0],
-      selectedDateIST: DateTimeUtils.formatIST(selectedDate),
+      selectedDateIST: istUtils.formatISTTimestamp(selectedDate),
       summary,
       records,
       count: records.length,
@@ -416,35 +596,32 @@ const getOrganizationQRCodes = async (req, res) => {
       });
     }
 
+    const currentTime = istUtils.getISTDate();
     const response = {
       organizationName: org.name,
       organizationId: org._id,
       location: org.location,
       qrCodes: {
-        checkIn: org.checkInQRCodeId
-          ? {
-            id: org.checkInQRCodeId._id,
-            code: org.checkInQRCodeId.code,
-            type: org.checkInQRCodeId.qrType,
-            qrImage: org.checkInQRCodeId.qrImageData,
-            active: org.checkInQRCodeId.active,
-            usageCount: org.checkInQRCodeId.usageCount,
-            createdAt: org.checkInQRCodeId.createdAt,
-            createdAtIST: org.checkInQRCodeId.createdAtIST,
-          }
-          : null,
-        checkOut: org.checkOutQRCodeId
-          ? {
-            id: org.checkOutQRCodeId._id,
-            code: org.checkOutQRCodeId.code,
-            type: org.checkOutQRCodeId.qrType,
-            qrImage: org.checkOutQRCodeId.qrImageData,
-            active: org.checkOutQRCodeId.active,
-            usageCount: org.checkOutQRCodeId.usageCount,
-            createdAt: org.checkOutQRCodeId.createdAt,
-            createdAtIST: org.checkOutQRCodeId.createdAtIST,
-          }
-          : null,
+        checkIn: org.checkInQRCodeId ? {
+          id: org.checkInQRCodeId._id,
+          code: org.checkInQRCodeId.code,
+          type: org.checkInQRCodeId.qrType,
+          qrImage: org.checkInQRCodeId.qrImageData,
+          active: org.checkInQRCodeId.active,
+          usageCount: org.checkInQRCodeId.usageCount,
+          createdAt: org.checkInQRCodeId.createdAt,
+          createdAtIST: istUtils.formatISTTimestamp(org.checkInQRCodeId.createdAt),
+        } : null,
+        checkOut: org.checkOutQRCodeId ? {
+          id: org.checkOutQRCodeId._id,
+          code: org.checkOutQRCodeId.code,
+          type: org.checkOutQRCodeId.qrType,
+          qrImage: org.checkOutQRCodeId.qrImageData,
+          active: org.checkOutQRCodeId.active,
+          usageCount: org.checkOutQRCodeId.usageCount,
+          createdAt: org.checkOutQRCodeId.createdAt,
+          createdAtIST: istUtils.formatISTTimestamp(org.checkOutQRCodeId.createdAt),
+        } : null,
       },
       settings: {
         qrCodeValidityMinutes: org.settings?.qrCodeValidityMinutes || 30,
@@ -452,7 +629,7 @@ const getOrganizationQRCodes = async (req, res) => {
         requireDeviceRegistration: org.settings?.requireDeviceRegistration || true,
         strictLocationVerification: org.settings?.strictLocationVerification || true,
       },
-      lastUpdated: DateTimeUtils.formatIST(DateTimeUtils.getISTDate()),
+      lastUpdated: istUtils.formatISTTimestamp(currentTime),
     };
 
     res.json({
@@ -628,7 +805,7 @@ const getTodaysAttendance = async (req, res) => {
   }
 };
 
-// Update user by admin with enhanced features
+// Update user by admin
 const updateUserByAdmin = async (req, res) => {
   try {
     const userId = req.params.id;
@@ -637,7 +814,6 @@ const updateUserByAdmin = async (req, res) => {
       workingHours, password, customHolidays, weeklySchedule
     } = req.body;
 
-    // Check if user is organization admin
     if (req.user.role !== "organization") {
       return res.status(403).json({
         success: false,
@@ -645,20 +821,14 @@ const updateUserByAdmin = async (req, res) => {
       });
     }
 
-    // ✅ FIXED: Extract organization ID properly
     let adminOrgId;
-    
     if (req.user.organizationId) {
-      // If organizationId is a full document, extract the _id
       if (typeof req.user.organizationId === 'object' && req.user.organizationId._id) {
         adminOrgId = req.user.organizationId._id;
       } else {
-        // If it's already an ObjectId
         adminOrgId = req.user.organizationId;
       }
     } else {
-      // Fallback: lookup organization
-      console.log("Admin organizationId not found in token, looking up organization...");
       const org = await Organization.findOne({ adminId: req.user._id }).select("_id");
       if (!org) {
         return res.status(403).json({
@@ -669,15 +839,11 @@ const updateUserByAdmin = async (req, res) => {
       adminOrgId = org._id;
     }
 
-    console.log("Final admin organization ID:", adminOrgId);
-
-    // Find the user to update
     const userToUpdate = await User.findById(userId);
     if (!userToUpdate) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    // ✅ FIXED: Compare ObjectIds properly
     if (String(userToUpdate.organizationId) !== String(adminOrgId)) {
       return res.status(403).json({
         success: false,
@@ -685,7 +851,6 @@ const updateUserByAdmin = async (req, res) => {
       });
     }
 
-    // Build update data
     const updateData = {};
     if (name !== undefined) updateData.name = name;
     if (email !== undefined) updateData.email = email;
@@ -696,8 +861,7 @@ const updateUserByAdmin = async (req, res) => {
     if (workingHours !== undefined) updateData.workingHours = workingHours;
     if (customHolidays !== undefined) updateData.customHolidays = customHolidays;
     if (weeklySchedule !== undefined) updateData.weeklySchedule = weeklySchedule;
-    
-    // Hash password if provided
+
     if (password) {
       const bcrypt = require("bcryptjs");
       updateData.password = await bcrypt.hash(password, 10);
@@ -711,8 +875,6 @@ const updateUserByAdmin = async (req, res) => {
     if (!updatedUser) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
-
-    console.log("SUCCESS: User updated successfully");
 
     res.status(200).json({
       success: true,
@@ -741,6 +903,24 @@ const deleteUser = async (req, res) => {
       });
     }
 
+    let adminOrgId;
+    if (req.user.organizationId) {
+      if (typeof req.user.organizationId === 'object' && req.user.organizationId._id) {
+        adminOrgId = req.user.organizationId._id;
+      } else {
+        adminOrgId = req.user.organizationId;
+      }
+    } else {
+      const org = await Organization.findOne({ adminId: req.user._id }).select("_id");
+      if (!org) {
+        return res.status(403).json({
+          success: false,
+          message: "Admin has no organization",
+        });
+      }
+      adminOrgId = org._id;
+    }
+
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({
@@ -749,7 +929,7 @@ const deleteUser = async (req, res) => {
       });
     }
 
-    if (String(user.organizationId) !== String(req.user.organizationId)) {
+    if (String(user.organizationId) !== String(adminOrgId)) {
       return res.status(403).json({
         success: false,
         message: "Forbidden to delete user outside your organization",
@@ -763,16 +943,9 @@ const deleteUser = async (req, res) => {
       });
     }
 
-    console.log("Deleting user:", userId, "by admin:", req.user._id);
-
-    // Delete related attendance records and daily timesheets
     await Attendance.deleteMany({ userId: userId });
     await DailyTimeSheet.deleteMany({ userId: userId });
-
-    // Delete the user
     await User.findByIdAndDelete(userId);
-
-    console.log("User deleted successfully:", userId);
 
     res.status(200).json({
       success: true,
@@ -792,7 +965,6 @@ const deleteUser = async (req, res) => {
 const singleUser = async (req, res) => {
   try {
     const userId = req.params.id;
-
     const user = await User.findById(userId)
       .select("-password")
       .populate("organizationId", "name")
@@ -805,7 +977,6 @@ const singleUser = async (req, res) => {
       });
     }
 
-    // Get user's recent attendance summary
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
@@ -829,12 +1000,10 @@ const singleUser = async (req, res) => {
         attendanceSummary,
         recentAttendance: recentTimesheets.slice(0, 10).map(sheet => ({
           date: sheet.date,
-          dateIST: DateTimeUtils.formatIST(sheet.date),
+          dateIST: istUtils.formatISTTimestamp(sheet.date),
           status: sheet.status,
           workingMinutes: sheet.totalWorkingTime,
-          workingHours: sheet.totalWorkingTime > 0
-            ? `${Math.floor(sheet.totalWorkingTime / 60)}h ${sheet.totalWorkingTime % 60}m`
-            : "0h 0m",
+          workingHours: istUtils.formatDuration(sheet.totalWorkingTime),
           sessions: sheet.sessions.length,
         })),
       },
@@ -848,7 +1017,7 @@ const singleUser = async (req, res) => {
   }
 };
 
-// NEW: Get comprehensive dashboard data
+// Get comprehensive dashboard data
 const getDashboardData = async (req, res) => {
   try {
     const orgId = req.user.organizationId;
@@ -859,10 +1028,9 @@ const getDashboardData = async (req, res) => {
       });
     }
 
-    const today = DateTimeUtils.getStartOfDayIST();
-    const endToday = DateTimeUtils.getEndOfDayIST();
+    const today = istUtils.getStartOfDayIST();
+    const endToday = istUtils.getEndOfDayIST();
 
-    // Get today's data
     const [allUsers, todayTimesheets, todayAttendance] = await Promise.all([
       User.find({ organizationId: orgId, role: "user" }).select("name email department").lean(),
       DailyTimeSheet.find({
@@ -875,7 +1043,6 @@ const getDashboardData = async (req, res) => {
       }).populate("userId", "name email").sort({ istTimestamp: -1 }).lean()
     ]);
 
-    // Calculate comprehensive statistics
     const stats = {
       totalEmployees: allUsers.length,
       present: todayTimesheets.filter(sheet => sheet.status !== "absent").length,
@@ -888,7 +1055,6 @@ const getDashboardData = async (req, res) => {
       totalCheckOuts: todayAttendance.filter(record => record.type === "check-out").length,
     };
 
-    // Calculate late entries and early departures
     for (const sheet of todayTimesheets) {
       if (sheet.sessions && sheet.sessions.length > 0) {
         const firstCheckIn = sheet.sessions[0]?.checkIn?.time;
@@ -915,21 +1081,20 @@ const getDashboardData = async (req, res) => {
       }
     }
 
-    // Latest activities
     const latestActivities = todayAttendance.slice(0, 20).map(record => ({
       userId: record.userId._id,
       userName: record.userId.name,
       userEmail: record.userId.email,
       type: record.type,
       time: record.istTimestamp,
-      timeIST: DateTimeUtils.formatIST(record.istTimestamp),
+      timeIST: istUtils.formatISTTimestamp(record.istTimestamp),
       verified: record.verified,
     }));
 
     res.json({
       success: true,
       date: today.toISOString().split('T')[0],
-      dateIST: DateTimeUtils.formatIST(today),
+      dateIST: istUtils.formatISTTimestamp(today),
       stats,
       latestActivities,
       message: "Dashboard data fetched successfully",
@@ -1038,4 +1203,7 @@ module.exports = {
   handleDeviceChangeRequest,
   getDashboardData,
   markHolidayAttendance,
+  getNotifications,
+  markNotificationRead,
+  markAllNotificationsRead
 };
