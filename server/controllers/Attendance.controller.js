@@ -243,6 +243,62 @@ const getUserPastAttendance = async (req, res) => {
     });
   }
 };
+
+
+const getTodaysAttendance = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    // Use the IST-aware utility to get the date range
+    const nowIST = istUtils.getISTDate();
+    const startOfDay = istUtils.getStartOfDayIST(nowIST);
+    const endOfDay = istUtils.getEndOfDayIST(nowIST);
+
+    const todaysSheet = await DailyTimeSheet.findOne({
+      userId,
+      date: { $gte: startOfDay, $lte: endOfDay },
+    }).populate('organizationId', 'name');
+
+    if (!todaysSheet) {
+      return res.status(200).json({
+        success: true,
+        message: 'No attendance record for today.',
+        data: null,
+      });
+    }
+
+    // *** ADD THIS LOGIC TO FORMAT THE DATA ***
+    const formattedSheet = {
+      id: todaysSheet._id,
+      date: todaysSheet.date,
+      status: todaysSheet.status,
+      totalWorkingTime: todaysSheet.totalWorkingTime || 0,
+      totalWorkingTimeFormatted: istUtils.formatDuration(todaysSheet.totalWorkingTime || 0),
+      sessions: todaysSheet.sessions.map((sess, i) => ({
+        sessionNumber: i + 1,
+        checkIn: sess.checkIn ? {
+          time: sess.checkIn.time,
+          timeIST: istUtils.formatISTTimestamp(sess.checkIn.time, 'h:mm A'),
+        } : null,
+        checkOut: sess.checkOut ? {
+          time: sess.checkOut.time,
+          timeIST: istUtils.formatISTTimestamp(sess.checkOut.time, 'h:mm A'),
+        } : null,
+        duration: sess.duration || 0,
+        durationFormatted: istUtils.formatDuration(sess.duration || 0),
+        isActive: !!sess.checkIn && !sess.checkOut,
+      })),
+      organizationName: todaysSheet.organizationId ? todaysSheet.organizationId.name : 'N/A',
+      hasActiveSession: todaysSheet.sessions.some(s => !!s.checkIn && !s.checkOut),
+    };
+
+    res.status(200).json({ success: true, data: formattedSheet });
+
+  } catch (error) {
+    console.error('Error fetching today\'s attendance:', error);
+    res.status(500).json({ success: false, message: "Failed to fetch today's attendance" });
+  }
+};
+
 // Daily report (no nulls in first/last; uses "-" if missing)
 const getDailyReport = async (req, res) => {
   try {
@@ -599,6 +655,8 @@ module.exports = {
   getUserPastAttendance,
   getDailyReport,
   getWeeklyReport,
+  getTodaysAttendance,
+
   getMonthlyReport,
   checkWorkingDay,
 };

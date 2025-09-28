@@ -12,6 +12,7 @@ router.post("/scan", auth, qrRateLimiter, antiSpoofingMiddleware, attendanceCont
 
 // User attendance history (limited to 1 month)
 router.get("/past", auth, cache(60), attendanceController.getUserPastAttendance);
+router.get("/today", auth, attendanceController.getTodaysAttendance);
 
 // Reports for users
 router.get("/daily-report", auth, cache(120), attendanceController.getDailyReport);
