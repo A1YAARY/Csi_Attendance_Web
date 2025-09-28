@@ -165,19 +165,27 @@ const scanQRCode = async (req, res) => {
 const getUserPastAttendance = async (req, res) => {
   try {
     const userId = req.user._id;
-
     const limit = Math.min(parseInt(req.query.limit, 10) || 50, 100);
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const skip = (page - 1) * limit;
 
-    const oneMonthAgo = new Date();
+    // FIX: Use IST-aware date calculation
+    const nowIST = istUtils.getISTDate();
+    const oneMonthAgo = new Date(nowIST);
     oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
-    const fromIST = istUtils.getStartOfDayIST(oneMonthAgo); // assumes server stores UTC and formats to IST
+    const fromIST = istUtils.getStartOfDayIST(oneMonthAgo);
 
+    console.log('Past attendance query:', {
+      userId,
+      fromIST: fromIST.toISOString(),
+      nowIST: nowIST.toISOString()
+    });
+
+    // FIX: Simplified query - get all records with sessions or non-absent status
     const baseQuery = {
       userId,
       date: { $gte: fromIST },
-      $or: [{ status: { $ne: 'absent' } }, { 'sessions.0': { $exists: true } }],
+      // Remove complex $or condition - let's get all records first
     };
 
     const [total, sheets] = await Promise.all([
@@ -190,54 +198,76 @@ const getUserPastAttendance = async (req, res) => {
         .lean(),
     ]);
 
+    console.log('Found sheets:', sheets.length, 'Total:', total);
+
     const attendance = sheets.map((s) => {
       const sessions = (s.sessions || []).map((sess, i) => {
-        const checkInTime = sess.checkIn?.time || sess.checkIn || null;
-        const checkOutTime = sess.checkOut?.time || sess.checkOut || null;
-        const duration = typeof sess.duration === 'number' ? sess.duration : 0;
+        // FIX: Simplified session data extraction
+        const checkInTime = sess.checkIn?.time;
+        const checkOutTime = sess.checkOut?.time;
+        const duration = sess.duration || 0;
 
         return {
           sessionNumber: i + 1,
-          checkIn: checkInTime
-            ? { time: checkInTime, timeIST: istUtils.formatISTTimestamp(checkInTime) }
-            : null,
-          checkOut: checkOutTime
-            ? { time: checkOutTime, timeIST: istUtils.formatISTTimestamp(checkOutTime) }
-            : null,
+          checkIn: checkInTime ? {
+            time: checkInTime,
+            timeIST: istUtils.formatISTTimestamp(checkInTime)
+          } : null,
+          checkOut: checkOutTime ? {
+            time: checkOutTime,
+            timeIST: istUtils.formatISTTimestamp(checkOutTime)
+          } : null,
           duration,
           durationFormatted: istUtils.formatDuration(duration),
           isActive: Boolean(checkInTime && !checkOutTime),
         };
       });
 
-      const totalWorkingTime = typeof s.totalWorkingTime === 'number'
-        ? s.totalWorkingTime
-        : sessions.reduce((sum, x) => sum + (x.duration || 0), 0);
+      const totalWorkingTime = s.totalWorkingTime || 0;
 
       return {
         _id: s._id,
         date: s.date,
         dateIST: istUtils.formatISTTimestamp(s.date),
-        status: s.status,
+        status: s.status || 'absent',
         totalWorkingTime,
         totalWorkingTimeFormatted: istUtils.formatDuration(totalWorkingTime),
         sessionsCount: sessions.length,
         sessions,
-        organizationName: s.organizationId?.name || null,
+        organizationName: s.organizationId?.name || 'Unknown',
         hasActiveSession: sessions.some(x => x.isActive),
       };
     });
 
+    // FIX: Filter out truly empty records after processing
+    const filteredAttendance = attendance.filter(record =>
+      record.sessionsCount > 0 || record.status !== 'absent'
+    );
+
+    console.log('Filtered attendance records:', filteredAttendance.length);
+
     res.json({
+      success: true,
       page,
       limit,
       skip,
-      total,
-      totalPages: Math.ceil(total / limit),
-      data: attendance,
+      total: filteredAttendance.length, // Use filtered count
+      totalPages: Math.ceil(filteredAttendance.length / limit),
+      data: filteredAttendance,
+      debug: {
+        queryRange: {
+          from: fromIST.toISOString(),
+          to: nowIST.toISOString(),
+        },
+        rawSheetsFound: sheets.length,
+        filteredCount: filteredAttendance.length,
+      }
     });
+
   } catch (err) {
+    console.error('getUserPastAttendance error:', err);
     res.status(500).json({
+      success: false,
       message: 'Failed to load attendance',
       error: err?.message || String(err),
     });
@@ -247,7 +277,7 @@ const getUserPastAttendance = async (req, res) => {
 
 const getTodaysAttendance = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user._id;
     // Use the IST-aware utility to get the date range
     const nowIST = istUtils.getISTDate();
     const startOfDay = istUtils.getStartOfDayIST(nowIST);

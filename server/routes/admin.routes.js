@@ -21,6 +21,13 @@ router.post("/reset-user-device", auth, role(["organization"]), adminController.
 router.get("/device-change-requests", auth, role(["organization"]), adminController.getDeviceChangeRequests);
 router.post("/handle-device-change-request", auth, role(["organization"]), adminController.handleDeviceChangeRequest);
 
+// Admin notifications
+router.get("/notifications", auth, role(["organization"]), adminController.getNotifications);
+router.patch("/notifications/:notificationId/read", auth, role(["organization"]), adminController.markNotificationRead);
+router.patch("/notifications/read-all", auth, role(["organization"]), adminController.markAllNotificationsRead);
+
+
+
 // QR Code management
 router.get("/qrcodes", auth, role(["organization"]), cache(300), adminController.getOrganizationQRCodes);
 router.get("/qrcode/:type", auth, role(["organization"]), cache(300), adminController.getQRCodeByType);
