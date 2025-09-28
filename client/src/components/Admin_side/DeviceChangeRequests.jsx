@@ -25,7 +25,7 @@ const DeviceChangeRequests = () => {
   const [actionType, setActionType] = useState('');
   const [adminReason, setAdminReason] = useState('');
 
-  const BASE_URL = process.env.VITE_BACKEND_BASE_URL || "http://localhost:3000";
+  const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL || "http://localhost:3000";
 
   // Fetch device change requests
   const fetchRequests = async () => {
@@ -181,13 +181,13 @@ const DeviceChangeRequests = () => {
                 <Clock className="w-5 h-5 text-yellow-600 mr-2" />
                 <span className="text-yellow-800 font-medium">Pending Requests</span>
               </div>
-              <p className="text-2xl font-bold text-yellow-900 mt-1">{requests.length}</p>
+              <p className="text-2xl font-bold text-yellow-900 mt-1">{requests?.length}</p>
             </div>
           </div>
         </div>
 
         {/* Requests List */}
-        {requests.length === 0 ? (
+        {requests?.length === 0 ? (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
             <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No Pending Requests</h3>
@@ -195,7 +195,7 @@ const DeviceChangeRequests = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            {requests.map((request) => (
+            {requests?.map((request) => (
               <div
                 key={request._id}
                 className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"

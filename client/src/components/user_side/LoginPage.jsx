@@ -129,7 +129,11 @@ export const LoginPage = () => {
       console.error("❌ Login error:", error);
 
       // Enhanced error handling with device change request popup
-      if (error.message?.includes("DEVICE_NOT_AUTHORIZED")) {
+      // Check multiple places where the error could be
+      const errorMessage = error.message || error.response?.data?.message || "";
+      const errorCode = error.response?.data?.code || "";
+
+      if (errorMessage.includes("DEVICE_NOT_AUTHORIZED") || errorCode === "DEVICE_NOT_AUTHORIZED") {
         // Show confirmation popup
         const confirmRequest = window.confirm(
           `🚫 Device Not Authorized\n\nThis account is registered to another device.\n\nDo you want to send a device change request to your admin?\n\nClick OK to send request or Cancel to contact admin manually.`
@@ -194,11 +198,11 @@ export const LoginPage = () => {
             }
           );
         }
-      } else if (error.message?.includes("INVALID_CREDENTIALS")) {
+      } else if (errorMessage.includes("INVALID_CREDENTIALS") || errorMessage.includes("Invalid credentials")) {
         toast.error("❌ Invalid email or password. Please check your credentials.");
-      } else if (error.message?.includes("USER_NOT_FOUND")) {
+      } else if (errorMessage.includes("USER_NOT_FOUND") || errorMessage.includes("User not found")) {
         toast.error("❌ User not found. Please check your email or contact admin.");
-      } else if (error.message?.includes("ACCOUNT_SUSPENDED")) {
+      } else if (errorMessage.includes("ACCOUNT_SUSPENDED")) {
         toast.error("❌ Your account has been suspended. Please contact admin.");
       } else {
         // Generic error handling
@@ -213,6 +217,8 @@ export const LoginPage = () => {
       setIsLoading(false);
     }
   };
+
+
 
 
   return (

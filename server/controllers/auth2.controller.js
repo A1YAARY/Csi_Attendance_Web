@@ -538,7 +538,7 @@ const login = async (req, res) => {
 };
 const requestDeviceChange = async (req, res) => {
   try {
-    const { newDeviceId, newDeviceType, newDeviceFingerprint, reason } = req.body;
+    const { email, newDeviceId, newDeviceType, newDeviceFingerprint, reason } = req.body;
 
     if (!newDeviceId) {
       return res.status(400).json({
@@ -547,7 +547,29 @@ const requestDeviceChange = async (req, res) => {
       });
     }
 
-    const user = await User.findById(req.user._id).populate('organizationId');
+    let user;
+
+    // Handle both authenticated and unauthenticated requests
+    if (req.user) {
+      // Authenticated request (user is logged in)
+      user = await User.findById(req.user._id).populate('organizationId');
+    } else if (email) {
+      // Unauthenticated request (login failure scenario)
+      user = await User.findOne({ email }).populate('organizationId');
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found with this email"
+        });
+      }
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "User email is required for unauthenticated requests"
+      });
+    }
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -575,12 +597,15 @@ const requestDeviceChange = async (req, res) => {
       newDeviceType: newDeviceType || "unknown",
       newDeviceFingerprint: newDeviceFingerprint || "",
       requestedAt: istUtils.getISTDate(),
-      status: "pending"
+      status: "pending",
+      reason: reason
     };
 
     await user.save();
 
     // Create notification for admin
+    const Notification = require('../models/Notification.models'); // Add this import at the top
+
     await Notification.create({
       type: "devicechangerequest",
       organizationId: user.organizationId._id,
@@ -613,6 +638,7 @@ const requestDeviceChange = async (req, res) => {
         status: "pending"
       }
     });
+
   } catch (error) {
     console.error("Device change request error:", error);
     res.status(500).json({

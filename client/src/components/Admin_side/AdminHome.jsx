@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Admin_Navbar } from "./Admin_Navbar";
 import EmployeeLayout from "./EmployeeLayout";
-import  AttendanceRecordLayout  from "./AttendanceRecordLayout";
+import AttendanceRecordLayout from "./AttendanceRecordLayout";
 import { useAuth } from "../../context/authStore"; // ✅ FIXED IMPORT
 import QRcodeView from "./QRcodeView";
 import AITestPage from "./AITestPage";
@@ -10,6 +10,7 @@ import VoiceDashboard from "../VoiceInterface/VoiceDashboard";
 import { useAdminProtection } from "../../hooks/useAdminProtection";
 import Dashbord2 from "./Dashbord2";
 import EmployeeLayout2 from "./EmployeeLayout2";
+import DeviceChangeRequests from "./DeviceChangeRequests";
 
 const AdminHome = () => {
   const {
@@ -207,12 +208,15 @@ const AdminHome = () => {
       case "ai":
       case "ai-test":
         return <AITestPage />;
+      case "notifications":
+        return <DeviceChangeRequests />
       case "voice":
         return (
           <VoiceDashboard
             organizationId={user?.organizationId?._id || user?.organizationId}
             userId={user?._id}
           />
+
         );
     }
   };

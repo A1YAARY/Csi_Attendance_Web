@@ -24,7 +24,7 @@ export const Admin_Navbar = () => {
       });
 
       if (response.data.success) {
-        setNotificationCount(response.data.requests.length);
+        setNotificationCount(response?.data?.requests?.length);
       }
     } catch (error) {
       console.error("Error fetching notification count:", error);
