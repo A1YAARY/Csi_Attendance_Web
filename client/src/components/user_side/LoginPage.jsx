@@ -122,18 +122,95 @@ export const LoginPage = () => {
           navigate("/teacherinfo", { replace: true });
         }
       } else {
-        toast.error(result.message || "Login failed");
+        // Handle login failure cases including device authorization
+        const code = result?.code || result?.errorCode || "";
+        const msg = String(result?.message || "").toLowerCase();
+        const deviceDenied =
+          code === "DEVICE_NOT_AUTHORIZED" ||
+          /device not authorized|device not registered|device registration/i.test(msg);
+
+        if (deviceDenied) {
+          // Show confirmation popup for device change request
+          const confirmRequest = window.confirm(
+            `🚫 Device Not Authorized\n\nThis account is registered to another device.\n\nDo you want to send a device change request to your admin?\n\nClick OK to send request or Cancel to contact admin manually.`
+          );
+
+          if (confirmRequest) {
+            try {
+              // Gather device details for the request
+              const requestData = {
+                email: email, // Include email for identification since user isn't authenticated yet
+                newDeviceId: deviceId,
+                newDeviceType: /Android/.test(navigator.userAgent)
+                  ? "Android"
+                  : /iPhone|iPad|iPod/.test(navigator.userAgent)
+                    ? "iOS"
+                    : "Web",
+                newDeviceFingerprint: deviceId,
+                reason: "Logging in from a new device - automatic request from login page"
+              };
+
+              console.log("📱 Sending device change request:", requestData);
+
+              // Make API call to request device change - FIXED URL TO MATCH BACKEND ROUTE
+              const response = await axios.post(
+                `${BASE_URL}/auth2/device-change-request`, // CORRECTED: was /request-device-change
+                requestData,
+                {
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                }
+              );
+
+              if (response.data.success) {
+                toast.success(
+                  "✅ Device change request sent successfully!\n\nYour admin will review and approve your request.\nYou will be notified once it's processed.",
+                  {
+                    autoClose: 8000,
+                    style: { whiteSpace: "pre-line" }
+                  }
+                );
+              } else {
+                toast.error(
+                  "❌ Failed to send device change request: " + response.data.message
+                );
+              }
+
+            } catch (reqError) {
+              console.error("❌ Device change request error:", reqError);
+              toast.error(
+                "❌ Error sending device change request.\nPlease contact your admin manually.\n\nError: " +
+                (reqError.response?.data?.message || reqError.message)
+              );
+            }
+          } else {
+            // User chose not to send request
+            toast.info(
+              "📧 Please contact your admin to reset your device registration.\n\nAlternatively, try the device change request option next time.",
+              {
+                autoClose: 8000,
+                style: { whiteSpace: "pre-line" }
+              }
+            );
+          }
+        } else {
+          // Other login failures
+          toast.error(result.message || "Login failed. Please try again.");
+        }
       }
 
     } catch (error) {
       console.error("❌ Login error:", error);
 
-      // Enhanced error handling with device change request popup
-      // Check multiple places where the error could be
-      const errorMessage = error.message || error.response?.data?.message || "";
-      const errorCode = error.response?.data?.code || "";
+      // Enhanced error handling for thrown errors (fallback)
+      const code = error?.response?.data?.code || error?.code || "";
+      const emsg = (error?.response?.data?.message || error?.message || "").toLowerCase();
+      const deviceDeniedCatch =
+        code === "DEVICE_NOT_AUTHORIZED" ||
+        /device not authorized|device not registered|device registration/i.test(emsg);
 
-      if (errorMessage.includes("DEVICE_NOT_AUTHORIZED") || errorCode === "DEVICE_NOT_AUTHORIZED") {
+      if (deviceDeniedCatch) {
         // Show confirmation popup
         const confirmRequest = window.confirm(
           `🚫 Device Not Authorized\n\nThis account is registered to another device.\n\nDo you want to send a device change request to your admin?\n\nClick OK to send request or Cancel to contact admin manually.`
@@ -141,9 +218,8 @@ export const LoginPage = () => {
 
         if (confirmRequest) {
           try {
-            // Gather device details for the request
             const requestData = {
-              email: email, // Include email for identification since user isn't authenticated yet
+              email: email,
               newDeviceId: deviceId,
               newDeviceType: /Android/.test(navigator.userAgent)
                 ? "Android"
@@ -156,9 +232,9 @@ export const LoginPage = () => {
 
             console.log("📱 Sending device change request:", requestData);
 
-            // Make API call to request device change
+            // CORRECTED URL TO MATCH BACKEND ROUTE
             const response = await axios.post(
-              `${BASE_URL}/request-device-change`,
+              `${BASE_URL}/auth2/device-change-request`,
               requestData,
               {
                 headers: {
@@ -189,7 +265,6 @@ export const LoginPage = () => {
             );
           }
         } else {
-          // User chose not to send request
           toast.info(
             "📧 Please contact your admin to reset your device registration.\n\nAlternatively, try the device change request option next time.",
             {
@@ -198,11 +273,11 @@ export const LoginPage = () => {
             }
           );
         }
-      } else if (errorMessage.includes("INVALID_CREDENTIALS") || errorMessage.includes("Invalid credentials")) {
+      } else if (error.message?.includes("INVALID_CREDENTIALS")) {
         toast.error("❌ Invalid email or password. Please check your credentials.");
-      } else if (errorMessage.includes("USER_NOT_FOUND") || errorMessage.includes("User not found")) {
+      } else if (error.message?.includes("USER_NOT_FOUND")) {
         toast.error("❌ User not found. Please check your email or contact admin.");
-      } else if (errorMessage.includes("ACCOUNT_SUSPENDED")) {
+      } else if (error.message?.includes("ACCOUNT_SUSPENDED")) {
         toast.error("❌ Your account has been suspended. Please contact admin.");
       } else {
         // Generic error handling

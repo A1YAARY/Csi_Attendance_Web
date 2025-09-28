@@ -138,6 +138,8 @@ const getusers = async (req, res) => {
 const getDeviceChangeRequests = async (req, res) => {
   try {
     let adminOrgId;
+
+    // Get admin's organization ID
     if (req.user.organizationId) {
       if (typeof req.user.organizationId === 'object' && req.user.organizationId._id) {
         adminOrgId = req.user.organizationId._id;
@@ -155,15 +157,23 @@ const getDeviceChangeRequests = async (req, res) => {
       adminOrgId = org._id;
     }
 
+    console.log("🔍 Admin Org ID:", adminOrgId); // Debug log
+
+    // Find users with pending device change requests in admin's organization
     const usersWithRequests = await User.find({
       organizationId: adminOrgId,
       "deviceChangeRequest.status": "pending",
     }).select("name email deviceInfo deviceChangeRequest").lean();
 
+    console.log("📱 Found users with requests:", usersWithRequests.length); // Debug log
+
     const requests = usersWithRequests.map((user) => ({
+      _id: user._id, // Add this for proper identification
       userId: user._id,
-      userName: user.name,
-      userEmail: user.email,
+      name: user.name, // Changed from userName to name
+      email: user.email, // Changed from userEmail to email
+      deviceInfo: user.deviceInfo || {}, // Add full device info
+      deviceChangeRequest: user.deviceChangeRequest, // Add full request info
       currentDevice: user.deviceInfo?.deviceId,
       newDeviceId: user.deviceChangeRequest?.newDeviceId,
       newDeviceType: user.deviceChangeRequest?.newDeviceType,
@@ -173,12 +183,14 @@ const getDeviceChangeRequests = async (req, res) => {
         : null,
     }));
 
+    // FIXED: Return data in 'requests' field to match frontend expectation
     res.json({
       success: true,
       message: "Device change requests fetched successfully",
-      data: requests,
+      requests: requests, // Changed from 'data' to 'requests'
       count: requests.length,
     });
+
   } catch (error) {
     console.error("Error fetching device change requests:", error);
     res.status(500).json({
@@ -189,7 +201,7 @@ const getDeviceChangeRequests = async (req, res) => {
 };
 
 
-// Handle device change request (approve/reject)
+// Handle device change request (approve/reject) - CORRECTED VERSION
 const handleDeviceChangeRequest = async (req, res) => {
   try {
     const { userId, action, reason } = req.body;
@@ -209,7 +221,27 @@ const handleDeviceChangeRequest = async (req, res) => {
       });
     }
 
-    if (user.organizationId.toString() !== req.user.organizationId.toString()) {
+    // Get admin's organization ID correctly - FIX APPLIED HERE
+    let adminOrgId;
+    if (req.user.organizationId) {
+      if (typeof req.user.organizationId === 'object' && req.user.organizationId._id) {
+        adminOrgId = req.user.organizationId._id;
+      } else {
+        adminOrgId = req.user.organizationId;
+      }
+    } else {
+      const org = await Organization.findOne({ adminId: req.user._id }).select("_id");
+      if (!org) {
+        return res.status(403).json({
+          success: false,
+          message: "Admin has no organization"
+        });
+      }
+      adminOrgId = org._id;
+    }
+
+    // Check if user belongs to admin's organization - IMPROVED COMPARISON
+    if (user.organizationId.toString() !== adminOrgId.toString()) {
       return res.status(403).json({
         success: false,
         message: "Unauthorized to handle this request",
@@ -223,24 +255,28 @@ const handleDeviceChangeRequest = async (req, res) => {
       });
     }
 
+    // Handle approval
     if (action === "approve") {
       user.deviceInfo = {
         deviceId: user.deviceChangeRequest.newDeviceId,
         deviceType: user.deviceChangeRequest.newDeviceType,
         deviceFingerprint: user.deviceChangeRequest.newDeviceFingerprint,
         isRegistered: true,
-        registeredAt: DateTimeUtils.getISTDate(),
+        registeredAt: istUtils.getISTDate(), // FIXED: Use istUtils instead of DateTimeUtils
       };
     }
 
+    // Update request status
     user.deviceChangeRequest.status = action === "approve" ? "approved" : "rejected";
     user.deviceChangeRequest.adminResponse = {
       adminId: req.user._id,
-      respondedAt: DateTimeUtils.getISTDate(),
+      respondedAt: istUtils.getISTDate(), // FIXED: Use istUtils instead of DateTimeUtils
       reason: reason || "",
     };
 
     await user.save();
+
+    console.log(`✅ Device change request ${action}d for user ${user.name} (${user.email})`);
 
     res.json({
       success: true,
@@ -252,14 +288,17 @@ const handleDeviceChangeRequest = async (req, res) => {
         respondedAt: user.deviceChangeRequest.adminResponse.respondedAt,
       },
     });
+
   } catch (error) {
     console.error("Error handling device change request:", error);
     res.status(500).json({
       success: false,
       message: "Failed to handle device change request",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
 };
+
 
 
 // Get admin notifications

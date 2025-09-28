@@ -1,15 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { toast, ToastContainer } from 'react-toastify';
-import { 
-  Smartphone, 
-  Monitor, 
-  Tablet, 
-  Check, 
-  X, 
-  Clock, 
-  User, 
-  Mail, 
+import {
+  Smartphone,
+  Monitor,
+  Tablet,
+  Check,
+  X,
+  Clock,
+  User,
+  Mail,
   Calendar,
   RefreshCw,
   AlertCircle
@@ -25,7 +25,7 @@ const DeviceChangeRequests = () => {
   const [actionType, setActionType] = useState('');
   const [adminReason, setAdminReason] = useState('');
 
-  const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL || "http://localhost:3000";
+  const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL|| "http://localhost:5000";
 
   // Fetch device change requests
   const fetchRequests = async () => {
@@ -39,7 +39,7 @@ const DeviceChangeRequests = () => {
       });
 
       if (response.data.success) {
-        setRequests(response.data.requests);
+        setRequests(response.data.requests || []);
       } else {
         toast.error("Failed to fetch device change requests");
       }
@@ -51,14 +51,14 @@ const DeviceChangeRequests = () => {
     }
   };
 
-  // Handle approve/reject request
+  // Handle approve/reject request - CORRECTED FUNCTION
   const handleRequest = async (action) => {
     if (!selectedRequest) return;
 
     try {
       setProcessingRequest(selectedRequest._id);
       const token = localStorage.getItem("accessToken");
-      
+
       const requestData = {
         userId: selectedRequest._id,
         action: action,
@@ -173,7 +173,7 @@ const DeviceChangeRequests = () => {
               </button>
             </div>
           </div>
-          
+
           {/* Stats */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
@@ -181,13 +181,13 @@ const DeviceChangeRequests = () => {
                 <Clock className="w-5 h-5 text-yellow-600 mr-2" />
                 <span className="text-yellow-800 font-medium">Pending Requests</span>
               </div>
-              <p className="text-2xl font-bold text-yellow-900 mt-1">{requests?.length}</p>
+              <p className="text-2xl font-bold text-yellow-900 mt-1">{requests.length}</p>
             </div>
           </div>
         </div>
 
         {/* Requests List */}
-        {requests?.length === 0 ? (
+        {requests.length === 0 ? (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
             <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No Pending Requests</h3>
@@ -195,7 +195,7 @@ const DeviceChangeRequests = () => {
           </div>
         ) : (
           <div className="space-y-4">
-            {requests?.map((request) => (
+            {requests.map((request) => (
               <div
                 key={request._id}
                 className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 hover:shadow-md transition-shadow"
@@ -215,7 +215,7 @@ const DeviceChangeRequests = () => {
                         </div>
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center text-sm text-gray-600">
                       <Calendar className="w-4 h-4 mr-2" />
                       Requested: {formatDate(request.deviceChangeRequest.requestedAt)}
@@ -270,7 +270,7 @@ const DeviceChangeRequests = () => {
                         <Check className="w-4 h-4" />
                         <span>Approve</span>
                       </button>
-                      
+
                       <button
                         onClick={() => openModal(request, 'reject')}
                         disabled={processingRequest === request._id}
@@ -302,7 +302,7 @@ const DeviceChangeRequests = () => {
             <h3 className="text-lg font-medium text-gray-900 mb-4">
               {actionType === 'approve' ? 'Approve' : 'Reject'} Device Change Request
             </h3>
-            
+
             <p className="text-gray-600 mb-4">
               Are you sure you want to {actionType} the device change request for{' '}
               <strong>{selectedRequest?.name}</strong>?
@@ -329,15 +329,14 @@ const DeviceChangeRequests = () => {
               >
                 Cancel
               </button>
-              
+
               <button
                 onClick={() => handleRequest(actionType)}
                 disabled={processingRequest}
-                className={`px-4 py-2 rounded-lg text-white disabled:opacity-50 transition-colors ${
-                  actionType === 'approve'
+                className={`px-4 py-2 rounded-lg text-white disabled:opacity-50 transition-colors ${actionType === 'approve'
                     ? 'bg-green-600 hover:bg-green-700'
                     : 'bg-red-600 hover:bg-red-700'
-                }`}
+                  }`}
               >
                 {processingRequest ? (
                   <div className="flex items-center space-x-2">

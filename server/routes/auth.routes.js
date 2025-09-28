@@ -46,7 +46,7 @@ router.put(
 );
 
 // Device change request (for users)
-router.post("/device-change-request", role(["user"]), requestDeviceChange);
+router.post("/device-change-request", requestDeviceChange);
 
 // Get device request status (for users)
 router.get("/device-request-status", authMiddleware, role(["user"]), getUserDeviceRequestStatus);
