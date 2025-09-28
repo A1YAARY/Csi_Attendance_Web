@@ -79,6 +79,7 @@ export const LoginPage = () => {
   const handleEmailLogin = async (e) => {
     e.preventDefault();
     if (isLoading) return;
+
     setIsLoading(true);
 
     try {
@@ -105,6 +106,7 @@ export const LoginPage = () => {
 
         // Store device binding
         localStorage.setItem("user_device_binding", `${email}:${deviceId}`);
+
         console.log(
           "✅ Login successful, device registered:",
           result.user.deviceRegistered
@@ -122,25 +124,96 @@ export const LoginPage = () => {
       } else {
         toast.error(result.message || "Login failed");
       }
+
     } catch (error) {
       console.error("❌ Login error:", error);
 
-      // Enhanced error handling
+      // Enhanced error handling with device change request popup
       if (error.message?.includes("DEVICE_NOT_AUTHORIZED")) {
-        toast.error(
-          `🚫 Device Not Authorized\n\nThis account is registered to another device.\n\nPlease contact admin to reset your device registration.`,
-          {
-            autoClose: 10000,
-            style: { whiteSpace: "pre-line" },
-          }
+        // Show confirmation popup
+        const confirmRequest = window.confirm(
+          `🚫 Device Not Authorized\n\nThis account is registered to another device.\n\nDo you want to send a device change request to your admin?\n\nClick OK to send request or Cancel to contact admin manually.`
         );
+
+        if (confirmRequest) {
+          try {
+            // Gather device details for the request
+            const requestData = {
+              email: email, // Include email for identification since user isn't authenticated yet
+              newDeviceId: deviceId,
+              newDeviceType: /Android/.test(navigator.userAgent)
+                ? "Android"
+                : /iPhone|iPad|iPod/.test(navigator.userAgent)
+                  ? "iOS"
+                  : "Web",
+              newDeviceFingerprint: deviceId,
+              reason: "Logging in from a new device - automatic request from login page"
+            };
+
+            console.log("📱 Sending device change request:", requestData);
+
+            // Make API call to request device change
+            const response = await axios.post(
+              `${BASE_URL}/request-device-change`,
+              requestData,
+              {
+                headers: {
+                  "Content-Type": "application/json",
+                },
+              }
+            );
+
+            if (response.data.success) {
+              toast.success(
+                "✅ Device change request sent successfully!\n\nYour admin will review and approve your request.\nYou will be notified once it's processed.",
+                {
+                  autoClose: 8000,
+                  style: { whiteSpace: "pre-line" }
+                }
+              );
+            } else {
+              toast.error(
+                "❌ Failed to send device change request: " + response.data.message
+              );
+            }
+
+          } catch (reqError) {
+            console.error("❌ Device change request error:", reqError);
+            toast.error(
+              "❌ Error sending device change request.\nPlease contact your admin manually.\n\nError: " +
+              (reqError.response?.data?.message || reqError.message)
+            );
+          }
+        } else {
+          // User chose not to send request
+          toast.info(
+            "📧 Please contact your admin to reset your device registration.\n\nAlternatively, try the device change request option next time.",
+            {
+              autoClose: 8000,
+              style: { whiteSpace: "pre-line" }
+            }
+          );
+        }
+      } else if (error.message?.includes("INVALID_CREDENTIALS")) {
+        toast.error("❌ Invalid email or password. Please check your credentials.");
+      } else if (error.message?.includes("USER_NOT_FOUND")) {
+        toast.error("❌ User not found. Please check your email or contact admin.");
+      } else if (error.message?.includes("ACCOUNT_SUSPENDED")) {
+        toast.error("❌ Your account has been suspended. Please contact admin.");
       } else {
-        toast.error(error.message || "Login failed. Please try again.");
+        // Generic error handling
+        toast.error(
+          error.response?.data?.message ||
+          error.message ||
+          "Login failed. Please try again."
+        );
       }
+
     } finally {
       setIsLoading(false);
     }
   };
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4">

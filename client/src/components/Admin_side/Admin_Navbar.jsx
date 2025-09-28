@@ -1,13 +1,45 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../../context/authStore";
-import { Search, Menu, X } from "lucide-react";
+import { Search, Menu, X, Bell } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
 
 export const Admin_Navbar = () => {
   const { activeAdminView, setAdminView, user, logout } = useAuth();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
+  const [notificationCount, setNotificationCount] = useState(0);
+
+  const BASE_URL =import.meta.env.VITE_BACKEND_BASE_URL || "http://localhost:5000";
+
+  // Fetch notification count
+  const fetchNotificationCount = async () => {
+    try {
+      const token = localStorage.getItem("accessToken");
+      const response = await axios.get(`${BASE_URL}/admin/device-change-requests`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+
+      if (response.data.success) {
+        setNotificationCount(response.data.requests.length);
+      }
+    } catch (error) {
+      console.error("Error fetching notification count:", error);
+    }
+  };
+
+  // Fetch notification count on component mount and periodically
+  useEffect(() => {
+    if (user?.role === "organization") {
+      fetchNotificationCount();
+      // Refresh notification count every 30 seconds
+      const interval = setInterval(fetchNotificationCount, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [user]);
 
   // Effect to sync radio buttons with activeAdminView on load and update
   useEffect(() => {
@@ -73,6 +105,12 @@ export const Admin_Navbar = () => {
   // Handle settings navigation
   const handleSettings = () => {
     setAdminView("settings");
+  };
+
+  // Handle notifications click
+  const handleNotifications = () => {
+    setAdminView("notifications");
+    setIsMobileMenuOpen(false);
   };
 
   const navItems = [
@@ -152,21 +190,26 @@ export const Admin_Navbar = () => {
             />
           </div>
 
-          {/* Search Section - Adaptive */}
-          {/* <div className="flex-1 max-w-xs xs:max-w-sm sm:max-w-md md:max-w-lg lg:max-w-xl xl:max-w-2xl mx-2 xs:mx-4 sm:mx-6 lg:mx-8">
-            <div className="relative">
-              <input
-                type="text"
-                placeholder={searchFocused ? "Search..." : "🔍︎"}
-                onFocus={() => setSearchFocused(true)}
-                onBlur={() => setSearchFocused(false)}
-                className="w-full input input-sm sm:input-md bg-white border border-gray-300 rounded-lg text-xs xs:text-sm sm:text-base placeholder:text-center placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-              />
-            </div>
-          </div> */}
-
           {/* User Profile Section */}
           <div className="flex items-center gap-2">
+            {/* Notification Icon */}
+            <div className="relative">
+              <button
+                onClick={handleNotifications}
+                className={`btn btn-ghost btn-sm sm:btn-md p-1 sm:p-2 relative ${activeAdminView === "notifications"
+                    ? "bg-blue-50 text-blue-600"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                  }`}
+              >
+                <Bell className="w-5 h-5 sm:w-6 sm:h-6" />
+                {notificationCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 sm:h-5 sm:w-5 flex items-center justify-center font-medium text-[10px] sm:text-xs">
+                    {notificationCount > 99 ? '99+' : notificationCount}
+                  </span>
+                )}
+              </button>
+            </div>
+
             <div className="dropdown dropdown-end">
               <div
                 tabIndex={0}
@@ -280,11 +323,10 @@ export const Admin_Navbar = () => {
               <li key={`tablet-${item.id}`}>
                 <button
                   onClick={() => handleNavChange(item.view)}
-                  className={`rounded-lg px-2 md:px-3 lg:px-4 py-2 md:py-3 gap-1 md:gap-2 text-xs md:text-sm lg:text-base font-medium flex items-center transition-all duration-200 hover:scale-105 whitespace-nowrap ${
-                    isActiveView(item.view)
+                  className={`rounded-lg px-2 md:px-3 lg:px-4 py-2 md:py-3 gap-1 md:gap-2 text-xs md:text-sm lg:text-base font-medium flex items-center transition-all duration-200 hover:scale-105 whitespace-nowrap ${isActiveView(item.view)
                       ? "bg-primary text-black shadow-sm"
                       : "hover:bg-gray-100"
-                  }`}
+                    }`}
                 >
                   {typeof item.icon === "string" ? (
                     <img
@@ -304,12 +346,11 @@ export const Admin_Navbar = () => {
       </div>
 
       {/* Mobile Navigation - Shows below MD (768px) */}
-      <div className="md:hidden bg-white">
+      <div className="md:hidden bg-white relative">
         {/* Mobile Menu Toggle Bar */}
         <div
-          className={`transition-all duration-300 ease-in-out border-b border-gray-200 ${
-            isMobileMenuOpen ? "shadow-sm" : ""
-          }`}
+          className={`transition-all duration-300 ease-in-out border-b border-gray-200 ${isMobileMenuOpen ? "shadow-sm" : ""
+            }`}
         >
           <div className="flex justify-between items-center px-4 py-3">
             <span className="text-gray-700 font-medium text-sm">
@@ -326,9 +367,8 @@ export const Admin_Navbar = () => {
 
         {/* Mobile Menu Items - Collapsible */}
         <div
-          className={`overflow-hidden transition-all duration-300 ease-in-out ${
-            isMobileMenuOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
-          }`}
+          className={`overflow-hidden transition-all duration-300 ease-in-out bg-white relative z-50 ${isMobileMenuOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+            }`}
         >
           <div className="px-4 pb-4 bg-gray-50">
             <ul className="space-y-1 mt-4">
@@ -336,11 +376,10 @@ export const Admin_Navbar = () => {
                 <li key={`mobile-${item.id}`}>
                   <button
                     onClick={() => handleNavChange(item.view)}
-                    className={`w-full text-left p-3 sm:p-4 rounded-lg flex items-center gap-3 transition-all duration-200 text-sm sm:text-base font-medium ${
-                      isActiveView(item.view)
+                    className={`w-full text-left p-3 sm:p-4 rounded-lg flex items-center gap-3 transition-all duration-200 text-sm sm:text-base font-medium ${isActiveView(item.view)
                         ? "bg-primary text-black shadow-sm transform scale-[1.02]"
                         : "hover:bg-white hover:shadow-sm active:scale-95"
-                    }`}
+                      }`}
                   >
                     {typeof item.icon === "string" ? (
                       <img
@@ -355,15 +394,36 @@ export const Admin_Navbar = () => {
                   </button>
                 </li>
               ))}
+
+              {/* Mobile Notification Button */}
+              <li>
+                <button
+                  onClick={handleNotifications}
+                  className={`w-full text-left p-3 sm:p-4 rounded-lg flex items-center gap-3 transition-all duration-200 text-sm sm:text-base font-medium ${activeAdminView === "notifications"
+                      ? "bg-primary text-black shadow-sm transform scale-[1.02]"
+                      : "hover:bg-white hover:shadow-sm active:scale-95"
+                    }`}
+                >
+                  <div className="relative">
+                    <Bell className="w-5 h-5" />
+                    {notificationCount > 0 && (
+                      <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center font-medium text-[10px]">
+                        {notificationCount > 9 ? '9+' : notificationCount}
+                      </span>
+                    )}
+                  </div>
+                  Notifications
+                </button>
+              </li>
             </ul>
           </div>
         </div>
       </div>
 
-      {/* Mobile Menu Backdrop */}
+      {/* Mobile Menu Backdrop - Fixed z-index issue */}
       {isMobileMenuOpen && (
         <div
-          className="fixed inset-0 bg-black bg-opacity-20 z-10 md:hidden"
+          className="fixed inset-0 bg-black bg-opacity-20 z-40 md:hidden"
           onClick={() => setIsMobileMenuOpen(false)}
         />
       )}
