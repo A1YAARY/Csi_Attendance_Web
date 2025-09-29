@@ -65,7 +65,7 @@ const organizationSchema = new mongoose.Schema(
     settings: {
       timezone: { type: String, default: "Asia/Kolkata" },
       qrCodeValidityMinutes: { type: Number, default: 30 },
-      locationToleranceMeters: { type: Number, default: 500 },
+      locationToleranceMeters: { type: Number, default: 600 },
       requireDeviceRegistration: { type: Boolean, default: true },
       strictLocationVerification: { type: Boolean, default: true },
     },

@@ -25,7 +25,7 @@ async function generateQRCode(
     location: {
       latitude: Number(location?.latitude ?? 0).toFixed(5),
       longitude: Number(location?.longitude ?? 0).toFixed(5),
-      radius: Number(location?.radius ?? 500),
+      radius: Number(location?.radius ?? 600),
     },
     timestamp,
     code,

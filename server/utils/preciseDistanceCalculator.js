@@ -14,14 +14,14 @@ class PreciseDistanceCalculator {
     return {
       distance: distance, // meters
       accuracy: accuracy,
-      isWithinTolerance: distance <= (location1.accuracy || 500) + (location2.accuracy || 500) + 50,
+      isWithinTolerance: distance <= (location1.accuracy || 600) + (location2.accuracy || 600) + 50,
       precision: 'high' // Can be high/medium/low based on GPS accuracy
     };
   }
 
   static calculateAccuracy(loc1, loc2, distance) {
     const avgAccuracy = (loc1.accuracy + loc2.accuracy) / 2;
-    return Math.max(95, 500 - (avgAccuracy / distance) * 500);
+    return Math.max(95, 600 - (avgAccuracy / distance) * 600);
   }
 }
 

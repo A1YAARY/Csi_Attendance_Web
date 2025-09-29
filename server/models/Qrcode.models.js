@@ -27,7 +27,7 @@ const qrCodeSchema = new mongoose.Schema(
     location: {
       latitude: { type: Number },
       longitude: { type: Number },
-      radius: { type: Number, default: 500 },
+      radius: { type: Number, default: 600 },
     },
     timestamp: {
       type: Number,
