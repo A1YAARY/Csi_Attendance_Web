@@ -6,11 +6,14 @@ const notificationSchema = new mongoose.Schema({
     type: String,
     enum: [
       "devicechangerequest",
-      "deviceapproved",
+      "deviceapproved", 
       "devicerejected",
       "userregistered",
       "attendancealert",
-      "systemalert"
+      "systemalert",
+      "manual_attendance", // ✅ ADDED THIS LINE
+      "attendance_marked", // ✅ ADDED AS ALTERNATIVE
+      "admin_action"       // ✅ ADDED AS GENERIC ALTERNATIVE
     ],
     required: true
   },
@@ -21,7 +24,7 @@ const notificationSchema = new mongoose.Schema({
   },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: "User",
+    ref: "User", 
     required: true
   },
   title: {

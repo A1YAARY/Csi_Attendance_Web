@@ -326,31 +326,78 @@ const register_orginization = async (req, res) => {
 
 const register_user = async (req, res) => {
   try {
-    const { email, name, organizationCode, institute, department, password } = req.body;
+    const {
+      email,
+      name,
+      organizationCode,
+      institute,
+      department,
+      password,
+      phone, // NEW
+      workingHoursStart, // NEW
+      workingHoursEnd, // NEW
+      weeklySchedule, // NEW - Object with days
+      customHolidays, // NEW - Array of dates
+    } = req.body;
 
+    // Validation: Required fields
     if (!email || !organizationCode || !name || !institute || !department) {
       return res.status(400).json({
         success: false,
-        message: "All fields are required"
+        message: "All fields are required (email, name, organizationCode, institute, department)",
       });
     }
 
+    // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        message: "User already exists"
+        message: "User already exists",
       });
     }
 
+    // Find organization
     const organization = await Organization.findOne({ name: organizationCode });
     if (!organization) {
       return res.status(400).json({
         success: false,
-        message: "Invalid organization code"
+        message: "Invalid organization code",
       });
     }
 
+    // **NEW: Parse working hours with defaults**
+    const workingHours = {
+      start: workingHoursStart || "09:00",
+      end: workingHoursEnd || "18:00",
+    };
+
+    // **NEW: Parse weekly schedule (defaults: Mon-Fri working, Sat-Sun off)**
+    const defaultWeeklySchedule = {
+      monday: true,
+      tuesday: true,
+      wednesday: true,
+      thursday: true,
+      friday: true,
+      saturday: false,
+      sunday: false,
+    };
+
+    const finalWeeklySchedule = weeklySchedule
+      ? { ...defaultWeeklySchedule, ...weeklySchedule }
+      : defaultWeeklySchedule;
+
+    // **NEW: Parse custom holidays (array of date strings)**
+    const parsedHolidays = customHolidays
+      ? customHolidays
+          .map((dateStr) => {
+            const date = new Date(dateStr);
+            return isNaN(date.getTime()) ? null : date;
+          })
+          .filter((date) => date !== null)
+      : [];
+
+    // Create user with all fields
     const user = new User({
       email,
       password: password,
@@ -358,12 +405,17 @@ const register_user = async (req, res) => {
       role: "user",
       institute,
       department,
+      phone: phone || undefined, // NEW
       organizationId: organization._id,
+      workingHours, // NEW
+      weeklySchedule: finalWeeklySchedule, // NEW
+      customHolidays: parsedHolidays, // NEW
       deviceInfo: { isRegistered: false },
     });
 
     await user.save();
 
+    // Send welcome email with password reset link
     try {
       const resetToken = jwt.sign(
         { userId: user._id, email: user.email },
@@ -372,28 +424,35 @@ const register_user = async (req, res) => {
       );
 
       const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}&newUser=true`;
+
       const emailSubject = "Welcome to Attendance System - Set Your Password";
       const emailBody = `
- Hello ${name},
- 
- Your account has been created successfully for ${organization.name}.
- 
- Please set your password using the link below:
- ${resetLink}
- 
- This link will expire in 24 hours for security reasons.
- 
- Account Details:
- - Email: ${email}
- - Organization: ${organization.name}
- - Institute: ${institute}
- - Department: ${department}
- 
- If you didn't request this account creation, please contact your administrator.
- 
- Best regards,
- Attendance System Team
-             `;
+Hello ${name},
+
+Your account has been created successfully for ${organization.name}.
+
+Please set your password using the link below:
+${resetLink}
+
+This link will expire in 24 hours for security reasons.
+
+Account Details:
+- Email: ${email}
+- Organization: ${organization.name}
+- Institute: ${institute}
+- Department: ${department}
+- Phone: ${phone || "Not provided"}
+- Working Hours: ${workingHours.start} - ${workingHours.end}
+- Weekly Offs: ${Object.entries(finalWeeklySchedule)
+  .filter(([day, working]) => !working)
+  .map(([day]) => day.charAt(0).toUpperCase() + day.slice(1))
+  .join(", ") || "None"}
+
+If you didn't request this account creation, please contact your administrator.
+
+Best regards,
+Attendance System Team
+`;
 
       await sendMail(email, emailSubject, emailBody);
     } catch (mailErr) {
@@ -401,6 +460,7 @@ const register_user = async (req, res) => {
       // Continue without failing registration
     }
 
+    // Generate tokens
     const { accessToken, refreshToken } = generateTokens(user._id);
 
     res.cookie("refreshToken", refreshToken, {
@@ -419,6 +479,10 @@ const register_user = async (req, res) => {
         name: user.name,
         role: user.role,
         organizationId: user.organizationId,
+        phone: user.phone,
+        workingHours: user.workingHours,
+        weeklySchedule: user.weeklySchedule,
+        customHolidays: user.customHolidays,
       },
       accessToken,
     });
@@ -426,10 +490,11 @@ const register_user = async (req, res) => {
     console.error("User registration error:", error);
     res.status(500).json({
       success: false,
-      message: "Server error during user registration"
+      message: "Server error during user registration",
     });
   }
 };
+
 
 // Enhanced login with device registration check
 const login = async (req, res) => {

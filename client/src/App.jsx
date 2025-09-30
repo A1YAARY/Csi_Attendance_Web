@@ -17,6 +17,7 @@ import AdminProtected from "./components/AdminProtected";
 import ClickSpark from "./reactbitscomponents/ClickSpark";
 import ResetPass from "./components/Admin_side/ResetPass";
 import UpdationUser from "./components/Admin_side/UpdationUser";
+import ManualAttendance from './components/Admin_side/ManualAttendance';
 
 function App() {
   const location = useLocation();
@@ -74,6 +75,8 @@ function App() {
                 </PublicRoute>
               }
             />
+            <Route path="/admin/manual-attendance" element={<ManualAttendance />} />
+
 
             {/* Password Reset Route */}
             <Route

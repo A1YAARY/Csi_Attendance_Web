@@ -930,6 +930,90 @@ const updateUserByAdmin = async (req, res) => {
   }
 };
 
+
+// New endpoint in admin.controller.js
+const autoMarkWeeklyOffs = async (req, res) => {
+  try {
+    const { date } = req.body; // Format: YYYY-MM-DD
+    const orgId = req.user.organizationId;
+
+    if (!orgId) {
+      return res.status(400).json({
+        success: false,
+        message: 'User not associated with any organization',
+      });
+    }
+
+    const checkDate = date ? new Date(date) : istUtils.getISTDate();
+    const dayName = checkDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+    const startOfDay = istUtils.getStartOfDayIST(checkDate);
+    const endOfDay = istUtils.getEndOfDayIST(checkDate);
+
+    // Get all users in organization
+    const users = await User.find({ organizationId: orgId, role: 'user' }).lean();
+
+    // Filter users who have this day as weekly off
+    const usersWithWeeklyOff = users.filter(user => {
+      const schedule = user.weeklySchedule || {};
+      return schedule[dayName] === false;
+    });
+
+    if (usersWithWeeklyOff.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No users with weekly off on this day',
+        data: { date: checkDate.toISOString().split('T')[0], count: 0 },
+      });
+    }
+
+    // Create or update daily timesheets for weekly off
+    const bulkOperations = usersWithWeeklyOff.map(user => ({
+      updateOne: {
+        filter: {
+          userId: user._id,
+          organizationId: orgId,
+          date: { $gte: startOfDay, $lte: endOfDay },
+        },
+        update: {
+          $setOnInsert: {
+            userId: user._id,
+            organizationId: orgId,
+            date: startOfDay,
+            sessions: [],
+            totalWorkingTime: 0,
+            status: 'weekly-off',
+            isWeeklyOff: true,
+          },
+        },
+        upsert: true,
+      },
+    }));
+
+    const result = await DailyTimeSheet.bulkWrite(bulkOperations);
+
+    res.json({
+      success: true,
+      message: 'Weekly off attendance marked successfully',
+      data: {
+        date: checkDate.toISOString().split('T')[0],
+        dayName,
+        usersMarked: usersWithWeeklyOff.length,
+        upsertedCount: result.upsertedCount,
+        modifiedCount: result.modifiedCount,
+      },
+    });
+  } catch (error) {
+    console.error('Error marking weekly off attendance:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Failed to mark weekly off attendance',
+    });
+  }
+};
+
+
+
+
 // Delete user
 const deleteUser = async (req, res) => {
   try {
@@ -1228,6 +1312,175 @@ const markHolidayAttendance = async (req, res) => {
   }
 };
 
+
+const manualMarkPresent = async (req, res) => {
+  try {
+    const { userId, date, reason, workingHours } = req.body;
+
+    // Validation
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID is required',
+      });
+    }
+
+    // Get admin's organization
+    let adminOrgId;
+    if (req.user.organizationId) {
+      if (typeof req.user.organizationId === 'object' && req.user.organizationId._id) {
+        adminOrgId = req.user.organizationId._id;
+      } else {
+        adminOrgId = req.user.organizationId;
+      }
+    } else {
+      const org = await Organization.findOne({ adminId: req.user._id }).select('_id');
+      if (!org) {
+        return res.status(403).json({
+          success: false,
+          message: 'Admin has no organization',
+        });
+      }
+      adminOrgId = org._id;
+    }
+
+    // Verify user exists and belongs to admin's organization
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found',
+      });
+    }
+
+    if (user.organizationId.toString() !== adminOrgId.toString()) {
+      return res.status(403).json({
+        success: false,
+        message: 'User does not belong to your organization',
+      });
+    }
+
+    // Get the date (default to today)
+    const markDate = date ? new Date(date) : istUtils.getISTDate();
+    const startOfDay = istUtils.getStartOfDayIST(markDate);
+    const endOfDay = istUtils.getEndOfDayIST(markDate);
+
+    // Check if user's weekly schedule allows work on this day
+    const dayName = markDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+    const weeklySchedule = user.weeklySchedule || {};
+
+    if (weeklySchedule[dayName] === false) {
+      return res.status(400).json({
+        success: false,
+        message: `${user.name} has a weekly off on ${dayName.charAt(0).toUpperCase() + dayName.slice(1)}. Cannot mark present.`,
+      });
+    }
+
+    // Check if it's a custom holiday for this user
+    const dateStr = markDate.toISOString().split('T')[0];
+    const isCustomHoliday = (user.customHolidays || []).some(
+      holiday => new Date(holiday).toISOString().split('T')[0] === dateStr
+    );
+
+    if (isCustomHoliday) {
+      return res.status(400).json({
+        success: false,
+        message: `${dateStr} is marked as a custom holiday for ${user.name}. Cannot mark present.`,
+      });
+    }
+
+    // Check if attendance record already exists
+    let dts = await DailyTimeSheet.findOne({
+      userId: userId,
+      organizationId: adminOrgId,
+      date: { $gte: startOfDay, $lte: endOfDay },
+    });
+
+    const manualWorkingTime = workingHours ? parseInt(workingHours) * 60 : 480; // Default 8 hours
+
+    if (dts) {
+      // Update existing record
+      dts.status = 'full-day';
+      dts.totalWorkingTime = Math.max(dts.totalWorkingTime, manualWorkingTime);
+      dts.isManualEntry = true;
+      dts.manualEntryDetails = {
+        markedBy: req.user._id,
+        markedByName: req.user.name || 'Admin',
+        markedAt: istUtils.getISTDate(),
+        reason: reason || 'Phone issue - marked by admin',
+      };
+      await dts.save();
+    } else {
+      // Create new record
+      dts = new DailyTimeSheet({
+        userId: userId,
+        organizationId: adminOrgId,
+        date: startOfDay,
+        sessions: [],
+        totalWorkingTime: manualWorkingTime,
+        status: 'full-day',
+        isManualEntry: true,
+        manualEntryDetails: {
+          markedBy: req.user._id,
+          markedByName: req.user.name || 'Admin',
+          markedAt: istUtils.getISTDate(),
+          reason: reason || 'Phone issue - marked by admin',
+        },
+      });
+      await dts.save();
+    }
+
+    // Create notification (with error handling)
+    try {
+      await Notification.create({
+        organizationId: adminOrgId,
+        userId: userId,
+        type: 'systemalert', // ✅ USE EXISTING ENUM VALUE
+        title: 'Attendance Marked Manually',
+        message: `Your attendance for ${dateStr} has been marked present by admin (${req.user.name || 'Admin'}). Reason: ${reason || 'Phone issue'}`,
+        data: {
+          date: dateStr,
+          markedBy: req.user.name || 'Admin',
+          reason: reason || 'Phone issue - marked by admin',
+          workingHours: workingHours || 8,
+          actionType: 'manual_attendance', // Store actual type in data field
+        },
+        priority: 'medium',
+      });
+    } catch (notifError) {
+      console.error('Notification creation error:', notifError);
+      // Continue without failing - attendance is already marked
+    }
+
+    return res.json({
+      success: true,
+      message: `${user.name} marked present for ${dateStr}`,
+      data: {
+        userId: user._id,
+        userName: user.name,
+        userEmail: user.email,
+        date: dateStr,
+        dateIST: istUtils.formatISTTimestamp(markDate).readable,
+        status: dts.status,
+        totalWorkingTime: dts.totalWorkingTime,
+        totalWorkingHours: istUtils.formatDuration(dts.totalWorkingTime),
+        isManualEntry: true,
+        markedBy: req.user.name || 'Admin',
+        markedAt: istUtils.formatISTTimestamp(dts.manualEntryDetails.markedAt).readable,
+        reason: dts.manualEntryDetails.reason,
+      },
+    });
+  } catch (error) {
+    console.error('Manual mark present error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Failed to mark user present',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+    });
+  }
+};
+
+
 module.exports = {
   records,
   singleUser,
@@ -1237,6 +1490,8 @@ module.exports = {
   getQRCodeByType,
   getusers,
   updateUserByAdmin,
+  manualMarkPresent,
+
   resetUserDevice,
   getDeviceChangeRequests,
   handleDeviceChangeRequest,
@@ -1244,5 +1499,6 @@ module.exports = {
   markHolidayAttendance,
   getNotifications,
   markNotificationRead,
-  markAllNotificationsRead
+  markAllNotificationsRead,
+  autoMarkWeeklyOffs,
 };

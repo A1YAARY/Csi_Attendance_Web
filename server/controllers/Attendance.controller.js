@@ -9,7 +9,6 @@ const holidayService = require('../utils/holidayService');
 const geolib = require('geolib');
 const istUtils = require('../utils/istDateTimeUtils');
 
-// QR scan (check-in / check-out)
 const scanQRCode = async (req, res) => {
   try {
     const { qrCode, latitude, longitude, accuracy = 10 } = req.body;
@@ -35,7 +34,6 @@ const scanQRCode = async (req, res) => {
       { latitude: qrCodeDoc.location.latitude, longitude: qrCodeDoc.location.longitude }
     );
     const withinRange = distance <= qrCodeDoc.location.radius;
-
     if (!withinRange) {
       return res.status(400).json({
         success: false,
@@ -66,6 +64,10 @@ const scanQRCode = async (req, res) => {
       });
     }
 
+    // **NEW: Get user's working hours**
+    const user = await User.findById(userId).select('workingHours weeklySchedule');
+    const workingHours = user.workingHours || { start: '09:00', end: '17:00' };
+
     // Find/create DTS
     let dts = await DailyTimeSheet.findOne({
       userId,
@@ -94,7 +96,37 @@ const scanQRCode = async (req, res) => {
       }
     }
 
-    // Persist attendance
+    // **NEW: Calculate if late/early**
+    let attendanceFlags = {
+      isLateEntry: false,
+      isEarlyEntry: false,
+      isLateDeparture: false,
+      isEarlyDeparture: false,
+    };
+
+    if (qrCodeDoc.qrType === 'check-in') {
+      const [startHour, startMinute] = workingHours.start.split(':').map(Number);
+      const expectedStart = new Date(nowIST);
+      expectedStart.setHours(startHour, startMinute, 0, 0);
+
+      if (nowIST > expectedStart) {
+        attendanceFlags.isLateEntry = true;
+      } else if (nowIST < expectedStart) {
+        attendanceFlags.isEarlyEntry = true;
+      }
+    } else if (qrCodeDoc.qrType === 'check-out') {
+      const [endHour, endMinute] = workingHours.end.split(':').map(Number);
+      const expectedEnd = new Date(nowIST);
+      expectedEnd.setHours(endHour, endMinute, 0, 0);
+
+      if (nowIST < expectedEnd) {
+        attendanceFlags.isEarlyDeparture = true;
+      } else if (nowIST > expectedEnd) {
+        attendanceFlags.isLateDeparture = true;
+      }
+    }
+
+    // Persist attendance with flags
     const attendance = new Attendance({
       userId,
       organizationId: qrCodeDoc.organizationId._id,
@@ -111,14 +143,24 @@ const scanQRCode = async (req, res) => {
         ipAddress: req.ip,
       },
       verified: true,
+      // **NEW: Store attendance flags**
+      metadata: attendanceFlags,
     });
     await attendance.save();
 
     // Update DTS sessions
     if (qrCodeDoc.qrType === 'check-in') {
-      dts.addCheckInSession({ time: nowIST, attendanceId: attendance._id });
+      dts.addCheckInSession({ 
+        time: nowIST, 
+        attendanceId: attendance._id,
+        ...attendanceFlags 
+      });
     } else {
-      dts.addCheckOutToActiveSession({ time: nowIST, attendanceId: attendance._id });
+      dts.addCheckOutToActiveSession({ 
+        time: nowIST, 
+        attendanceId: attendance._id,
+        ...attendanceFlags 
+      });
     }
 
     // Recompute totals
@@ -138,12 +180,14 @@ const scanQRCode = async (req, res) => {
         type: qrCodeDoc.qrType,
         timestamp: attendance.istTimestamp,
         timestampIST: formattedTime,
+        expectedTime: qrCodeDoc.qrType === 'check-in' ? workingHours.start : workingHours.end,
+        ...attendanceFlags, // Include late/early flags
         location: {
           latitude,
           longitude,
           accuracy,
-          distance,       // meters (number)
-          withinRange,    // boolean
+          distance,
+          withinRange,
         },
         organizationName: qrCodeDoc.organizationId.name,
         sessionNumber: dts.sessions.length,
@@ -329,28 +373,28 @@ const getTodaysAttendance = async (req, res) => {
   }
 };
 
-// Daily report (no nulls in first/last; uses "-" if missing)
 const getDailyReport = async (req, res) => {
   try {
     const { date } = req.query;
     const orgId = req.user.organizationId;
-
     const reportDate = date ? istUtils.getISTDate(new Date(date)) : istUtils.getISTDate();
     const startOfDay = istUtils.getStartOfDayIST(reportDate);
     const endOfDay = istUtils.getEndOfDayIST(reportDate);
 
-    const isHoliday = !(await holidayService.isWorkingDay(reportDate));
+    // Check if it's a public holiday
+    const isPublicHoliday = !(await holidayService.isWorkingDay(reportDate));
+    const dayOfWeek = reportDate.toLocaleDateString('en-US', { weekday: 'long' });
 
     const dailyTimesheets = await DailyTimeSheet.find({
       organizationId: orgId,
       date: { $gte: startOfDay, $lte: endOfDay },
     })
-      .populate('userId', 'name email department institute')
+      .populate('userId', 'name email department institute workingHours weeklySchedule customHolidays')
       .sort({ 'userId.name': 1 })
       .lean();
 
     const allUsers = await User.find({ organizationId: orgId, role: 'user' })
-      .select('name email department institute')
+      .select('name email department institute workingHours weeklySchedule customHolidays')
       .lean();
 
     const report = allUsers.map(user => {
@@ -358,14 +402,32 @@ const getDailyReport = async (req, res) => {
         sheet => sheet.userId._id.toString() === user._id.toString()
       );
 
+      // **NEW: Check if it's user's weekly off**
+      const userWeeklySchedule = user.weeklySchedule || {};
+      const dayKey = dayOfWeek.toLowerCase(); // 'monday', 'tuesday', etc.
+      const isUserWeeklyOff = userWeeklySchedule[dayKey] === false; // false means not working
+
+      // **NEW: Check custom holidays**
+      const dateStr = reportDate.toISOString().split('T')[0];
+      const isUserCustomHoliday = (user.customHolidays || []).some(
+        holiday => new Date(holiday).toISOString().split('T')[0] === dateStr
+      );
+
       let status = 'absent';
       let workingTime = 0;
       let sessions = [];
       let firstCheckIn = '-';
       let lastCheckOut = '-';
+      let isLateEntry = false;
+      let isEarlyEntry = false;
+      let isLateDeparture = false;
+      let isEarlyDeparture = false;
 
-      if (isHoliday) {
-        status = 'holiday';
+      // **CRITICAL FIX: Auto-mark present if weekly off or holiday**
+      if (isPublicHoliday || isUserWeeklyOff || isUserCustomHoliday) {
+        status = isPublicHoliday ? 'public-holiday' : 
+                 isUserWeeklyOff ? 'weekly-off' : 'custom-holiday';
+        workingTime = 0; // No working time expected
       } else if (timesheet) {
         status = timesheet.status;
         workingTime = timesheet.totalWorkingTime || 0;
@@ -378,10 +440,35 @@ const getDailyReport = async (req, res) => {
           if (checkIns.length > 0) {
             const first = new Date(Math.min(...checkIns.map(d => d.getTime())));
             firstCheckIn = istUtils.formatISTTimestamp(first).readable;
+
+            // **NEW: Check if late or early entry**
+            const workingHours = user.workingHours || { start: '09:00', end: '17:00' };
+            const [startHour, startMinute] = workingHours.start.split(':').map(Number);
+            const expectedStart = new Date(first);
+            expectedStart.setHours(startHour, startMinute, 0, 0);
+
+            if (first > expectedStart) {
+              isLateEntry = true;
+            } else if (first < expectedStart) {
+              isEarlyEntry = true;
+            }
           }
+
           if (checkOuts.length > 0) {
             const last = new Date(Math.max(...checkOuts.map(d => d.getTime())));
             lastCheckOut = istUtils.formatISTTimestamp(last).readable;
+
+            // **NEW: Check if late or early departure**
+            const workingHours = user.workingHours || { start: '09:00', end: '17:00' };
+            const [endHour, endMinute] = workingHours.end.split(':').map(Number);
+            const expectedEnd = new Date(last);
+            expectedEnd.setHours(endHour, endMinute, 0, 0);
+
+            if (last < expectedEnd) {
+              isEarlyDeparture = true;
+            } else if (last > expectedEnd) {
+              isLateDeparture = true;
+            }
           }
         }
       }
@@ -397,20 +484,30 @@ const getDailyReport = async (req, res) => {
         status,
         workingTime,
         workingHours: istUtils.formatDuration(workingTime),
+        expectedWorkingHours: user.workingHours || { start: '09:00', end: '17:00' },
         sessionsCount: sessions.length,
         firstCheckIn,
         lastCheckOut,
-        isHoliday,
+        isLateEntry,
+        isEarlyEntry,
+        isLateDeparture,
+        isEarlyDeparture,
+        isPublicHoliday,
+        isWeeklyOff: isUserWeeklyOff,
+        isCustomHoliday: isUserCustomHoliday,
       };
     });
 
     const stats = {
       totalEmployees: allUsers.length,
-      present: report.filter(r => !['absent', 'holiday'].includes(r.status)).length,
+      present: report.filter(r => !['absent'].includes(r.status)).length,
       absent: report.filter(r => r.status === 'absent').length,
-      holiday: isHoliday,
+      weeklyOff: report.filter(r => r.isWeeklyOff).length,
+      publicHoliday: isPublicHoliday,
       fullDays: report.filter(r => r.status === 'full-day').length,
       halfDays: report.filter(r => r.status === 'half-day').length,
+      lateEntries: report.filter(r => r.isLateEntry).length,
+      earlyDepartures: report.filter(r => r.isEarlyDeparture).length,
       averageWorkingHours:
         allUsers.length > 0
           ? (report.reduce((sum, r) => sum + r.workingTime, 0) / allUsers.length / 60).toFixed(2)
@@ -421,7 +518,8 @@ const getDailyReport = async (req, res) => {
       success: true,
       reportDate: reportDate.toISOString().split('T')[0],
       reportDateIST: istUtils.formatISTTimestamp(reportDate).readable,
-      isHoliday,
+      isPublicHoliday,
+      dayOfWeek,
       stats,
       data: report,
     });
@@ -434,7 +532,7 @@ const getDailyReport = async (req, res) => {
   }
 };
 
-// Weekly report (IST week window)
+
 const getWeeklyReport = async (req, res) => {
   try {
     const { startDate } = req.query;
@@ -443,11 +541,12 @@ const getWeeklyReport = async (req, res) => {
     let weekStart = startDate ? istUtils.getStartOfDayIST(new Date(startDate)) : null;
     if (!weekStart) {
       const today = istUtils.getISTDate();
-      const dow = today.getDay(); // 0=Sun
+      const dow = today.getDay();
       const tmp = new Date(today);
       tmp.setDate(today.getDate() - dow);
       weekStart = istUtils.getStartOfDayIST(tmp);
     }
+
     let weekEnd = new Date(weekStart);
     weekEnd.setDate(weekStart.getDate() + 6);
     weekEnd = istUtils.getEndOfDayIST(weekEnd);
@@ -456,20 +555,42 @@ const getWeeklyReport = async (req, res) => {
       organizationId: orgId,
       date: { $gte: weekStart, $lte: weekEnd },
     })
-      .populate('userId', 'name email department institute')
+      .populate('userId', 'name email department institute weeklySchedule customHolidays')
       .lean();
 
-    const allUsers = await User.find({ organizationId: orgId, role: 'user' }).lean();
+    const allUsers = await User.find({ organizationId: orgId, role: 'user' })
+      .select('name email department institute weeklySchedule customHolidays')
+      .lean();
 
+    // **NEW: Calculate expected working days for each user**
     const weeklyReport = allUsers.map(user => {
       const userTimesheets = weeklyTimesheets.filter(
         sheet => sheet.userId._id.toString() === user._id.toString()
       );
 
+      // **NEW: Count weekly offs for this user**
+      let expectedWorkingDays = 7;
+      let weeklyOffDays = 0;
+      const weeklySchedule = user.weeklySchedule || {};
+      
+      for (let i = 0; i < 7; i++) {
+        const checkDate = new Date(weekStart);
+        checkDate.setDate(weekStart.getDate() + i);
+        const dayName = checkDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+        
+        if (weeklySchedule[dayName] === false) {
+          weeklyOffDays++;
+          expectedWorkingDays--;
+        }
+      }
+
       const totalWorkingTime = userTimesheets.reduce((sum, sheet) => sum + (sheet.totalWorkingTime || 0), 0);
       const presentDays = userTimesheets.filter(sheet => sheet.status !== 'absent').length;
       const fullDays = userTimesheets.filter(sheet => sheet.status === 'full-day').length;
       const halfDays = userTimesheets.filter(sheet => sheet.status === 'half-day').length;
+      
+      // **NEW: Calculate actual absences (excluding weekly offs)**
+      const actualAbsences = expectedWorkingDays - presentDays;
 
       return {
         employeeId: user._id,
@@ -479,8 +600,10 @@ const getWeeklyReport = async (req, res) => {
         institute: user.institute || '',
         weekStartDate: weekStart.toISOString().split('T')[0],
         weekEndDate: weekEnd.toISOString().split('T')[0],
+        expectedWorkingDays, // **NEW**
+        weeklyOffDays, // **NEW**
         presentDays,
-        absentDays: 7 - presentDays,
+        absentDays: actualAbsences, // **FIXED: Now excludes weekly offs**
         fullDays,
         halfDays,
         totalWorkingTime,
@@ -496,10 +619,12 @@ const getWeeklyReport = async (req, res) => {
       weekEndDate: weekEnd.toISOString().split('T')[0],
       totalPresentDays: weeklyReport.reduce((sum, u) => sum + u.presentDays, 0),
       totalAbsentDays: weeklyReport.reduce((sum, u) => sum + u.absentDays, 0),
+      totalWeeklyOffDays: weeklyReport.reduce((sum, u) => sum + u.weeklyOffDays, 0),
       totalWorkingHours: weeklyReport.reduce((sum, u) => sum + u.totalWorkingTime, 0) / 60,
       averageAttendance:
         allUsers.length > 0
-          ? ((weeklyReport.reduce((s, u) => s + u.presentDays, 0) / (allUsers.length * 7)) * 100).toFixed(2)
+          ? ((weeklyReport.reduce((s, u) => s + u.presentDays, 0) / 
+             weeklyReport.reduce((s, u) => s + u.expectedWorkingDays, 0)) * 100).toFixed(2)
           : '0.00',
     };
 
@@ -523,7 +648,7 @@ const getWeeklyReport = async (req, res) => {
   }
 };
 
-// Monthly report (IST month window)
+
 const getMonthlyReport = async (req, res) => {
   try {
     const { month, year } = req.query;
@@ -539,43 +664,69 @@ const getMonthlyReport = async (req, res) => {
     const monthlyReports = await DailyTimeSheet.find({
       organizationId: orgId,
       date: { $gte: startOfMonth, $lte: endOfMonth },
-    }).populate('userId', 'name email institute department').lean();
+    }).populate('userId', 'name email institute department weeklySchedule customHolidays').lean();
 
-    const allUsers = await User.find({ organizationId: orgId, role: 'user' }).lean();
+    const allUsers = await User.find({ organizationId: orgId, role: 'user' })
+      .select('name email institute department weeklySchedule customHolidays')
+      .lean();
 
     const userSummary = {};
-    const monthDays = endOfMonth.getUTCDate();
+    const monthDays = endOfMonth.getDate();
 
     allUsers.forEach((user) => {
+      // **NEW: Calculate expected working days**
+      let expectedWorkingDays = 0;
+      const dailyRecords = {};
+      
+      for (let day = 1; day <= monthDays; day++) {
+        const checkDate = new Date(reportYear, reportMonth, day);
+        const dayName = checkDate.toLocaleDateString('en-US', { weekday: 'long' }).toLowerCase();
+        const dateKey = `${reportYear}-${String(reportMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        
+        const weeklySchedule = user.weeklySchedule || {};
+        const isWeeklyOff = weeklySchedule[dayName] === false;
+        
+        // Check custom holidays
+        const isCustomHoliday = (user.customHolidays || []).some(
+          holiday => new Date(holiday).toISOString().split('T')[0] === dateKey
+        );
+        
+        if (!isWeeklyOff && !isCustomHoliday) {
+          expectedWorkingDays++;
+        }
+        
+        dailyRecords[dateKey] = {
+          date: dateKey,
+          status: isWeeklyOff ? 'weekly-off' : isCustomHoliday ? 'custom-holiday' : 'absent',
+          workingTime: 0,
+          sessions: 0,
+          firstCheckIn: '-',
+          lastCheckOut: '-',
+          isWeeklyOff,
+          isCustomHoliday,
+        };
+      }
+
       userSummary[user._id.toString()] = {
         userId: user._id,
         name: user.name,
         email: user.email,
         institute: user.institute,
         department: user.department,
-        dailyRecords: {},
+        dailyRecords,
         totalMinutes: 0,
         presentDays: 0,
         absentDays: 0,
         halfDays: 0,
         fullDays: 0,
+        weeklyOffDays: 0,
+        customHolidayDays: 0,
+        expectedWorkingDays, // **NEW**
         lateEntries: 0,
         earlyDepartures: 0,
         totalSessions: 0,
         averageWorkingHours: 0,
       };
-
-      for (let day = 1; day <= monthDays; day++) {
-        const dateKey = `${reportYear}-${String(reportMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-        userSummary[user._id.toString()].dailyRecords[dateKey] = {
-          date: dateKey,
-          status: 'absent',
-          workingTime: 0,
-          sessions: 0,
-          firstCheckIn: '-',
-          lastCheckOut: '-',
-        };
-      }
     });
 
     monthlyReports.forEach((report) => {
@@ -590,6 +741,8 @@ const getMonthlyReport = async (req, res) => {
           sessions: report.sessions.length,
           firstCheckIn: '-',
           lastCheckOut: '-',
+          isWeeklyOff: userSummary[userId].dailyRecords[dateKey].isWeeklyOff,
+          isCustomHoliday: userSummary[userId].dailyRecords[dateKey].isCustomHoliday,
         };
 
         if (report.sessions && report.sessions.length > 0) {
@@ -600,6 +753,7 @@ const getMonthlyReport = async (req, res) => {
             const first = new Date(Math.min(...checkIns.map(d => d.getTime())));
             dayRecord.firstCheckIn = istUtils.formatISTTimestamp(first).readable;
           }
+
           if (checkOuts.length > 0) {
             const last = new Date(Math.max(...checkOuts.map(d => d.getTime())));
             dayRecord.lastCheckOut = istUtils.formatISTTimestamp(last).readable;
@@ -619,15 +773,36 @@ const getMonthlyReport = async (req, res) => {
         } else if (report.status !== 'absent') {
           userSummary[userId].presentDays++;
         }
-
-        // Placeholder for policy checks (late/early) if needed
       }
     });
 
+    // **NEW: Calculate actual absences and payroll data**
     Object.keys(userSummary).forEach((uid) => {
       const u = userSummary[uid];
-      u.absentDays = monthDays - u.presentDays;
+      
+      // Count weekly offs and holidays
+      Object.values(u.dailyRecords).forEach(day => {
+        if (day.isWeeklyOff) u.weeklyOffDays++;
+        if (day.isCustomHoliday) u.customHolidayDays++;
+      });
+      
+      // **CRITICAL: Actual absences exclude weekly offs and holidays**
+      u.absentDays = u.expectedWorkingDays - u.presentDays;
       u.averageWorkingHours = u.presentDays > 0 ? (u.totalMinutes / u.presentDays / 60).toFixed(1) : '0.0';
+      
+      // **NEW: Payroll calculation data**
+      u.payrollData = {
+        totalDaysInMonth: monthDays,
+        expectedWorkingDays: u.expectedWorkingDays,
+        actualPresentDays: u.presentDays,
+        actualAbsentDays: u.absentDays,
+        weeklyOffDays: u.weeklyOffDays,
+        customHolidayDays: u.customHolidayDays,
+        attendancePercentage: u.expectedWorkingDays > 0 
+          ? ((u.presentDays / u.expectedWorkingDays) * 100).toFixed(2)
+          : '100.00',
+        salaryDeductionDays: u.absentDays, // Use this for salary calculation
+      };
     });
 
     res.json({
@@ -642,8 +817,10 @@ const getMonthlyReport = async (req, res) => {
         totalWorkingDays: monthDays,
         averageAttendance:
           allUsers.length > 0
-            ? (Object.values(userSummary).reduce((sum, u) => sum + u.presentDays, 0) / (allUsers.length * monthDays) * 100).toFixed(1)
+            ? (Object.values(userSummary).reduce((sum, u) => sum + u.presentDays, 0) / 
+               Object.values(userSummary).reduce((sum, u) => sum + u.expectedWorkingDays, 0) * 100).toFixed(1)
             : '0.0',
+        totalAbsences: Object.values(userSummary).reduce((sum, u) => sum + u.absentDays, 0),
       },
     });
   } catch (error) {
@@ -654,6 +831,7 @@ const getMonthlyReport = async (req, res) => {
     });
   }
 };
+
 
 // Working day check
 const checkWorkingDay = async (req, res) => {

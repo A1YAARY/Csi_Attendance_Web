@@ -37,8 +37,27 @@ router.get("/todays-attendance", auth, role(["organization"]), cache(30), adminC
 router.get("/daily-report", auth, role(["organization"]), cache(60), attendanceController.getDailyReport);
 router.get("/weekly-report", auth, role(["organization"]), cache(300), attendanceController.getWeeklyReport);
 router.get("/monthly-report", auth, role(["organization"]), cache(600), attendanceController.getMonthlyReport);
+router.post('/manual-mark-present', auth, role(['organization']), adminController.manualMarkPresent);
 
 // Holiday management
 router.post("/mark-holiday-attendance", auth, role(["organization"]), adminController.markHolidayAttendance);
+router.post('/test-weekly-off-cron', auth, async (req, res) => {
+    try {
+        // Import the function from timeRefresher
+        const autoMarkWeeklyOffs = require('../utils/timeRefresher').autoMarkWeeklyOffs;
 
+        await autoMarkWeeklyOffs();
+
+        res.json({
+            success: true,
+            message: 'Weekly off cron job executed manually',
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Error running cron job',
+            error: error.message,
+        });
+    }
+});
 module.exports = router;
