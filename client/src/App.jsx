@@ -181,8 +181,14 @@ function App() {
               }
             />
 
-            <Route path="/edit/:userId" element={<UpdationUser />} />
-
+            <Route
+              path="/admin/edit/:id"
+              element={
+                <AdminProtected>
+                  <UpdationUser />
+                </AdminProtected>
+              }
+            />
             {/* Root route - redirect based on authentication */}
             <Route
               path="/"

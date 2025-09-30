@@ -918,7 +918,7 @@ const updateUserByAdmin = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "User updated successfully",
-      data: updatedUser.toObject(),
+      data: updatedUser.toObject ? updatedUser.toObject() : updatedUser,
     });
   } catch (error) {
     console.error("Update user profile error:", error);

@@ -495,11 +495,15 @@ export const useAuthStore = create((set, get) => {
         getSingleUser: async (userId) =>
             cachedFetch(`${BASE_URL}/admin/singleUser/${userId}`),
 
-        updateUserByAdmin: async (userId, data) =>
-            makeAuthenticatedRequest(`${BASE_URL}/admin/user/${userId}`, {
+        updateUserByAdmin: async (userId, data) => {
+            apiCache.clear(); // Clear cache before update
+            const result = await makeAuthenticatedRequest(`${BASE_URL}/admin/user/${userId}`, {
                 method: "PATCH",
                 body: JSON.stringify(data),
-            }),
+            });
+            apiCache.clear(); // Clear cache after update
+            return result;
+        },
 
         deleteUser: async (userId) => {
             apiCache.clear();

@@ -2,6 +2,7 @@ adding a popup after the device reset successfull
 records page cehck in check out 
 export button not working 
 update user not working 
+adding the holidy for individual users
 reset password testing 
 anamation page error (during check in the check in time is visible and during check out the check out time is visible only)
 addign a back button on all the pages

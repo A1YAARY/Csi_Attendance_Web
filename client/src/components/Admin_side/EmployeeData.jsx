@@ -9,6 +9,8 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
   const [users, setUsers] = useState(allusers || []);
   const [openDropdownUserId, setOpenDropdownUserId] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
+  const getUserId = (user) => (user?._id || user?.id || '').toString();
+
 
   useEffect(() => {
     setUsers(allusers || []);
@@ -26,7 +28,7 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
         }
       );
       console.log(response, "Reset Device Response");
-      
+
 
       if (response.success) {
         toast.success(
@@ -62,9 +64,14 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
     }
   };
 
-  // ✅ FIXED: Navigate with userId parameter
   const handleEditUser = (userId) => {
-    navigate(`/edit/${userId}`);
+    console.log('Navigating to edit with userId:', userId);
+    if (!userId || userId === '' || userId === 'undefined') {
+      toast.error('Invalid user ID');
+      console.error('Invalid userId:', userId);
+      return;
+    }
+    navigate(`/admin/edit/${userId}`);
   };
 
   // Send password reset email to user
@@ -152,7 +159,7 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
     <div className="bg-white rounded-b-lg lg:rounded-t-none shadow-sm overflow-hidden">
       <div className="divide-y divide-gray-200">
         {users.map((user, index) => {
-          const userId = user._id || user.id || `user-${index}`;
+          const userId = getUserId(user);
           const userName = user.name || user.fullName || "Unknown User";
           const userEmail = user.email || "No email provided";
           const userDepartment = user.department || "N/A";
