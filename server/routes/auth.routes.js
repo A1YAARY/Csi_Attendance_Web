@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
-
+const validate = require('../middleware/validate');
+const { registerUser, loginUser, updateUser } = require('../validations/user.validation');
 // 🚨 CRITICAL: Import verifyToken (was missing!)
 const {
   register_orginization,
@@ -17,10 +18,12 @@ const authMiddleware = require("../middleware/Auth.middleware");
 const role = require("../middleware/role.middleware");
 
 // Organization register
-router.post("/organization-register", register_orginization);
+router.post("/organization-register", validate(registerUser),
+  register_orginization);
 
 // New user register
-router.post("/register-user", register_user);
+router.post("/register-user", validate(loginUser),
+  register_user);
 
 // Token refresh
 router.post("/refresh-token", refreshToken);
@@ -38,6 +41,7 @@ router.post("/logout", authMiddleware, logout);
 router.put(
   "/updateProfile",
   authMiddleware,
+  validate(updateUser),
   role(["organization"]),
   updateProfile
 );
