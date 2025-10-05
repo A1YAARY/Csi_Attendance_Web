@@ -1,37 +1,38 @@
-const { createLogger, format, transports } = require('winston');
-require('winston-daily-rotate-file');
+const winston = require('winston');
 
-let logger;
+// Custom logger with levels and colors
+const logger = winston.createLogger({
+  level: process.env.LOG_LEVEL || 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.errors({ stack: true }),
+    winston.format.json()
+  ),
+  transports: [
+    // Console transport with colors
+    new winston.transports.Console({
+      format: winston.format.combine(
+        winston.format.colorize(),
+        winston.format.simple()
+      ),
+    }),
+    // File transport for production
+    ...(process.env.NODE_ENV === 'production' ? [
+      new winston.transports.File({ filename: 'error.log', level: 'error' }),
+      new winston.transports.File({ filename: 'combined.log' }),
+    ] : []),
+  ],
+});
 
-try {
-  logger = createLogger({
-    level: 'info',
-    format: format.combine(
-      format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
-      format.errors({ stack: true }),
-      format.splat(),
-      format.json()
-    ),
-    transports: [
-      new transports.Console({
-        format: format.combine(format.colorize(), format.simple())
-      }),
-      new transports.File({ filename: 'logs/error.log', level: 'error' }),
-      new transports.File({ filename: 'logs/combined.log' })
-    ],
-    exceptionHandlers: [
-      new transports.File({ filename: 'logs/exceptions.log' })
-    ]
-  });
-} catch (error) {
-  console.error('Error creating logger:', error);
-  // Fallback: basic console logger
-  logger = {
-    info: console.log,
-    error: console.error,
-    warn: console.warn,
-    debug: console.debug
-  };
-}
+// HTTP-specific logger (for Morgan integration)
+logger.http = (message) => {
+  logger.info(message, { level: 'http' });
+};
+
+// Convenience methods
+logger.error = (message, meta) => logger.error({ message, ...meta });
+logger.warn = (message, meta) => logger.warn({ message, ...meta });
+logger.info = (message, meta) => logger.info({ message, ...meta });
+logger.debug = (message, meta) => logger.debug({ message, ...meta });
 
 module.exports = logger;

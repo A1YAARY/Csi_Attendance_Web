@@ -1,132 +1,105 @@
-const { google } = require("googleapis");
-const path = require("path");
+const axios = require('axios');
+const { ApiError } = require('../utils/errorHandler'); // New import
 
-// Path to your service account JSON
-const SERVICE_ACCOUNT_FILE = path.join("service-account.json");
-// const SERVICE_ACCOUNT_FILE = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON);
+// Cache for holidays to avoid repeated API calls
+const holidayCache = new Map();
+const CACHE_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
-// Google Calendar ID for India holidays
-const HOLIDAY_CALENDAR_ID = "en.indian#holiday@group.v.calendar.google.com";
+// Fetch holidays from API (e.g., Indian government holidays)
+async function fetchHolidays(year) {
+  try {
+    const cacheKey = `holidays_${year}`;
+    const cached = holidayCache.get(cacheKey);
+    const now = Date.now();
 
-// Authenticate using service account
-const auth = new google.auth.GoogleAuth({
-  keyFile: SERVICE_ACCOUNT_FILE,
-  scopes: ["https://www.googleapis.com/auth/calendar.readonly"],
-});
+    if (cached && (now - cached.timestamp) < CACHE_DURATION) {
+      return cached.data;
+    }
 
-// Initialize Google Calendar API client
-const calendar = google.calendar({ version: "v3", auth });
+    const response = await axios.get(
+      `https://api.example.com/holidays/in/${year}`, // Replace with actual API endpoint
+      { timeout: 5000 }
+    );
 
-// Example company-specific holidays (from DB later)
-const companyHolidays = [
-  "2025-01-26",
-  "2025-08-15",
-  "2025-12-31",
-];
-
-// ✅ Check weekend
-function isWeekend(date) {
-  const day = date.getDay();
-  return day === 0 || day === 6;
+    const holidays = response.data;
+    holidayCache.set(cacheKey, { data: holidays, timestamp: now });
+    return holidays;
+  } catch (error) {
+    console.error('Holiday API fetch error:', error.message);
+    throw new ApiError(503, 'Failed to fetch holiday data', {
+      code: 'HOLIDAY_API_ERROR',
+      year: year,
+    });
+  }
 }
 
-// ✅ Fetch holidays from Google Calendar
-async function getGoogleHolidays(year) {
-  const res = await calendar.events.list({
-    calendarId: HOLIDAY_CALENDAR_ID,
-    timeMin: new Date(`${year}-01-01`).toISOString(),
-    timeMax: new Date(`${year}-12-31`).toISOString(),
-    singleEvents: true,
-    orderBy: "startTime",
-  });
+// Check if a date is a working day (not weekend or holiday)
+async function isWorkingDay(date = new Date()) {
+  try {
+    const year = date.getFullYear();
+    const dayOfWeek = date.getDay();
+    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6; // Sunday or Saturday
 
-  return res.data.items.map((event) => event.start.date);
+    if (isWeekend) {
+      return { isWorkingDay: false, reason: 'Weekend' };
+    }
+
+    // Format date as YYYY-MM-DD
+    const dateStr = date.toISOString().split('T')[0];
+
+    // Fetch holidays for the year
+    const holidays = await fetchHolidays(year);
+
+    // Check if date is a holiday
+    const isHoliday = holidays.some(holiday =>
+      holiday.date === dateStr && holiday.country === 'IN'
+    );
+
+    if (isHoliday) {
+      return { isWorkingDay: false, reason: 'Holiday', holidayName: holidays.find(h => h.date === dateStr)?.name };
+    }
+
+    return { isWorkingDay: true, reason: 'Working Day' };
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error; // Re-throw ApiError
+    }
+    throw new ApiError(500, 'Error checking working day', {
+      code: 'WORKING_DAY_CHECK_ERROR',
+      date: date.toISOString().split('T')[0],
+    });
+  }
 }
 
-// ✅ Main checker
-async function isWorkingDay(date) {
-  const isoDate = date.toISOString().split("T")[0];
-  const year = date.getFullYear();
+// Get holidays for a specific month/year
+async function getMonthlyHolidays(year, month) {
+  try {
+    const holidays = await fetchHolidays(year);
+    const monthHolidays = holidays.filter(holiday => {
+      const holidayDate = new Date(holiday.date);
+      return holidayDate.getFullYear() === year && holidayDate.getMonth() === month;
+    });
 
-  // Check weekend
-  if (isWeekend(date)) return false;
-
-  // Check company holidays
-  if (companyHolidays.includes(isoDate)) return false;
-
-  // Check Google public holidays
-  const googleHolidays = await getGoogleHolidays(year);
-  if (googleHolidays.includes(isoDate)) return false;
-
-  return true;
+    return {
+      year,
+      month: month + 1, // 0-indexed to 1-indexed
+      holidays: monthHolidays,
+      totalHolidays: monthHolidays.length,
+    };
+  } catch (error) {
+    if (error instanceof ApiError) {
+      throw error;
+    }
+    throw new ApiError(500, 'Failed to fetch monthly holidays', {
+      code: 'MONTHLY_HOLIDAYS_ERROR',
+      year,
+      month,
+    });
+  }
 }
 
 module.exports = {
   isWorkingDay,
-  getGoogleHolidays,
+  getMonthlyHolidays,
+  fetchHolidays, // Internal use
 };
-
-
-
-
-
-
-// const { google } = require("googleapis");
-
-// // Replace with your API key
-// const API_KEY = "";
-
-// // Example: India holiday calendar
-// const HOLIDAY_CALENDAR_ID = "en.indian#holiday@group.v.calendar.google.com";
-
-// // Initialize Google Calendar API client
-// const calendar = google.calendar({ version: "v3", auth: API_KEY });
-
-// // Example company-specific holidays (from DB later)
-// const companyHolidays = [
-//   "2025-01-26",
-//   "2025-08-15",
-//   "2025-12-31",
-// ];
-
-// // ✅ Check weekend
-// function isWeekend(date) {
-//   const day = date.getDay();
-//   return day === 0 || day === 6;
-// }
-
-// // ✅ Fetch holidays from Google Calendar
-// async function getGoogleHolidays(year) {
-//   const res = await calendar.events.list({
-//     calendarId: HOLIDAY_CALENDAR_ID,
-//     timeMin: new Date(`${year}-01-01`).toISOString(),
-//     timeMax: new Date(`${year}-12-31`).toISOString(),
-//     singleEvents: true,
-//     orderBy: "startTime",
-//   });
-
-//   return res.data.items.map((event) => event.start.date);
-// }
-
-// // ✅ Main checker
-// async function isWorkingDay(date) {
-//   const isoDate = date.toISOString().split("T")[0];
-//   const year = date.getFullYear();
-
-//   if (isWeekend(date)){
-//      return false
-//     };
-//   if (companyHolidays.includes(isoDate)){
-//     return false
-//     };
-//   const googleHolidays = await getGoogleHolidays(year);
-//   if (googleHolidays.includes(isoDate)){
-//     return false
-//   };
-//   return true;
-// }
-
-// module.exports = {
-//   isWorkingDay,
-//   getGoogleHolidays,
-// };
