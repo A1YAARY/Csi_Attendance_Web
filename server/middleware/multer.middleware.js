@@ -1,6 +1,7 @@
 const multer = require("multer");
 const { CloudinaryStorage } = require("multer-storage-cloudinary");
 const cloudinary = require("../utils/cloudinary");
+const { ApiError } = require("../utils/errorHandler"); // New import
 
 const storage = new CloudinaryStorage({
   cloudinary,
@@ -29,10 +30,8 @@ const upload = multer({
     if (allowedTypes.includes(file.mimetype)) {
       cb(null, true);
     } else {
-      cb(
-        new Error("Only Excel files (.xlsx, .xls) and CSV files are allowed!"),
-        false
-      );
+      // Updated to throw ApiError
+      return cb(new ApiError(400, "Only Excel files (.xlsx, .xls) and CSV files are allowed!"), false);
     }
   },
 });

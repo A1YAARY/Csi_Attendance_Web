@@ -2,6 +2,8 @@ const express = require("express");
 const User = require("../models/user.models");
 const Organization = require("../models/organization.models");
 const jwt = require("jsonwebtoken");
+const { handleAsync, ApiError } = require("../utils/errorHandler");
+
 const qrGenerator = require("../utils/qrGenerator");
 const QRCode = require("../models/Qrcode.models");
 const { sendMail } = require("../utils/mailer");
@@ -709,8 +711,31 @@ const logout = (req, res) => {
     message: "Logged out successfully",
   });
 };
+const resetPassword = handleAsync(async (req, res) => {
+  const { token, newPassword } = req.body;
+  if (!token || !newPassword) {
+    throw new ApiError(400, "Token and new password are required");
+  }
+  let decoded;
+  try {
+    decoded = jwt.verify(token, process.env.JWT_RESET_SECRET);
+  } catch (error) {
+    if (error.name === "TokenExpiredError") {
+      throw new ApiError(401, "Reset token expired");
+    }
+    throw new ApiError(401, "Invalid reset token");
+  }
+  const user = await User.findById(decoded.userId);
+  if (!user) {
+    throw new ApiError(404, "User not found");
+  }
+  user.password = newPassword;
+  await user.save();
+  res.json({ success: true, message: "Password reset successful" });
+});
 
 module.exports = {
+  resetPassword,
   register_orginization,
   register_user,
   login,

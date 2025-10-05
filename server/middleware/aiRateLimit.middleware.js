@@ -1,5 +1,6 @@
 const rateLimit = require("express-rate-limit");
 const { ipKeyGenerator } = require("express-rate-limit");
+const { ApiError } = require("../utils/errorHandler"); // New import for ApiError
 
 // Enhanced AI-specific rate limiter with proper IPv6 handling
 const aiRateLimit = rateLimit({
@@ -41,29 +42,24 @@ const aiRateLimit = rateLimit({
   skip: (req, res) => {
     // Skip for health checks
     if (req.path === "/health") return true;
-
     // Skip for admin users (optional)
     if (req.user?.role === "admin") return true;
-
     return false;
   },
 
-  // Detailed logging and response
-  handler: (req, res, next, options) => {
+  // Detailed logging and response - Updated to throw ApiError
+  handler: (req, res, next, optionsUsed) => {
     const userInfo = req.user
       ? `${req.user.email} (${req.user._id})`
       : `IP: ${req.ip}`;
-
     console.warn(`🚫 AI Rate limit exceeded for: ${userInfo}`);
     console.warn(`📊 Request details: ${req.method} ${req.path}`);
 
-    res.status(429).json({
-      success: false,
-      error: "RATE_LIMIT_EXCEEDED",
-      message: "Too many AI requests. Please wait before trying again.",
-      retryAfter: options.message.retryAfter,
+    throw new ApiError(429, "Too many AI requests. Please wait before trying again.", {
+      code: "RATE_LIMIT_EXCEEDED",
+      retryAfter: optionsUsed.message.retryAfter,
       timestamp: new Date().toISOString(),
-      resetTime: new Date(Date.now() + options.windowMs).toISOString(),
+      resetTime: new Date(Date.now() + optionsUsed.windowMs).toISOString(),
       suggestions: [
         "Wait for the rate limit to reset",
         "Consider optimizing your queries to reduce frequency",
@@ -72,10 +68,18 @@ const aiRateLimit = rateLimit({
   },
 });
 
-
 const aiInfoRateLimit = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutes
   limit: 100, // Higher limit for info endpoints
+
+  // Updated handler to throw ApiError
+  handler: (req, res, next, optionsUsed) => {
+    throw new ApiError(429, "Info request limit exceeded. Please try again after 15 minutes.", {
+      code: "INFO_RATE_LIMIT_EXCEEDED",
+      retryAfter: 15 * 60,
+    });
+  },
+
   message: {
     success: false,
     message: "Info request limit exceeded. Please try again after 15 minutes.",

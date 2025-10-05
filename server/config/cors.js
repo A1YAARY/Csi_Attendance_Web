@@ -7,7 +7,7 @@ const corsOptions = {
     const allowedOrigins = [
       "*",
       "https://csi-attendance-frontend.onrender.com",
-      "https://csi-attendance-web-1-40fy.onrender.com", 
+      "https://csi-attendance-web-1-40fy.onrender.com",
       "http://localhost:5173",
       "http://localhost:3000",
       "http://localhost:3001",
@@ -25,15 +25,18 @@ const corsOptions = {
       callback(null, true);
     } else {
       console.log(`CORS blocked origin: ${origin}`);
+      // Minor: Enhanced log for debugging (no ApiError needed as this is CORS callback)
+      console.error(`❌ CORS error: Origin ${origin} not allowed by policy. Allowed:`, allowedOrigins);
       callback(new Error(`Origin ${origin} not allowed by CORS`));
     }
   },
+
   credentials: true,
   optionsSuccessStatus: 200,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: [
     "Content-Type",
-    "Authorization", 
+    "Authorization",
     "X-Requested-With",
     "Accept",
     "Origin",

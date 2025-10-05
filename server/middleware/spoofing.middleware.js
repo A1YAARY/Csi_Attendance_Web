@@ -1,5 +1,6 @@
 const User = require("../models/user.models");
 const fingerprint = require("../utils/fingerprint");
+const { ApiError } = require("../utils/errorHandler"); // New import
 
 // IST helper function
 const getISTDate = (date = new Date()) => {
@@ -14,19 +15,11 @@ async function fingerprintCheckMiddleware(req, res, next) {
     const user = req.user;
 
     if (!user) {
-      return res.status(401).json({
-        success: false,
-        message: "User not authenticated",
-        spoofingDetected: true,
-      });
+      throw new ApiError(401, "User not authenticated", { spoofingDetected: true });
     }
 
     if (!fp) {
-      return res.status(400).json({
-        success: false,
-        message: "Device fingerprint is required for security",
-        spoofingDetected: true,
-      });
+      throw new ApiError(400, "Device fingerprint is required for security", { spoofingDetected: true });
     }
 
     if (!user.deviceInfo) {
@@ -36,9 +29,7 @@ async function fingerprintCheckMiddleware(req, res, next) {
     if (!fingerprint.isFingerprintAllowed(user, fp)) {
       fingerprint.logSuspicious(user, fp);
       await user.save();
-      return res.status(403).json({
-        success: false,
-        message: "Device not authorized. Please register this device first.",
+      throw new ApiError(403, "Device not authorized. Please register this device first.", {
         spoofingDetected: true,
         action: "device_registration_required",
       });
@@ -63,11 +54,10 @@ async function fingerprintCheckMiddleware(req, res, next) {
     next();
   } catch (err) {
     console.error("Fingerprint check middleware error:", err);
-    res.status(500).json({
-      success: false,
-      message: "Device verification failed",
-      spoofingDetected: true,
-    });
+    if (err instanceof ApiError) {
+      throw err; // Re-throw for global handler
+    }
+    throw new ApiError(500, "Device verification failed", { spoofingDetected: true });
   }
 }
 

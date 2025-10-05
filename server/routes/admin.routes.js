@@ -1,20 +1,29 @@
 const express = require("express");
+
 const router = express.Router();
+
 const role = require("../middleware/role.middleware");
+
 const adminController = require("../controllers/admin.controller");
+
 const attendanceController = require("../controllers/Attendance.controller");
+
 const auth = require("../middleware/Auth.middleware");
+
 const cache = require("../middleware/cache.middleware");
 
 // Existing routes
-router.get("/records", auth, role(["organization"]), cache(60),adminController.records);
-router.get("/allusers", auth, role(["organization"]), cache(60),adminController.getusers);
+router.get("/records", auth, role(["organization"]), cache(60), adminController.records);
+
+router.get("/allusers", auth, role(["organization"]), cache(60), adminController.getusers);
+
 router.post(
   "/reset-user-device",
   auth,
   role(["organization"]),
   adminController.resetUserDevice
 );
+
 router.get(
   "/singleUser/:id",
   auth,
@@ -22,18 +31,21 @@ router.get(
   cache(30),
   adminController.singleUser
 );
+
 router.patch(
   "/user/:id",
   auth,
   role(["organization"]),
   adminController.updateUserByAdmin
 );
+
 router.get(
   "/device-change-requests",
   auth,
   role(["organization"]),
   adminController.getDeviceChangeRequests
 );
+
 router.post(
   "/handle-device-change-request",
   auth,
@@ -45,8 +57,10 @@ router.get(
   "/qrcodes",
   auth,
   role(["organization"]),
+  cache(300), // Cache for 5 minutes
   adminController.getOrganizationQRCodes
 );
+
 router.get(
   "/todays-attendance",
   auth,
@@ -54,21 +68,12 @@ router.get(
   cache(30),
   adminController.getTodaysAttendance
 );
+
 router.delete(
   "/user/:id",
   auth,
   role(["organization"]),
   adminController.deleteUser
-);
-
-// 🔥 ENHANCED QR CODE ROUTES
-// Get both check-in and check-out QR codes
-router.get(
-  "/qrcodes",
-  auth,
-  role(["organization"]),
-  cache(300), // Cache for 5 minutes
-  adminController.getOrganizationQRCodes
 );
 
 // Get specific QR code by type

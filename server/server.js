@@ -5,11 +5,11 @@ const compression = require("compression");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const cookieParser = require("cookie-parser");
-
 const { connectDB, closeDB } = require("./config/Database");
 const customCors = require("./config/cors");
 const ScheduleAttendanceCheck = require("./utils/timeRefresher");
 const logger = require("./utils/logger");
+const { ApiError } = require("./utils/errorHandler"); // New import for ApiError
 
 // Routes
 const bulkUserRoutes = require("./routes/bulkUser.routes");
@@ -26,8 +26,9 @@ const app = express();
 // ✅ Proxy & cookies
 app.set("trust proxy", 1);
 app.use(cookieParser());
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
 // ✅ Security middleware
 app.use(
   helmet({
@@ -69,8 +70,6 @@ connectDB();
 
 // ✅ Middleware
 app.use(customCors);
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // Request logger
 app.use((req, res, next) => {
@@ -116,22 +115,35 @@ app.get("/", (req, res) => {
 // ✅ Static audio serving
 app.use("/api/audio", express.static(path.join(__dirname, "temp/audio")));
 
-// ✅ Middleware error handler
+// ✅ Middleware error handler - Updated to handle ApiError
 app.use((err, req, res, next) => {
   logger.error(`Unhandled error: ${err.message}`, { stack: err.stack });
-  res.status(500).json({
-    error: "Something went wrong!",
-    ...(process.env.NODE_ENV === "development" && {
+
+  if (err instanceof ApiError) {
+    // Handle ApiError specifically
+    return res.status(err.statusCode || 500).json({
+      success: false,
       message: err.message,
+      ...(err.code && { code: err.code }),
+      ...(err.details && { details: err.details }),
+      ...(process.env.NODE_ENV === "development" && { stack: err.stack }),
+    });
+  }
+
+  // Fallback for other errors
+  res.status(500).json({
+    success: false,
+    message: "Something went wrong!",
+    ...(process.env.NODE_ENV === "development" && {
+      error: err.message,
       stack: err.stack,
     }),
   });
 });
 
-// ✅ Catch-all 404
-app.use(/.*/, (req, res) => {
-  res.status(404).json({
-    message: "Route not found",
+// ✅ Catch-all 404 - Updated to throw ApiError but send response for consistency
+app.use((req, res) => {
+  throw new ApiError(404, "Route not found", {
     path: req.originalUrl,
     method: req.method,
   });
@@ -146,14 +158,12 @@ const server = app.listen(PORT, () => {
 
   // ✅ Start cron jobs
   ScheduleAttendanceCheck();
-
   console.log("✅ All systems initialized successfully!");
 });
 
 // ✅ Graceful shutdown
 const gracefulShutdown = async (signal) => {
   console.log(`\n🔄 Received ${signal}. Starting graceful shutdown...`);
-
   try {
     await new Promise((resolve, reject) => {
       server.close((err) => {
@@ -162,7 +172,6 @@ const gracefulShutdown = async (signal) => {
       });
     });
     console.log("✅ Server closed successfully");
-
     await closeDB();
     process.exit(0);
   } catch (err) {

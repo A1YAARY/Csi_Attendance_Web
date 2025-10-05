@@ -1,5 +1,7 @@
 // server/config/Database.js
+
 const mongoose = require("mongoose");
+
 require("dotenv").config();
 
 const uri = process.env.MONGODB_URI;
@@ -20,7 +22,6 @@ async function connectDB() {
 
     // Health check
     await mongoose.connection.db.admin().command({ ping: 1 });
-
     console.log("📡 MongoDB connection established");
 
     mongoose.connection.on("error", (err) => {
@@ -30,6 +31,7 @@ async function connectDB() {
     mongoose.connection.on("disconnected", () => {
       console.log("📡 MongoDB disconnected");
     });
+
   } catch (error) {
     console.error("❌ Error connecting to MongoDB:", error);
     process.exit(1); // Exit if DB connection fails

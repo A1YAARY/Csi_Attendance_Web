@@ -10,12 +10,13 @@ module.exports = (duration) => (req, res, next) => {
     // wrap res.json to store response in cache
     res.sendResponse = res.json;
     res.json = (body) => {
-      CacheModel.set(key, body, duration);
+      try {
+        CacheModel.set(key, body, duration);
+      } catch (error) {
+        console.error("Cache set error:", error); // Log but don't throw
+      }
       res.sendResponse(body);
     };
     next();
   }
 };
-
-
-

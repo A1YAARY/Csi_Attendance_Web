@@ -1,16 +1,12 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/user.models");
+const { ApiError } = require("../utils/errorHandler"); // New import
 
 const authMiddleware = async (req, res, next) => {
   try {
     const token = req.header("Authorization");
-
     if (!token || !token.startsWith("Bearer ")) {
-      return res.status(401).json({
-        success: false,
-        message: "Access token not provided",
-        code: "NO_TOKEN",
-      });
+      throw new ApiError(401, "Access token not provided", { code: "NO_TOKEN" });
     }
 
     const accessToken = token.substring(7);
@@ -20,10 +16,8 @@ const authMiddleware = async (req, res, next) => {
       decoded = jwt.verify(accessToken, process.env.JWT_SECRET);
     } catch (error) {
       console.log(`Auth middleware error: ${error.name}: ${error.message}`);
-
       let errorCode = "INVALID_TOKEN";
       let errorMessage = "Invalid or expired token";
-
       if (error.name === "TokenExpiredError") {
         errorCode = "TOKEN_EXPIRED";
         errorMessage = "Token has expired";
@@ -34,10 +28,7 @@ const authMiddleware = async (req, res, next) => {
         errorCode = "TOKEN_NOT_ACTIVE";
         errorMessage = "Token is not active yet";
       }
-
-      return res.status(401).json({
-        success: false,
-        message: errorMessage,
+      throw new ApiError(401, errorMessage, {
         code: errorCode,
         expiredAt: error.expiredAt || null,
       });
@@ -47,33 +38,23 @@ const authMiddleware = async (req, res, next) => {
     const user = await User.findById(decoded.userId)
       .populate("organizationId")
       .select("-password");
-
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found or account deactivated",
-        code: "USER_NOT_FOUND",
-      });
+      throw new ApiError(404, "User not found or account deactivated", { code: "USER_NOT_FOUND" });
     }
 
     // Check if organization is still active (if user belongs to one)
     if (user.organizationId && user.organizationId.status === "inactive") {
-      return res.status(403).json({
-        success: false,
-        message: "Organization is no longer active",
-        code: "ORGANIZATION_INACTIVE",
-      });
+      throw new ApiError(403, "Organization is no longer active", { code: "ORGANIZATION_INACTIVE" });
     }
 
     req.user = user;
     next();
   } catch (error) {
     console.error("Auth middleware error:", error);
-    res.status(500).json({
-      success: false,
-      message: "Server error during authentication",
-      code: "SERVER_ERROR",
-    });
+    if (error instanceof ApiError) {
+      throw error; // Re-throw for global handler
+    }
+    throw new ApiError(500, "Server error during authentication", { code: "SERVER_ERROR" });
   }
 };
 
@@ -81,25 +62,21 @@ const authMiddleware = async (req, res, next) => {
 const optionalAuthMiddleware = async (req, res, next) => {
   try {
     const token = req.header("Authorization");
-
     if (!token || !token.startsWith("Bearer ")) {
       req.user = null;
       return next();
     }
 
     const accessToken = token.substring(7);
-
     try {
       const decoded = jwt.verify(accessToken, process.env.JWT_SECRET);
       const user = await User.findById(decoded.userId)
         .populate("organizationId")
         .select("-password");
-
       req.user = user;
     } catch (error) {
       req.user = null;
     }
-
     next();
   } catch (error) {
     req.user = null;
