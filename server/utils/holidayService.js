@@ -4,15 +4,23 @@ require("dotenv").config();
 const { google } = require("googleapis");
 
 
-// Path to your service account JSON
-const SERVICE_ACCOUNT_FILE = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
 const HOLIDAY_CALENDAR_ID = "en.indian#holiday@group.v.calendar.google.com";
 
-// Authenticate using service account
-const auth = new google.auth.GoogleAuth({
-  keyFile: SERVICE_ACCOUNT_FILE,
-  scopes: ["https://www.googleapis.com/auth/calendar.readonly"],
-});
+let auth;
+try {
+  if (process.env.GOOGLE_SERVICE_ACCOUNT) {
+    const credentials = JSON.parse(process.env.GOOGLE_SERVICE_ACCOUNT);
+    // Authenticate using service account
+    auth = new google.auth.GoogleAuth({
+      credentials,
+      scopes: ["https://www.googleapis.com/auth/calendar.readonly"],
+    });
+  } else {
+    console.warn("Warning: GOOGLE_SERVICE_ACCOUNT not set. Google Calendar features will be disabled.");
+  }
+} catch (error) {
+  console.error("Error parsing GOOGLE_SERVICE_ACCOUNT:", error);
+}
 
 // Initialize Google Calendar API client
 const calendar = google.calendar({ version: "v3", auth });

@@ -11,7 +11,7 @@ export const Admin_Navbar = () => {
   const [searchFocused, setSearchFocused] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
 
-  const BASE_URL =import.meta.env.VITE_BACKEND_BASE_URL || "http://localhost:5000";
+  const BASE_URL =import.meta.env.VITE_BACKEND_BASE_URL || "http://localhost:5173";
 
   // Fetch notification count
   const fetchNotificationCount = async () => {

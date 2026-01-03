@@ -77,7 +77,8 @@ class EnhancedGeocodingService {
         };
       }
       return null;
-    } catch {
+    } catch (err) {
+       console.error("Geoapify error:", err.message);
       return null;
     }
   }
