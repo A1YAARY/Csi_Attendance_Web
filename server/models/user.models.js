@@ -11,153 +11,156 @@ const getISTDate = (date = new Date()) => {
 const DeviceRequestSchema = new mongoose.Schema({
   newDeviceId: {
     type: String,
-    required: true
+    required: true,
   },
   newDeviceType: String,
   newDeviceFingerprint: String,
   requestedAt: {
     type: Date,
-    default: () => getISTDate()
+    default: () => getISTDate(),
   },
   status: {
     type: String,
     enum: ["pending", "approved", "rejected"],
-    default: "pending"
+    default: "pending",
   },
   adminResponse: {
     adminId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "User"
+      ref: "User",
     },
     respondedAt: Date,
-    reason: String
-  }
+    reason: String,
+  },
 });
 
-const userSchema = new mongoose.Schema({
-  email: {
-    type: String,
-    required: true,
-    unique: true,
-    lowercase: true,
-  },
-  password: {
-    type: String,
-    required: true,
-    minlength: 6,
-  },
-  name: {
-    type: String,
-    required: true
-  },
-  institute: {
-    type: String,
-  },
-  department: {
-    type: String,
-  },
-  role: {
-    type: String,
-    enum: ["organization", "user"],
-    required: true,
-  },
-  organizationId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: "Organization",
-    required: function () {
-      return this.role === "user";
+const userSchema = new mongoose.Schema(
+  {
+    email: {
+      type: String,
+      required: true,
+      unique: true,
+      lowercase: true,
     },
-  },
-  lastActivity: {
-    type: Boolean,
-    default: false,
-  },
-  // Enhanced device management
-  deviceInfo: {
-    deviceId: String,
-    deviceType: String,
-    deviceFingerprint: String,
-    isRegistered: {
-      type: Boolean,
-      default: false
+    password: {
+      type: String,
+      required: true,
+      minlength: 6,
     },
-    registeredAt: Date,
-    lastKnownLocation: {
-      latitude: Number,
-      longitude: Number,
-      accuracy: Number,
-      timestamp: {
-        type: Date,
-        default: () => getISTDate()
+    name: {
+      type: String,
+      required: true,
+    },
+    institute: {
+      type: String,
+    },
+    department: {
+      type: String,
+    },
+    role: {
+      type: String,
+      enum: ["organization", "user"],
+      required: true,
+    },
+    organizationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Organization",
+      required: function () {
+        return this.role === "user";
       },
     },
-  },
-  // Device change requests
-  deviceChangeRequest: DeviceRequestSchema,
-  workingHours: {
-    start: {
-      type: String,
-      default: "09:00",
+    lastActivity: {
+      type: Boolean,
+      default: false,
     },
-    end: {
-      type: String,
-      default: "17:00",
+    // Enhanced device management
+    deviceInfo: {
+      deviceId: String,
+      deviceType: String,
+      deviceFingerprint: String,
+      isRegistered: {
+        type: Boolean,
+        default: false,
+      },
+      registeredAt: Date,
+      lastKnownLocation: {
+        latitude: Number,
+        longitude: Number,
+        accuracy: Number,
+        timestamp: {
+          type: Date,
+          default: () => getISTDate(),
+        },
+      },
     },
+    // Device change requests
+    deviceChangeRequest: DeviceRequestSchema,
+    workingHours: {
+      start: {
+        type: String,
+        default: "09:00",
+      },
+      end: {
+        type: String,
+        default: "17:00",
+      },
+    },
+    lastLogin: {
+      type: Date,
+      default: () => getISTDate(),
+    },
+    isActive: {
+      type: Boolean,
+      default: true,
+    },
+    refreshToken: String,
   },
-  lastLogin: {
-    type: Date,
-    default: () => getISTDate()
-  },
-  isActive: {
-    type: Boolean,
-    default: true,
-  },
-  refreshToken: String,
-}, { 
-  timestamps: true,
-  toJSON: { virtuals: true },
-  toObject: { virtuals: true }
-});
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  }
+);
 
 // IST Virtuals
 userSchema.virtual("createdAtIST").get(function () {
   return this.createdAt
-    ? this.createdAt.toLocaleString("en-IN", { 
+    ? this.createdAt.toLocaleString("en-IN", {
         timeZone: "Asia/Kolkata",
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
       })
     : null;
 });
 
 userSchema.virtual("updatedAtIST").get(function () {
   return this.updatedAt
-    ? this.updatedAt.toLocaleString("en-IN", { 
+    ? this.updatedAt.toLocaleString("en-IN", {
         timeZone: "Asia/Kolkata",
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
       })
     : null;
 });
 
 userSchema.virtual("lastLoginIST").get(function () {
   return this.lastLogin
-    ? this.lastLogin.toLocaleString("en-IN", { 
+    ? this.lastLogin.toLocaleString("en-IN", {
         timeZone: "Asia/Kolkata",
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
       })
     : null;
 });
@@ -182,5 +185,10 @@ userSchema.pre("save", function (next) {
 userSchema.methods.comparePassword = async function (candidatePassword) {
   return bcrypt.compare(candidatePassword, this.password);
 };
-
+userSchema.index({ email: 1 }, { unique: true }); // Already has unique, add explicit index
+userSchema.index({ organizationId: 1, role: 1 }); // 🔥 CRITICAL: For filtering users by org
+userSchema.index({ organizationId: 1, createdAt: -1 }); // 🔥 For sorted user lists
+userSchema.index({ "deviceInfo.deviceId": 1, organizationId: 1 }); // 🔥 For device verification
+userSchema.index({ "deviceChangeRequest.status": 1, organizationId: 1 }); // For pending requests
+userSchema.index({ isActive: 1, organizationId: 1 });
 module.exports = mongoose.model("User", userSchema);

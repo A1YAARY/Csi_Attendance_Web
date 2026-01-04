@@ -54,23 +54,27 @@ const detectLocationSpoofing = (location, userAgent, deviceInfo) => {
   }
 
   // Check for mock location apps in user agent
-  const mockLocationKeywords = ['mock', 'fake', 'spoof', 'simulator'];
-  if (userAgent && mockLocationKeywords.some(keyword =>
-    userAgent.toLowerCase().includes(keyword))) {
+  const mockLocationKeywords = ["mock", "fake", "spoof", "simulator"];
+  if (
+    userAgent &&
+    mockLocationKeywords.some((keyword) =>
+      userAgent.toLowerCase().includes(keyword)
+    )
+  ) {
     suspiciousIndicators.push("Mock location app detected");
   }
 
   // Check for developer options indicators
-  if (deviceInfo && (
-    deviceInfo.developmentSettingsEnabled ||
-    deviceInfo.mockLocationEnabled
-  )) {
+  if (
+    deviceInfo &&
+    (deviceInfo.developmentSettingsEnabled || deviceInfo.mockLocationEnabled)
+  ) {
     suspiciousIndicators.push("Developer options enabled");
   }
 
   return {
     isSuspicious: suspiciousIndicators.length > 0,
-    indicators: suspiciousIndicators
+    indicators: suspiciousIndicators,
   };
 };
 
@@ -116,7 +120,6 @@ const updateDailyTimeSheet = async (userId, organizationId, attendance) => {
       last.duration = Math.floor(
         (new Date(last.checkOut.time) - new Date(last.checkIn.time)) / 60000
       );
-
     }
 
     sheet.totalWorkingTime = (sheet.sessions || []).reduce(
@@ -128,16 +131,18 @@ const updateDailyTimeSheet = async (userId, organizationId, attendance) => {
       sheet.totalWorkingTime === 0
         ? "absent"
         : sheet.totalWorkingTime < requiredMinutes / 2
-          ? "half-day"
-          : "full-day";
+        ? "half-day"
+        : "full-day";
   }
 
   try {
     await sheet.save();
-    console.log(`TimeSheet updated for user ${userId}, type: ${attendance.type}`);
+    console.log(
+      `TimeSheet updated for user ${userId}, type: ${attendance.type}`
+    );
     return sheet;
   } catch (error) {
-    console.error('TimeSheet save error:', error);
+    console.error("TimeSheet save error:", error);
     throw error;
   }
 };
@@ -158,7 +163,9 @@ exports.scanQRCode = handleAsync(async (req, res) => {
 
   // Validate user location is provided
   if (!body.location || !body.location.latitude || !body.location.longitude) {
-    throw new ApiError(400, "Current location is required for attendance", { code: "LOCATION_REQUIRED" });
+    throw new ApiError(400, "Current location is required for attendance", {
+      code: "LOCATION_REQUIRED",
+    });
   }
 
   // Get organization
@@ -172,17 +179,24 @@ exports.scanQRCode = handleAsync(async (req, res) => {
   if (user.role === "user") {
     // Check device registration
     if (!user.deviceInfo.isRegistered) {
-      throw new ApiError(403, "Device not registered. Please contact admin.", { code: "DEVICE_NOT_REGISTERED" });
+      throw new ApiError(403, "Device not registered. Please contact admin.", {
+        code: "DEVICE_NOT_REGISTERED",
+      });
     }
 
     // Check device ID
-    const currentDeviceId = body.deviceInfo?.deviceId || req.headers['x-device-id'];
+    const currentDeviceId =
+      body.deviceInfo?.deviceId || req.headers["x-device-id"];
     if (!currentDeviceId || currentDeviceId !== user.deviceInfo.deviceId) {
-      throw new ApiError(403, "Unauthorized device. Please use your registered device or request device change.", {
-        code: "UNAUTHORIZED_DEVICE",
-        registeredDevice: user.deviceInfo.deviceId,
-        currentDevice: currentDeviceId
-      });
+      throw new ApiError(
+        403,
+        "Unauthorized device. Please use your registered device or request device change.",
+        {
+          code: "UNAUTHORIZED_DEVICE",
+          registeredDevice: user.deviceInfo.deviceId,
+          currentDevice: currentDeviceId,
+        }
+      );
     }
   }
 
@@ -217,49 +231,66 @@ exports.scanQRCode = handleAsync(async (req, res) => {
   const todaysAttendance = await Attendance.find({
     userId: req.user._id,
     organizationId: userOrgId,
-    istTimestamp: { $gte: dayStart, $lte: dayEnd }
-  }).sort({ istTimestamp: -1 });
+    istTimestamp: { $gte: dayStart, $lte: dayEnd },
+  })
+    .sort({ istTimestamp: -1 })
+    .select("type istTimestamp")
+    .lean();
 
   // Determine session status from actual attendance records
   let hasOpenSession = false;
   let lastCheckInTime = null;
   let lastCheckOutTime = null;
   if (todaysAttendance.length > 0) {
-    const lastCheckIn = todaysAttendance.find(record => record.type === 'check-in');
-    const lastCheckOut = todaysAttendance.find(record => record.type === 'check-out');
+    const lastCheckIn = todaysAttendance.find(
+      (record) => record.type === "check-in"
+    );
+    const lastCheckOut = todaysAttendance.find(
+      (record) => record.type === "check-out"
+    );
     lastCheckInTime = lastCheckIn ? lastCheckIn.istTimestamp : null;
     lastCheckOutTime = lastCheckOut ? lastCheckOut.istTimestamp : null;
     // User has an open session if they checked in and haven't checked out,
     // OR their last check-in is more recent than their last check-out
-    hasOpenSession = lastCheckInTime && (!lastCheckOutTime || lastCheckInTime > lastCheckOutTime);
+    hasOpenSession =
+      lastCheckInTime &&
+      (!lastCheckOutTime || lastCheckInTime > lastCheckOutTime);
   }
 
-  console.log('🔍 Session validation debug:', {
+  console.log("🔍 Session validation debug:", {
     userId: req.user._id,
     type,
     hasOpenSession,
     todaysAttendanceCount: todaysAttendance.length,
     lastCheckIn: lastCheckInTime,
-    lastCheckOut: lastCheckOutTime
+    lastCheckOut: lastCheckOutTime,
   });
 
   if (type === "check-in" && hasOpenSession) {
-    throw new ApiError(409, "Already checked in. Please check out before checking in again.", {
-      debug: {
-        lastCheckIn: lastCheckInTime,
-        lastCheckOut: lastCheckOutTime
+    throw new ApiError(
+      409,
+      "Already checked in. Please check out before checking in again.",
+      {
+        debug: {
+          lastCheckIn: lastCheckInTime,
+          lastCheckOut: lastCheckOutTime,
+        },
       }
-    });
+    );
   }
 
   if (type === "check-out" && !hasOpenSession) {
-    throw new ApiError(409, "No active check-in found. Please check in first.", {
-      debug: {
-        lastCheckIn: lastCheckInTime,
-        lastCheckOut: lastCheckOutTime,
-        todaysRecords: todaysAttendance.length
+    throw new ApiError(
+      409,
+      "No active check-in found. Please check in first.",
+      {
+        debug: {
+          lastCheckIn: lastCheckInTime,
+          lastCheckOut: lastCheckOutTime,
+          todaysRecords: todaysAttendance.length,
+        },
       }
-    });
+    );
   }
 
   // Expiry check using IST
@@ -268,7 +299,11 @@ exports.scanQRCode = handleAsync(async (req, res) => {
   const qrCodeValid =
     typeof qr.timestamp === "number" ? nowSec - qr.timestamp <= maxAge : true;
   if (!qrCodeValid) {
-    throw new ApiError(400, "QR code has expired. Please request a new QR code.", { code: "QR_EXPIRED" });
+    throw new ApiError(
+      400,
+      "QR code has expired. Please request a new QR code.",
+      { code: "QR_EXPIRED" }
+    );
   }
 
   // Enhanced location validation
@@ -287,18 +322,22 @@ exports.scanQRCode = handleAsync(async (req, res) => {
   const allowedRadius = org.settings?.locationToleranceMeters ?? 100;
   const locationMatch = distance <= allowedRadius;
   if (!locationMatch) {
-    throw new ApiError(403, `You are not within the organization premises. You are ${distance} meters away, but must be within ${allowedRadius} meters.`, {
-      code: "LOCATION_OUT_OF_RANGE",
-      data: {
-        currentDistance: distance,
-        allowedRadius,
-        organizationLocation: {
-          latitude: org.location.latitude,
-          longitude: org.location.longitude,
-          address: org.location.address
-        }
+    throw new ApiError(
+      403,
+      `You are not within the organization premises. You are ${distance} meters away, but must be within ${allowedRadius} meters.`,
+      {
+        code: "LOCATION_OUT_OF_RANGE",
+        data: {
+          currentDistance: distance,
+          allowedRadius,
+          organizationLocation: {
+            latitude: org.location.latitude,
+            longitude: org.location.longitude,
+            address: org.location.address,
+          },
+        },
       }
-    });
+    );
   }
 
   // Location spoofing detection
@@ -310,10 +349,14 @@ exports.scanQRCode = handleAsync(async (req, res) => {
 
   // If strict verification is enabled and spoofing is detected
   if (org.settings?.strictLocationVerification && spoofingCheck.isSuspicious) {
-    throw new ApiError(403, "Potential location spoofing detected. Please try again with legitimate location.", {
-      code: "LOCATION_SPOOFING_DETECTED",
-      indicators: spoofingCheck.indicators
-    });
+    throw new ApiError(
+      403,
+      "Potential location spoofing detected. Please try again with legitimate location.",
+      {
+        code: "LOCATION_SPOOFING_DETECTED",
+        indicators: spoofingCheck.indicators,
+      }
+    );
   }
 
   const verified = qrCodeValid && locationMatch && !spoofingCheck.isSuspicious;
@@ -331,7 +374,7 @@ exports.scanQRCode = handleAsync(async (req, res) => {
       accuracy: userLocation.accuracy,
     },
     deviceInfo: {
-      deviceId: body.deviceInfo?.deviceId || req.headers['x-device-id'],
+      deviceId: body.deviceInfo?.deviceId || req.headers["x-device-id"],
       platform: body.deviceInfo?.platform,
       userAgent: req.headers["user-agent"],
       ipAddress: req.ip,
@@ -344,7 +387,7 @@ exports.scanQRCode = handleAsync(async (req, res) => {
       deviceTrusted: true,
       spoofingDetected: spoofingCheck.isSuspicious,
       distance: distance,
-      spoofingIndicators: spoofingCheck.indicators
+      spoofingIndicators: spoofingCheck.indicators,
     },
   });
 
@@ -357,7 +400,7 @@ exports.scanQRCode = handleAsync(async (req, res) => {
       latitude: userLocation.latitude,
       longitude: userLocation.longitude,
       accuracy: userLocation.accuracy,
-      timestamp: getISTDate()
+      timestamp: getISTDate(),
     };
     await user.save();
   }
@@ -370,7 +413,10 @@ exports.scanQRCode = handleAsync(async (req, res) => {
 
   return res.json({
     success: true,
-    message: type === "check-in" ? "Checked in successfully" : "Checked out successfully",
+    message:
+      type === "check-in"
+        ? "Checked in successfully"
+        : "Checked out successfully",
     data: {
       attendanceId: attendance._id,
       verified,
@@ -453,7 +499,7 @@ exports.getDailyReport = handleAsync(async (req, res) => {
       totalWorkingTime: 0,
       status: "absent",
       sessions: [],
-      deviceRegistered: user.deviceInfo.isRegistered || false
+      deviceRegistered: user.deviceInfo.isRegistered || false,
     });
   });
 

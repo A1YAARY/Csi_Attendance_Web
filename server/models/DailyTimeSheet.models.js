@@ -27,14 +27,14 @@ const dailyTimeSheetSchema = new mongoose.Schema(
     date: {
       type: Date,
       required: true,
-      default: () => startOfISTDay()
+      default: () => startOfISTDay(),
     },
     sessions: [
       {
         checkIn: {
           time: {
             type: Date,
-            default: () => getISTDate()
+            default: () => getISTDate(),
           },
           attendanceId: {
             type: mongoose.Schema.Types.ObjectId,
@@ -44,7 +44,7 @@ const dailyTimeSheetSchema = new mongoose.Schema(
         checkOut: {
           time: {
             type: Date,
-            default: () => getISTDate()
+            default: () => getISTDate(),
           },
           attendanceId: {
             type: mongoose.Schema.Types.ObjectId,
@@ -68,49 +68,49 @@ const dailyTimeSheetSchema = new mongoose.Schema(
       default: 480, // 8 hours in minutes
     },
   },
-  { 
+  {
     timestamps: true,
     toJSON: { virtuals: true },
-    toObject: { virtuals: true }
+    toObject: { virtuals: true },
   }
 );
 
 // IST Virtuals
 dailyTimeSheetSchema.virtual("createdAtIST").get(function () {
   return this.createdAt
-    ? this.createdAt.toLocaleString("en-IN", { 
+    ? this.createdAt.toLocaleString("en-IN", {
         timeZone: "Asia/Kolkata",
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
       })
     : null;
 });
 
 dailyTimeSheetSchema.virtual("updatedAtIST").get(function () {
   return this.updatedAt
-    ? this.updatedAt.toLocaleString("en-IN", { 
+    ? this.updatedAt.toLocaleString("en-IN", {
         timeZone: "Asia/Kolkata",
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        second: "2-digit",
       })
     : null;
 });
 
 dailyTimeSheetSchema.virtual("dateIST").get(function () {
   return this.date
-    ? this.date.toLocaleDateString("en-IN", { 
+    ? this.date.toLocaleDateString("en-IN", {
         timeZone: "Asia/Kolkata",
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit'
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
       })
     : null;
 });
@@ -123,9 +123,8 @@ dailyTimeSheetSchema.pre("save", function (next) {
   next();
 });
 
-// Indexes for performance
-dailyTimeSheetSchema.index({ userId: 1, date: -1 });
-dailyTimeSheetSchema.index({ organizationId: 1, date: -1 });
-dailyTimeSheetSchema.index({ date: 1 });
-
+// REPLACE existing indexes with these optimized ones
+dailyTimeSheetSchema.index({ userId: 1, organizationId: 1, date: -1 }); // 🔥 CRITICAL: Compound index
+dailyTimeSheetSchema.index({ organizationId: 1, date: -1, status: 1 }); // For status reports
+dailyTimeSheetSchema.index({ date: -1, status: 1 }); // For daily aggregations
 module.exports = mongoose.model("DailyTimeSheet", dailyTimeSheetSchema);

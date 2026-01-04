@@ -38,7 +38,9 @@ const resetUserDevice = handleAsync(async (req, res) => {
   // Determine admin's organization for scoping
   let adminOrgId = req.user.organizationId;
   if (req.user.role === "organization" && !adminOrgId) {
-    const org = await Organization.findOne({ adminId: req.user._id }).select("_id");
+    const org = await Organization.findOne({ adminId: req.user._id }).select(
+      "_id"
+    );
     if (!org) {
       throw new ApiError(403, "Admin has no organization");
     }
@@ -59,7 +61,8 @@ const resetUserDevice = handleAsync(async (req, res) => {
 
   return res.json({
     success: true,
-    message: "User device reset successfully. User can now register a new device.",
+    message:
+      "User device reset successfully. User can now register a new device.",
     data: {
       userId: targetUser._id,
       userName: targetUser.name,
@@ -86,7 +89,9 @@ const getusers = handleAsync(async (req, res) => {
   // Resolve organizationId robustly for admins or scoped users
   let orgId = req.user.organizationId;
   if (req.user.role === "organization" && !orgId) {
-    const org = await Organization.findOne({ adminId: req.user._id }).select("_id");
+    const org = await Organization.findOne({ adminId: req.user._id })
+      .select("_id")
+      .lean();
     if (!org) {
       throw new ApiError(403, "Admin has no organization");
     }
@@ -102,8 +107,9 @@ const getusers = handleAsync(async (req, res) => {
   const users = await User.find({ organizationId: orgId })
     .select("-password -refreshToken")
     .lean()
-    .sort({ createdAt: -1 });
-  const formatted = users.map(u => ({
+    .sort({ createdAt: -1 })
+    .hint({ organizationId: 1, createdAt: -1 });
+  const formatted = users.map((u) => ({
     _id: u._id,
     id: u._id,
     name: u.name,
@@ -125,11 +131,11 @@ const getusers = handleAsync(async (req, res) => {
     updatedAt: u.updatedAt,
     createdAtFormatted: u.createdAt
       ? new Date(u.createdAt).toLocaleDateString("en-IN", {
-        timeZone: "Asia/Kolkata",
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-      })
+          timeZone: "Asia/Kolkata",
+          year: "numeric",
+          month: "short",
+          day: "numeric",
+        })
       : "N/A",
   }));
 
@@ -153,7 +159,9 @@ const getDeviceChangeRequests = handleAsync(async (req, res) => {
   const usersWithRequests = await User.find({
     organizationId: orgId,
     "deviceChangeRequest.status": "pending",
-  }).select("name email deviceInfo deviceChangeRequest").lean();
+  })
+    .select("name email deviceInfo deviceChangeRequest")
+    .lean();
   const requests = usersWithRequests.map((user) => ({
     userId: user._id,
     userName: user.name,
@@ -164,14 +172,14 @@ const getDeviceChangeRequests = handleAsync(async (req, res) => {
     requestedAt: user.deviceChangeRequest?.requestedAt,
     requestedAtIST: user.deviceChangeRequest?.requestedAt
       ? user.deviceChangeRequest.requestedAt.toLocaleString("en-IN", {
-        timeZone: "Asia/Kolkata",
-        year: "numeric",
-        month: "2-digit",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      })
+          timeZone: "Asia/Kolkata",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        })
       : null,
   }));
 
@@ -188,7 +196,10 @@ const getDeviceChangeRequests = handleAsync(async (req, res) => {
 const handleDeviceChangeRequest = handleAsync(async (req, res) => {
   const { userId, action, reason } = req.body;
   if (!userId || !action || !["approve", "reject"].includes(action)) {
-    throw new ApiError(400, "User ID and valid action (approve/reject) are required");
+    throw new ApiError(
+      400,
+      "User ID and valid action (approve/reject) are required"
+    );
   }
 
   const user = await User.findById(userId);
@@ -201,8 +212,14 @@ const handleDeviceChangeRequest = handleAsync(async (req, res) => {
     throw new ApiError(403, "Unauthorized to handle this request");
   }
 
-  if (!user.deviceChangeRequest || user.deviceChangeRequest.status !== "pending") {
-    throw new ApiError(400, "No pending device change request found for this user");
+  if (
+    !user.deviceChangeRequest ||
+    user.deviceChangeRequest.status !== "pending"
+  ) {
+    throw new ApiError(
+      400,
+      "No pending device change request found for this user"
+    );
   }
 
   if (action === "approve") {
@@ -217,7 +234,8 @@ const handleDeviceChangeRequest = handleAsync(async (req, res) => {
   }
 
   // Update request status
-  user.deviceChangeRequest.status = action === "approve" ? "approved" : "rejected";
+  user.deviceChangeRequest.status =
+    action === "approve" ? "approved" : "rejected";
   user.deviceChangeRequest.adminResponse = {
     adminId: req.user._id,
     respondedAt: getISTDate(),
@@ -260,7 +278,7 @@ const records = handleAsync(async (req, res) => {
           (r) =>
             r.userId._id.toString() === record.userId._id.toString() &&
             new Date(r.createdAt).toDateString() ===
-            new Date(record.createdAt).toDateString()
+              new Date(record.createdAt).toDateString()
         );
         const checkOut = sameDay.find((r) => r.type === "check-out");
 
@@ -273,7 +291,9 @@ const records = handleAsync(async (req, res) => {
           const checkOutDateTime = new Date(checkOut.createdAt);
           const diffInMillis = checkOutDateTime - checkInTime;
           const hours = Math.floor(diffInMillis / (1000 * 60 * 60));
-          const minutes = Math.floor((diffInMillis % (1000 * 60 * 60)) / (1000 * 60));
+          const minutes = Math.floor(
+            (diffInMillis % (1000 * 60 * 60)) / (1000 * 60)
+          );
           workingHours = `${hours}h ${minutes}m`;
           status = "Complete";
           checkOutTime = checkOutDateTime.toLocaleString("en-IN", {
@@ -334,7 +354,9 @@ const records = handleAsync(async (req, res) => {
 const getOrganizationQRCodes = handleAsync(async (req, res) => {
   const orgId = req.user.organizationId;
   if (!orgId) {
-    throw new ApiError(400, "User not associated with any organization", { error: "MISSING_ORGANIZATION" });
+    throw new ApiError(400, "User not associated with any organization", {
+      error: "MISSING_ORGANIZATION",
+    });
   }
 
   // Get organization with populated QR codes using lean
@@ -343,7 +365,9 @@ const getOrganizationQRCodes = handleAsync(async (req, res) => {
     .populate({ path: "checkOutQRCodeId", options: { lean: true } })
     .lean();
   if (!org) {
-    throw new ApiError(404, "Organization not found", { error: "ORG_NOT_FOUND" });
+    throw new ApiError(404, "Organization not found", {
+      error: "ORG_NOT_FOUND",
+    });
   }
 
   // Format response with complete QR code data
@@ -354,34 +378,36 @@ const getOrganizationQRCodes = handleAsync(async (req, res) => {
     qrCodes: {
       checkIn: org.checkInQRCodeId
         ? {
-          id: org.checkInQRCodeId._id,
-          code: org.checkInQRCodeId.code,
-          type: org.checkInQRCodeId.qrType,
-          qrImage: org.checkInQRCodeId.qrImageData,
-          active: org.checkInQRCodeId.active,
-          usageCount: org.checkInQRCodeId.usageCount,
-          createdAt: org.checkInQRCodeId.createdAt,
-          createdAtIST: org.checkInQRCodeId.createdAtIST,
-        }
+            id: org.checkInQRCodeId._id,
+            code: org.checkInQRCodeId.code,
+            type: org.checkInQRCodeId.qrType,
+            qrImage: org.checkInQRCodeId.qrImageData,
+            active: org.checkInQRCodeId.active,
+            usageCount: org.checkInQRCodeId.usageCount,
+            createdAt: org.checkInQRCodeId.createdAt,
+            createdAtIST: org.checkInQRCodeId.createdAtIST,
+          }
         : null,
       checkOut: org.checkOutQRCodeId
         ? {
-          id: org.checkOutQRCodeId._id,
-          code: org.checkOutQRCodeId.code,
-          type: org.checkOutQRCodeId.qrType,
-          qrImage: org.checkOutQRCodeId.qrImageData,
-          active: org.checkOutQRCodeId.active,
-          usageCount: org.checkOutQRCodeId.usageCount,
-          createdAt: org.checkOutQRCodeId.createdAt,
-          createdAtIST: org.checkOutQRCodeId.createdAtIST,
-        }
+            id: org.checkOutQRCodeId._id,
+            code: org.checkOutQRCodeId.code,
+            type: org.checkOutQRCodeId.qrType,
+            qrImage: org.checkOutQRCodeId.qrImageData,
+            active: org.checkOutQRCodeId.active,
+            usageCount: org.checkOutQRCodeId.usageCount,
+            createdAt: org.checkOutQRCodeId.createdAt,
+            createdAtIST: org.checkOutQRCodeId.createdAtIST,
+          }
         : null,
     },
     settings: {
       qrCodeValidityMinutes: org.settings?.qrCodeValidityMinutes || 30,
       locationToleranceMeters: org.settings?.locationToleranceMeters || 100,
-      requireDeviceRegistration: org.settings?.requireDeviceRegistration || true,
-      strictLocationVerification: org.settings?.strictLocationVerification || true,
+      requireDeviceRegistration:
+        org.settings?.requireDeviceRegistration || true,
+      strictLocationVerification:
+        org.settings?.strictLocationVerification || true,
     },
     lastUpdated: new Date().toISOString(),
   };
@@ -402,7 +428,10 @@ const getQRCodeByType = handleAsync(async (req, res) => {
   }
 
   if (!["check-in", "check-out"].includes(type)) {
-    throw new ApiError(400, "Invalid QR type. Must be 'check-in' or 'check-out'");
+    throw new ApiError(
+      400,
+      "Invalid QR type. Must be 'check-in' or 'check-out'"
+    );
   }
 
   const org = await Organization.findById(orgId)
@@ -415,7 +444,8 @@ const getQRCodeByType = handleAsync(async (req, res) => {
     throw new ApiError(404, "Organization not found");
   }
 
-  const qrCode = type === "check-in" ? org.checkInQRCodeId : org.checkOutQRCodeId;
+  const qrCode =
+    type === "check-in" ? org.checkInQRCodeId : org.checkOutQRCodeId;
   if (!qrCode) {
     throw new ApiError(404, `${type} QR code not found for organization`);
   }
@@ -449,10 +479,26 @@ const getTodaysAttendance = handleAsync(async (req, res) => {
   const istOffset = 5.5 * 60 * 60 * 1000;
   const istNow = new Date(now.getTime() + istOffset);
   const startOfDayIST = new Date(
-    Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate(), 0, 0, 0, 0)
+    Date.UTC(
+      istNow.getUTCFullYear(),
+      istNow.getUTCMonth(),
+      istNow.getUTCDate(),
+      0,
+      0,
+      0,
+      0
+    )
   );
   const endOfDayIST = new Date(
-    Date.UTC(istNow.getUTCFullYear(), istNow.getUTCMonth(), istNow.getUTCDate(), 23, 59, 59, 999)
+    Date.UTC(
+      istNow.getUTCFullYear(),
+      istNow.getUTCMonth(),
+      istNow.getUTCDate(),
+      23,
+      59,
+      59,
+      999
+    )
   );
 
   // Fetch records with lean
@@ -493,7 +539,16 @@ const getTodaysAttendance = handleAsync(async (req, res) => {
 
 const updateUserByAdmin = handleAsync(async (req, res) => {
   const userId = req.params.id;
-  const { name, email, department, role, phone, institute, workingHours, password } = req.body;
+  const {
+    name,
+    email,
+    department,
+    role,
+    phone,
+    institute,
+    workingHours,
+    password,
+  } = req.body;
   // Check if the requesting user is an admin
   if (req.user.role !== "organization") {
     throw new ApiError(403, "Only admins can update user profiles");
@@ -507,7 +562,10 @@ const updateUserByAdmin = handleAsync(async (req, res) => {
 
   // Check if user belongs to same organization
   if (String(userToUpdate.organizationId) !== String(req.user.organizationId)) {
-    throw new ApiError(403, "Forbidden to update user outside your organization");
+    throw new ApiError(
+      403,
+      "Forbidden to update user outside your organization"
+    );
   }
 
   // Build update data
@@ -562,7 +620,10 @@ const deleteUser = handleAsync(async (req, res) => {
 
   // Check if user belongs to same organization
   if (String(user.organizationId) !== String(req.user.organizationId)) {
-    throw new ApiError(403, "Forbidden to delete user outside your organization");
+    throw new ApiError(
+      403,
+      "Forbidden to delete user outside your organization"
+    );
   }
 
   // Prevent admin from deleting themselves
