@@ -22,10 +22,8 @@ try {
   console.error("Error parsing GOOGLE_SERVICE_ACCOUNT:", error);
 }
 
-    const response = await axios.get(
-      `https://api.example.com/holidays/in/${year}`, // Replace with actual API endpoint
-      { timeout: 5000 }
-    );
+// Initialize Google Calendar API client
+const calendar = google.calendar({ version: "v3", auth });
 
 // Company-specific holidays (configurable)
 const companyHolidays = [

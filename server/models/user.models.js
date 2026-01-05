@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
-const DateTimeUtils = require("../utils/dateTimeUtils");
+const DateTimeUtils = require("../utils/istDateTimeUtils");
 
 const DeviceRequestSchema = new mongoose.Schema({
   newDeviceId: {

@@ -134,5 +134,5 @@ function validateQRCode(qrData, currentTime = Math.floor(Date.now() / 1000)) {
 module.exports = {
   generateQRCode,
   validateQRCode,
-  generateQRToken, // For internal use
+  // generateQRToken // For internal use
 };
