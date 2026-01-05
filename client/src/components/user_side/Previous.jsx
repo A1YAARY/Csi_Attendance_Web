@@ -1,43 +1,64 @@
+// Previous.jsx - Dynamic previous attendance display
+// Premium enhancement: Added card-like styling with shadows and transitions
+
 import React from "react";
 import StatusLabel from "./StatusLabel";
 
-function Previous() {
+function Previous({ attendanceData }) {
+  if (!attendanceData) return null;
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString);
+    const dayName = date.toLocaleDateString("en-US", { weekday: "long" });
+    const formattedDate = date.toLocaleDateString("en-GB");
+    return { dayName, formattedDate };
+  };
+
+  const getCheckInTime = () => {
+    if (!attendanceData.sessions || attendanceData.sessions.length === 0) return "--";
+    const firstSession = attendanceData.sessions[0];
+    return firstSession.checkIn ? new Date(firstSession.checkIn.time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true }) : "--";
+  };
+
+  const getCheckOutTime = () => {
+    if (!attendanceData.sessions || attendanceData.sessions.length === 0) return "--";
+    const sessionsWithCheckout = attendanceData.sessions.filter((s) => s.checkOut);
+    if (sessionsWithCheckout.length === 0) return "--";
+    const lastCheckout = sessionsWithCheckout[sessionsWithCheckout.length - 1];
+    return new Date(lastCheckout.checkOut.time).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true });
+  };
+
+  const getTotalWorkTime = () => {
+    if (!attendanceData.sessions || attendanceData.sessions.length === 0) return "0h 0m";
+    if (attendanceData.totalWorkingTimeFormatted) return attendanceData.totalWorkingTimeFormatted; // Dynamic from data
+    let totalMinutes = 0;
+    attendanceData.sessions.forEach((session) => {
+      if (session.duration) {
+        totalMinutes += session.duration;
+      } else if (session.checkIn && session.checkOut) {
+        const checkIn = new Date(session.checkIn.time);
+        const checkOut = new Date(session.checkOut.time);
+        totalMinutes += Math.floor((checkOut - checkIn) / (1000 * 60));
+      }
+    });
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = totalMinutes % 60;
+    return `${hours}h ${minutes}m`;
+  };
+
+  const { dayName, formattedDate } = formatDate(attendanceData.date || attendanceData.dateIST.iso); // Dynamic date
+
   return (
-    <div className="w-full bg-white rounded-lg sm:rounded-xl shadow-sm border border-gray-100 p-3 sm:p-4 lg:p-5">
-      <div className="flex items-center justify-between">
-        {/* Left side - Date info */}
-        <div className="flex flex-col space-y-1 sm:space-y-2">
-          <p className="text-[12px] sm:text-[14px] lg:text-[15px] font-medium text-gray-800">
-            Monday
-          </p>
-          <p className="text-[10px] sm:text-[12px] lg:text-[13px] text-gray-500">
-            30/05/2025
-          </p>
-        </div>
-
-        {/* Center - Time info (hidden on mobile if space is tight) */}
-        <div className="hidden sm:flex flex-col items-center space-y-1">
-          <p className="text-[11px] sm:text-[12px] lg:text-[13px] text-gray-600">
-            Check-in: 9:00 AM
-          </p>
-          <p className="text-[11px] sm:text-[12px] lg:text-[13px] text-gray-600">
-            Check-out: 5:30 PM
-          </p>
-        </div>
-
-        {/* Right side - Status */}
-        <div className="flex flex-col items-end space-y-1 sm:space-y-2">
-          <StatusLabel status="Present" />
-          <p className="text-[10px] sm:text-[11px] lg:text-[12px] text-gray-400">
-            8h 30m
-          </p>
-        </div>
+    <div className="bg-white rounded-xl p-4 shadow-md hover:shadow-lg transition-shadow duration-200">
+      <div className="flex justify-between items-center mb-2">
+        <span className="text-lg font-semibold text-gray-800">{formattedDate}</span>
+        <StatusLabel status={attendanceData.status} />
       </div>
-
-      {/* Mobile time info - shown only on small screens */}
-      <div className="sm:hidden mt-3 pt-3 border-t border-gray-100 flex justify-between text-[11px] text-gray-600">
-        <span>In: 9:00 AM</span>
-        <span>Out: 5:30 PM</span>
+      <div className="text-sm text-gray-600">
+        <p>Check-in: {getCheckInTime()}</p>
+        <p>Check-out: {getCheckOutTime()}</p>
+        <p>Total Time: {getTotalWorkTime()}</p>
+        <p>Organization: {attendanceData.organizationName}</p>
       </div>
     </div>
   );

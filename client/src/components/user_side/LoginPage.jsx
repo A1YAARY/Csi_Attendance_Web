@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { toast, ToastContainer } from "react-toastify";
 import axios from "axios";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/authStore";
 import "react-toastify/dist/ReactToastify.css";
 import Magnet from "../../reactbitscomponents/Magnet";
 import { AiOutlineEye, AiOutlineEyeInvisible } from "react-icons/ai";
@@ -51,10 +51,9 @@ const generateStableDeviceId = () => {
     return fallbackId;
   }
 };
-
 export const LoginPage = () => {
   const navigate = useNavigate();
-  const { login, BASE_URL } = useAuth();
+  const { loginUser, login, BASE_URL } = useAuth(); // ✅ Use new store methods
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [show, setshow] = useState(false);
@@ -79,7 +78,6 @@ export const LoginPage = () => {
 
   const handleEmailLogin = async (e) => {
     e.preventDefault();
-
     if (isLoading) return;
 
     setIsLoading(true);
@@ -87,33 +85,23 @@ export const LoginPage = () => {
     try {
       console.log("🔐 Attempting login with device:", deviceId);
 
-      const res = await axios.post(
-        `${BASE_URL}/auth2/login`,
-        {
-          email,
-          password,
-          deviceId: deviceId,
-          deviceType: /Android/.test(navigator.userAgent)
-            ? "Android"
-            : /iPhone|iPad|iPod/.test(navigator.userAgent)
+      // ✅ USE THE NEW STORE METHOD
+      const result = await loginUser({
+        email,
+        password,
+        deviceId: deviceId,
+        deviceType: /Android/.test(navigator.userAgent)
+          ? "Android"
+          : /iPhone|iPad|iPod/.test(navigator.userAgent)
             ? "iOS"
             : "Web",
-          deviceFingerprint: deviceId, // Use deviceId as fingerprint too
-        },
-        {
-          withCredentials: true,
-          headers: {
-            "Content-Type": "application/json",
-            "X-Device-ID": deviceId,
-          },
-          timeout: 15000,
-        }
-      );
+        deviceFingerprint: deviceId,
+      });
 
-      if (res.data.success && res.data.accessToken) {
+      if (result.success && result.accessToken) {
         // Store organization code if available
-        if (res.data.organization?.name) {
-          localStorage.setItem("orginizationcode", res.data.organization.name);
+        if (result.organization?.name) {
+          localStorage.setItem("organizationcode", result.organization.name);
         }
 
         // Store device binding
@@ -121,55 +109,192 @@ export const LoginPage = () => {
 
         console.log(
           "✅ Login successful, device registered:",
-          res.data.user.deviceRegistered
+          result.user.deviceRegistered
         );
 
-        login(res.data.user, res.data.accessToken, res.data.organization);
+        // ✅ The store's loginUser already handles state, but we need to ensure navigation
         toast.success("Login successful!");
 
         // Navigate based on role
-        if (res.data.user.role === "organization") {
+        if (result.user.role === "organization") {
           navigate("/admin", { replace: true });
         } else {
-          navigate("/Teacherinfo", { replace: true });
+          navigate("/teacherinfo", { replace: true });
+        }
+      } else {
+        // Handle login failure cases including device authorization
+        const code = result?.code || result?.errorCode || "";
+        const msg = String(result?.message || "").toLowerCase();
+        const deviceDenied =
+          code === "DEVICE_NOT_AUTHORIZED" ||
+          /device not authorized|device not registered|device registration/i.test(msg);
+
+        if (deviceDenied) {
+          // Show confirmation popup for device change request
+          const confirmRequest = window.confirm(
+            `🚫 Device Not Authorized\n\nThis account is registered to another device.\n\nDo you want to send a device change request to your admin?\n\nClick OK to send request or Cancel to contact admin manually.`
+          );
+
+          if (confirmRequest) {
+            try {
+              // Gather device details for the request
+              const requestData = {
+                email: email, // Include email for identification since user isn't authenticated yet
+                newDeviceId: deviceId,
+                newDeviceType: /Android/.test(navigator.userAgent)
+                  ? "Android"
+                  : /iPhone|iPad|iPod/.test(navigator.userAgent)
+                    ? "iOS"
+                    : "Web",
+                newDeviceFingerprint: deviceId,
+                reason: "Logging in from a new device - automatic request from login page"
+              };
+
+              console.log("📱 Sending device change request:", requestData);
+
+              // Make API call to request device change - FIXED URL TO MATCH BACKEND ROUTE
+              const response = await axios.post(
+                `${BASE_URL}/auth2/device-change-request`, // CORRECTED: was /request-device-change
+                requestData,
+                {
+                  headers: {
+                    "Content-Type": "application/json",
+                  },
+                }
+              );
+
+              if (response.data.success) {
+                toast.success(
+                  "✅ Device change request sent successfully!\n\nYour admin will review and approve your request.\nYou will be notified once it's processed.",
+                  {
+                    autoClose: 8000,
+                    style: { whiteSpace: "pre-line" }
+                  }
+                );
+              } else {
+                toast.error(
+                  "❌ Failed to send device change request: " + response.data.message
+                );
+              }
+
+            } catch (reqError) {
+              console.error("❌ Device change request error:", reqError);
+              toast.error(
+                "❌ Error sending device change request.\nPlease contact your admin manually.\n\nError: " +
+                (reqError.response?.data?.message || reqError.message)
+              );
+            }
+          } else {
+            // User chose not to send request
+            toast.info(
+              "📧 Please contact your admin to reset your device registration.\n\nAlternatively, try the device change request option next time.",
+              {
+                autoClose: 8000,
+                style: { whiteSpace: "pre-line" }
+              }
+            );
+          }
+        } else {
+          // Other login failures
+          toast.error(result.message || "Login failed. Please try again.");
         }
       }
+
     } catch (error) {
       console.error("❌ Login error:", error);
-      const errorData = error.response?.data;
 
-      // Enhanced error handling
-      if (errorData?.code === "DEVICE_NOT_AUTHORIZED") {
-        toast.error(
-          `🚫 Device Not Authorized\n\nThis account is registered to another device.\n\nRegistered Device: ${errorData.registeredDevice}\nCurrent Device: ${errorData.currentDevice}\n\nPlease contact admin to reset your device registration.`,
-          {
-            autoClose: 10000,
-            style: { whiteSpace: "pre-line" },
-          }
+      // Enhanced error handling for thrown errors (fallback)
+      const code = error?.response?.data?.code || error?.code || "";
+      const emsg = (error?.response?.data?.message || error?.message || "").toLowerCase();
+      const deviceDeniedCatch =
+        code === "DEVICE_NOT_AUTHORIZED" ||
+        /device not authorized|device not registered|device registration/i.test(emsg);
+
+      if (deviceDeniedCatch) {
+        // Show confirmation popup
+        const confirmRequest = window.confirm(
+          `🚫 Device Not Authorized\n\nThis account is registered to another device.\n\nDo you want to send a device change request to your admin?\n\nClick OK to send request or Cancel to contact admin manually.`
         );
 
-        // Show contact admin option for users
-        if (loginadmin) {
-          setTimeout(() => {
-            if (
-              window.confirm(
-                "Would you like to request device change from admin?"
-              )
-            ) {
-              // You can implement a device change request flow here
-              navigate("/contact-admin");
+        if (confirmRequest) {
+          try {
+            const requestData = {
+              email: email,
+              newDeviceId: deviceId,
+              newDeviceType: /Android/.test(navigator.userAgent)
+                ? "Android"
+                : /iPhone|iPad|iPod/.test(navigator.userAgent)
+                  ? "iOS"
+                  : "Web",
+              newDeviceFingerprint: deviceId,
+              reason: "Logging in from a new device - automatic request from login page"
+            };
+
+            console.log("📱 Sending device change request:", requestData);
+
+            // CORRECTED URL TO MATCH BACKEND ROUTE
+            const response = await axios.post(
+              `${BASE_URL}/auth2/device-change-request`,
+              requestData,
+              {
+                headers: {
+                  "Content-Type": "application/json",
+                },
+              }
+            );
+
+            if (response.data.success) {
+              toast.success(
+                "✅ Device change request sent successfully!\n\nYour admin will review and approve your request.\nYou will be notified once it's processed.",
+                {
+                  autoClose: 8000,
+                  style: { whiteSpace: "pre-line" }
+                }
+              );
+            } else {
+              toast.error(
+                "❌ Failed to send device change request: " + response.data.message
+              );
             }
-          }, 2000);
+
+          } catch (reqError) {
+            console.error("❌ Device change request error:", reqError);
+            toast.error(
+              "❌ Error sending device change request.\nPlease contact your admin manually.\n\nError: " +
+              (reqError.response?.data?.message || reqError.message)
+            );
+          }
+        } else {
+          toast.info(
+            "📧 Please contact your admin to reset your device registration.\n\nAlternatively, try the device change request option next time.",
+            {
+              autoClose: 8000,
+              style: { whiteSpace: "pre-line" }
+            }
+          );
         }
-      } else if (errorData?.requiresDeviceInfo) {
-        toast.error("Device information is required for login");
+      } else if (error.message?.includes("INVALID_CREDENTIALS")) {
+        toast.error("❌ Invalid email or password. Please check your credentials.");
+      } else if (error.message?.includes("USER_NOT_FOUND")) {
+        toast.error("❌ User not found. Please check your email or contact admin.");
+      } else if (error.message?.includes("ACCOUNT_SUSPENDED")) {
+        toast.error("❌ Your account has been suspended. Please contact admin.");
       } else {
-        toast.error(errorData?.message || "Login failed. Please try again.");
+        // Generic error handling
+        toast.error(
+          error.response?.data?.message ||
+          error.message ||
+          "Login failed. Please try again."
+        );
       }
+
     } finally {
       setIsLoading(false);
     }
   };
+
+
+
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-purple-50 p-4">
@@ -247,13 +372,13 @@ export const LoginPage = () => {
 
             {/* Submit Button */}
             {/* <Magnet> */}
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-blue-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isLoading ? "Signing In..." : "Sign In"}
-              </button>
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="w-full bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold py-3 px-6 rounded-lg hover:from-blue-600 hover:to-purple-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isLoading ? "Signing In..." : "Sign In"}
+            </button>
             {/* </Magnet> */}
           </form>
 
@@ -282,7 +407,7 @@ export const LoginPage = () => {
         {/* Footer */}
         <div className="text-center mt-8">
           <p className="text-sm text-gray-500">
-            © 2024 Attendance System. All rights reserved.
+            © 2025 Attendance System. All rights reserved.
           </p>
         </div>
       </div>

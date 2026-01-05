@@ -17,6 +17,7 @@ const requestPasswordReset = async (req, res) => {
 
     // Find user by email
     const user = await User.findOne({ email }).populate("organizationId");
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -34,8 +35,9 @@ const requestPasswordReset = async (req, res) => {
       { expiresIn: "1h" }
     );
 
-    // Create reset link
-    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+    // Create reset link - Fixed URL generation
+    const frontendUrl = process.env.FRONTEND_URL?.replace(/\/$/, "");
+    const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
 
     // Send password reset email
     const emailSubject = "Password Reset Request - Attendance System";
@@ -56,9 +58,11 @@ Email: ${user.email}
 
 Best regards,
 Attendance System Team
-    `;
+`;
 
     await sendMail(user.email, emailSubject, emailBody);
+
+    console.log(`✅ Password reset email sent to: ${user.email}`);
 
     res.json({
       success: true,
@@ -116,6 +120,7 @@ const resetPassword = async (req, res) => {
       if (error.name === "TokenExpiredError") {
         errorMessage = "Reset token has expired. Please request a new one.";
       }
+
       return res.status(401).json({
         success: false,
         message: errorMessage,
@@ -124,6 +129,7 @@ const resetPassword = async (req, res) => {
 
     // Find user
     const user = await User.findById(decoded.userId);
+
     if (!user) {
       return res.status(404).json({
         success: false,
@@ -131,14 +137,16 @@ const resetPassword = async (req, res) => {
       });
     }
 
-    // Hash new password
-    const hashedPassword = await bcrypt.hash(newPassword, 12);
+    // FIXED: Use the same salt rounds as your User model (10 rounds)
+    const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS) || 10;
+    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
 
     // Update user password
     user.password = hashedPassword;
     await user.save();
 
     console.log(`✅ Password reset successful for user: ${user.email}`);
+    console.log(`🔐 Used salt rounds: ${saltRounds}`);
 
     res.json({
       success: true,

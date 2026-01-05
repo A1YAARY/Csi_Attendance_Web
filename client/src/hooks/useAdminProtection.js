@@ -1,7 +1,7 @@
 // hooks/useAdminProtection.js
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../context/authStore";
 
 export const useAdminProtection = () => {
   const { user } = useAuth();

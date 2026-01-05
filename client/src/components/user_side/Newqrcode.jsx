@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
+// export default NewQrcode;
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { Html5Qrcode } from "html5-qrcode";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
@@ -7,6 +8,7 @@ const NewQrcode = () => {
   const navigate = useNavigate();
   const html5QrCodeRef = useRef(null);
   const busyRef = useRef(false);
+  const locationTimeoutRef = useRef(null);
   const [scannerRunning, setScannerRunning] = useState(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
@@ -17,27 +19,48 @@ const NewQrcode = () => {
   const [scannerStarted, setScannerStarted] = useState(false);
   const [location, setLocation] = useState(null);
   const [locationError, setLocationError] = useState("");
+  const [isLoadingLocation, setIsLoadingLocation] = useState(true);
+  const [locationStatus, setLocationStatus] = useState("fetching"); // fetching, success, error, timeout
 
   const BASE_URL =
     import.meta.env.VITE_BACKEND_BASE_URL ||
     "https://csi-attendance-web.onrender.com";
   const token = localStorage.getItem("accessToken");
 
-  // Get the same device ID used in login
   const deviceId =
     localStorage.getItem("attendance_device_id") || "unknown_device";
 
-  // Get user's current location
-  const getCurrentLocation = () => {
+  // High-accuracy location with reasonable timeout and fresh cache
+  const getCurrentLocation = useCallback(() => {
     return new Promise((resolve) => {
+      setIsLoadingLocation(true);
+      setLocationStatus("fetching");
+
       if (!navigator.geolocation) {
-        setLocationError("Geolocation is not supported by this browser.");
+        setLocationError("Geolocation not supported");
+        setLocationStatus("error");
+        setIsLoadingLocation(false);
         resolve(null);
         return;
       }
 
+      // Hard timeout guard
+      locationTimeoutRef.current = setTimeout(() => {
+        setLocationStatus("timeout");
+        setLocationError("Location timeout - continuing without precise location");
+        setIsLoadingLocation(false);
+        resolve(null);
+      }, 10000); // 10s
+
+      const options = {
+        enableHighAccuracy: true,
+        timeout: 9000,     // 9s
+        maximumAge: 10000, // <=10s old
+      };
+
       navigator.geolocation.getCurrentPosition(
         (position) => {
+          if (locationTimeoutRef.current) clearTimeout(locationTimeoutRef.current);
           const locationData = {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
@@ -46,42 +69,42 @@ const NewQrcode = () => {
           };
           setLocation(locationData);
           setLocationError("");
+          setLocationStatus("success");
+          setIsLoadingLocation(false);
           resolve(locationData);
         },
         (error) => {
-          let errorMsg = "Unable to retrieve your location. ";
+          if (locationTimeoutRef.current) clearTimeout(locationTimeoutRef.current);
+
+          let errorMsg = "";
           switch (error.code) {
             case error.PERMISSION_DENIED:
-              errorMsg += "Please enable location permissions for this site.";
+              errorMsg = "Location permission denied";
               break;
             case error.POSITION_UNAVAILABLE:
-              errorMsg += "Location information is unavailable.";
+              errorMsg = "Location unavailable";
               break;
             case error.TIMEOUT:
-              errorMsg += "Location request timed out.";
+              errorMsg = "Location request timeout";
               break;
             default:
-              errorMsg += "An unknown error occurred.";
+              errorMsg = "Location error occurred";
               break;
           }
+
           setLocationError(errorMsg);
+          setLocationStatus("error");
+          setIsLoadingLocation(false);
           resolve(null);
         },
-        {
-          enableHighAccuracy: true,
-          timeout: 10000,
-          maximumAge: 60000,
-        }
+        options
       );
     });
-  };
+  }, []);
 
   // Get user's current attendance status
   const getUserStatus = async () => {
     try {
-      // First, try to get location
-      await getCurrentLocation();
-
       const response = await axios.get(`${BASE_URL}/attend/past?limit=1`, {
         headers: {
           Authorization: `Bearer ${token}`,
@@ -102,10 +125,22 @@ const NewQrcode = () => {
     } catch (error) {
       console.log("Could not fetch user status, defaulting to checked-out");
       setCurrentStatus("checked-out");
-    } finally {
-      setReady(true);
-      setShowActionModal(true);
     }
+  };
+
+  // Initialize everything in parallel
+  const initializeApp = async () => {
+    setReady(false);
+
+    // Start both location and status fetching in parallel
+    await Promise.allSettled([
+      getCurrentLocation(),
+      getUserStatus(),
+    ]);
+
+    // Always set ready to true after initialization attempts
+    setReady(true);
+    setShowActionModal(true);
   };
 
   const stopCamera = async () => {
@@ -144,26 +179,34 @@ const NewQrcode = () => {
         (qrType && (qrType === "check-in" || qrType === "check-out")
           ? qrType
           : currentStatus === "checked-in"
-          ? "check-out"
-          : "check-in");
+            ? "check-out"
+            : "check-in");
 
       console.log("🔍 QR Scan Details:", {
         code: code.substring(0, 20) + "...",
         action: nextAction,
         deviceId: deviceId,
         hasLocation: !!location,
-        location: location,
+        locationStatus,
       });
 
-      // Prepare scan data with enhanced device info
+      // Refresh just-in-time for best accuracy
+      const fresh = await getCurrentLocation();
+      const useLocation = fresh || location;
+
+      if (!useLocation) {
+        // Surface a proper LOCATION_REQUIRED to match server handling
+        const err = new Error("Location required");
+        err.response = { data: { code: "LOCATION_REQUIRED", message: "Valid current location is required" } };
+        throw err;
+      }
+
       const scanData = {
         code,
         type: nextAction,
-        location: location || {
-          latitude: 0,
-          longitude: 0,
-          accuracy: 0,
-        },
+        latitude: useLocation.latitude,
+        longitude: useLocation.longitude,
+        accuracy: useLocation.accuracy,
         deviceInfo: {
           deviceId: deviceId,
           platform: navigator.platform,
@@ -189,14 +232,33 @@ const NewQrcode = () => {
 
       console.log("✅ Scan successful:", response.data);
 
-      // Update status
       setCurrentStatus(
         nextAction === "check-in" ? "checked-in" : "checked-out"
       );
 
-      // Navigate to success
+      const scanResultData = {
+        success: true,
+        action: nextAction,
+        timestamp: response.data.data?.timestamp || new Date().toISOString(),
+        message: response.data.message,
+        location: {
+          distance: response.data.data?.location?.distance,
+          withinRange: response.data.data?.location?.withinRange,
+        },
+        dailySummary: response.data.data?.dailySummary || {},
+        verified: response.data.data?.verified || false,
+        attendanceId: response.data.data?.attendanceId,
+      };
+
+      localStorage.setItem("scanResult", JSON.stringify(scanResultData));
+
       setTimeout(() => {
-        navigate("/animation");
+        navigate("/animation", {
+          state: {
+            scanData: scanResultData,
+            fromScan: true,
+          },
+        });
       }, 500);
     } catch (error) {
       console.error("❌ Scan failed:", error);
@@ -204,49 +266,45 @@ const NewQrcode = () => {
       let errorMsg =
         error.response?.data?.message || error.message || "Scan failed";
 
-      // Enhanced error handling
       if (error.response?.data?.code === "UNAUTHORIZED_DEVICE") {
-        errorMsg = `🚫 Device Not Authorized\n\nThis device is not registered for your account.\n\nRegistered: ${error.response.data.registeredDevice}\nCurrent: ${error.response.data.currentDevice}\n\nContact admin to reset your device.`;
+        errorMsg = `🚫 Device Not Authorized\n\nContact admin to reset your device.`;
       } else if (error.response?.data?.code === "LOCATION_OUT_OF_RANGE") {
-        errorMsg = `📍 Location Issue\n\nYou are ${error.response.data.data?.currentDistance}m away from the organization.\nRequired: within ${error.response.data.data?.allowedRadius}m.\n\nPlease move closer to the organization location.`;
+        errorMsg = `📍 You are too far from the organization location.\n\nDistance: ${error.response.data.data?.currentDistance}m\nRequired: within ${error.response.data.data?.allowedRadius}m`;
       } else if (error.response?.data?.code === "LOCATION_REQUIRED") {
-        errorMsg =
-          "📍 Location access required. Please enable location services.";
+        errorMsg = "📍 Location access required. Please enable location services.";
       } else if (error.code === "ECONNABORTED") {
-        errorMsg =
-          "Request timeout. Please check your connection and try again.";
+        errorMsg = "Request timeout. Please check your connection.";
       }
 
       setErrorMessage(errorMsg);
 
-      // Return to dashboard after error
       setTimeout(() => {
         navigate("/dashboard");
       }, 5000);
     } finally {
       setIsProcessing(false);
+      busyRef.current = false;
     }
   };
 
   const handleActionSelect = (action) => {
-    if (!location && !locationError) {
-      // Try to get location again if not available
-      getCurrentLocation().then(() => {
-        setSelectedAction(action);
-        setShowActionModal(false);
-        setScannerStarted(true);
-      });
-    } else {
-      setSelectedAction(action);
-      setShowActionModal(false);
-      setScannerStarted(true);
-    }
+    setSelectedAction(action);
+    setShowActionModal(false);
+    setScannerStarted(true);
   };
 
+  // Initialize on mount
   useEffect(() => {
-    getUserStatus();
+    initializeApp();
+
+    return () => {
+      if (locationTimeoutRef.current) {
+        clearTimeout(locationTimeoutRef.current);
+      }
+    };
   }, []);
 
+  // Scanner initialization
   useEffect(() => {
     if (!ready || !scannerStarted || showActionModal) return;
 
@@ -271,7 +329,6 @@ const NewQrcode = () => {
 
         const selectedCamera =
           rearCamera || devices[devices.length - 1] || devices[0];
-        console.log("📱 Selected camera:", selectedCamera.label);
 
         await scanner.start(
           selectedCamera.id,
@@ -282,10 +339,7 @@ const NewQrcode = () => {
           },
           (decodedText) => {
             if (busyRef.current) return;
-            console.log(
-              "📷 QR Detected:",
-              decodedText.substring(0, 50) + "..."
-            );
+            console.log("📷 QR Detected:", decodedText.substring(0, 50) + "...");
 
             (async () => {
               await stopCamera();
@@ -293,7 +347,6 @@ const NewQrcode = () => {
             })();
           },
           (error) => {
-            // Ignore frequent scan errors
             if (error && !String(error).includes("NotFoundException")) {
               console.warn("Scanner warning:", error);
             }
@@ -305,7 +358,7 @@ const NewQrcode = () => {
         console.error("Scanner initialization failed:", err);
         if (err.name === "NotAllowedError") {
           setErrorMessage(
-            "📷 Camera permission denied. Please allow camera access in your browser settings."
+            "📷 Camera permission denied. Please allow camera access."
           );
         } else {
           setErrorMessage("📷 Failed to start camera: " + err.message);
@@ -325,10 +378,44 @@ const NewQrcode = () => {
     navigate("/dashboard");
   };
 
+  const getLocationStatusIcon = () => {
+    switch (locationStatus) {
+      case "fetching": return "🔄";
+      case "success": return "📍";
+      case "error": return "⚠️";
+      case "timeout": return "⏱️";
+      default: return "❓";
+    }
+  };
+
+  const getLocationStatusText = () => {
+    switch (locationStatus) {
+      case "fetching": return "Getting location...";
+      case "success": return `Location ready (±${Math.round(location?.accuracy || 0)}m)`;
+      case "error": return locationError;
+      case "timeout": return "Location timeout - continuing";
+      default: return "Checking location...";
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+      {/* Loading Screen */}
+      {!ready && (
+        <div className="fixed inset-0 bg-white flex items-center justify-center z-50">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <h2 className="text-xl font-semibold text-gray-700 mb-2">Initializing Scanner</h2>
+            <div className="flex items-center justify-center text-sm text-gray-600">
+              <span className="mr-2">{getLocationStatusIcon()}</span>
+              <span>{getLocationStatusText()}</span>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Action Selection Modal */}
-      {showActionModal && (
+      {showActionModal && ready && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
             <div className="text-center">
@@ -336,42 +423,44 @@ const NewQrcode = () => {
                 {currentStatus === "checked-in" ? "🔓" : "🔒"}
               </div>
               <h2 className="text-xl font-bold text-gray-800 mb-2">
-                Attendance Action
+                Select Action
               </h2>
 
-              {locationError && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
-                  <p className="text-yellow-800 text-sm">{locationError}</p>
+              {/* Location Status */}
+              <div className={`border rounded-lg p-3 mb-4 ${locationStatus === "success"
+                  ? "bg-green-50 border-green-200"
+                  : locationStatus === "error"
+                    ? "bg-red-50 border-red-200"
+                    : "bg-yellow-50 border-yellow-200"
+                }`}>
+                <div className="flex items-center justify-center text-sm">
+                  <span className="mr-2">{getLocationStatusIcon()}</span>
+                  <span className={
+                    locationStatus === "success"
+                      ? "text-green-800"
+                      : locationStatus === "error"
+                        ? "text-red-800"
+                        : "text-yellow-800"
+                  }>
+                    {getLocationStatusText()}
+                  </span>
                 </div>
-              )}
-
-              {location && (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-2 mb-4">
-                  <p className="text-green-800 text-xs">
-                    📍 Location ready (Accuracy: ±
-                    {Math.round(location.accuracy)}m)
-                  </p>
-                </div>
-              )}
+              </div>
 
               <p className="text-gray-600 mb-4">
-                {currentStatus === "checked-in"
-                  ? "You are currently checked in"
-                  : "You are currently checked out"}
+                Current status: {currentStatus === "checked-in" ? "Checked In" : "Checked Out"}
               </p>
 
               <div className="space-y-3">
                 <button
                   onClick={() => handleActionSelect("check-in")}
-                  disabled={!location && !locationError}
-                  className="w-full bg-green-500 hover:bg-green-600 disabled:bg-gray-300 text-white py-3 px-4 rounded-lg font-medium transition duration-200 disabled:cursor-not-allowed"
+                  className="w-full bg-green-500 hover:bg-green-600 text-white py-3 px-4 rounded-lg font-medium transition duration-200"
                 >
                   🔓 Check In
                 </button>
                 <button
                   onClick={() => handleActionSelect("check-out")}
-                  disabled={!location && !locationError}
-                  className="w-full bg-red-500 hover:bg-red-600 disabled:bg-gray-300 text-white py-3 px-4 rounded-lg font-medium transition duration-200 disabled:cursor-not-allowed"
+                  className="w-full bg-red-500 hover:bg-red-600 text-white py-3 px-4 rounded-lg font-medium transition duration-200"
                 >
                   🔒 Check Out
                 </button>
@@ -398,12 +487,12 @@ const NewQrcode = () => {
               <p className="text-blue-800 font-medium text-sm">
                 Device: {deviceId.substring(0, 20)}...
               </p>
-              {location && (
-                <p className="text-blue-600 text-xs">
-                  Location: {location.latitude.toFixed(4)},{" "}
-                  {location.longitude.toFixed(4)}
-                </p>
-              )}
+              <div className="flex items-center justify-center mt-1">
+                <span className="mr-2">{getLocationStatusIcon()}</span>
+                <span className="text-blue-600 text-xs">
+                  {getLocationStatusText()}
+                </span>
+              </div>
             </div>
           </div>
 
@@ -429,7 +518,7 @@ const NewQrcode = () => {
               <div className="p-4 text-center">
                 <p className="text-gray-600 mb-2">📱 Point camera at QR code</p>
                 <p className="text-sm text-gray-500">
-                  Make sure location services are enabled
+                  Selected Action: {selectedAction}
                 </p>
 
                 <button

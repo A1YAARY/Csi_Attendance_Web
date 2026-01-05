@@ -1,24 +1,30 @@
 import React from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/authStore";
 
 const Logout = () => {
-  const user = JSON.parse(localStorage.getItem("user")) || JSON.parse(localStorage.getItem("userData"));
-  const { logout } = useAuth();
+  const { logout, user } = useAuth(); // ✅ Use store user directly
+
   const navigate = useNavigate();
 
-  const handleLogout = () => {
-    logout();
-    // Always redirect to login page after logout
-    navigate("/login", { replace: true });
+  const handleLogout = async () => {
+    try {
+      await logout(); // ✅ This calls logoutUser internally and clears state
+      navigate("/login", { replace: true });
+    } catch (error) {
+      console.error("Logout error:", error);
+      // Force logout even if API call fails
+      localStorage.removeItem("accessToken");
+      localStorage.removeItem("userData");
+      navigate("/login", { replace: true });
+    }
   };
 
   const cancel = () => {
-    // Check user role to redirect to appropriate page
     if (user?.role === "organization") {
       navigate("/admin");
     } else {
-      navigate("/Teacherinfo");
+      navigate("/teacherinfo");
     }
   };
 

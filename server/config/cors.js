@@ -33,7 +33,8 @@ const corsOptions = {
 
   credentials: true,
   optionsSuccessStatus: 200,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  // ✅ FIXED: Added PATCH method
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
   allowedHeaders: [
     "Content-Type",
     "Authorization",
@@ -41,8 +42,8 @@ const corsOptions = {
     "Accept",
     "Origin",
     "X-HTTP-Method-Override",
-    "X-Device-ID", // ✅ Already added this
-    "X-Device-Fingerprint", // ✅ ADD THIS LINE - This is missing!
+    "X-Device-ID",
+    "X-Device-Fingerprint",
   ],
 };
 

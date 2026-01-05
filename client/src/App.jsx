@@ -2,26 +2,35 @@ import "./App.css";
 import TeacherInfo from "./components/user_side/TeacherInfo";
 import { motion, AnimatePresence } from "framer-motion";
 import AnimationPage from "./components/user_side/AnimationPage";
-import React, { useEffect, useRef, useState } from "react";
+import React from "react";
 import NewQrcode from "./components/user_side/Newqrcode";
 import { Route, Routes, useLocation, Navigate } from "react-router-dom";
 import Logout from "./components/user_side/LogoutPage";
 import Dashboad from "./components/user_side/Dashboad";
 import { LoginPage } from "./components/user_side/LoginPage";
 import OrganizationRegister from "./components/user_side/OrganizationRegister";
-
 import AdminHome from "./components/Admin_side/AdminHome";
 import ProtectedRoute from "./components/ProtectedRoute";
 import PublicRoute from "./components/PublicRoute";
-import { useAuth } from "./context/AuthContext";
-import { useAdminProtection } from "./hooks/useAdminProtection";
-import "cally";
+import { useAuth } from "./context/authStore"; // ✅ FIXED IMPORT
 import AdminProtected from "./components/AdminProtected";
 import ClickSpark from "./reactbitscomponents/ClickSpark";
 import ResetPass from "./components/Admin_side/ResetPass";
+import UpdationUser from "./components/Admin_side/UpdationUser";
+import ManualAttendance from './components/Admin_side/ManualAttendance';
 
 function App() {
   const location = useLocation();
+  const { isAuthenticated, isAdmin, user } = useAuth(); // ✅ Now using store
+
+  // Helper function to determine redirect path
+  const getRedirectPath = () => {
+    if (user?.role === "organization") {
+      return "/admin";
+    } else {
+      return "/teacherinfo";
+    }
+  };
 
   return (
     <>
@@ -34,7 +43,7 @@ function App() {
       >
         <AnimatePresence mode="wait">
           <Routes location={location} key={location.pathname}>
-            {/* Public Routes - Redirect to teacherinfo if already logged in */}
+            {/* Public Routes */}
             <Route
               path="/login"
               element={
@@ -66,10 +75,30 @@ function App() {
                 </PublicRoute>
               }
             />
+            <Route path="/admin/manual-attendance" element={<ManualAttendance />} />
 
-           
 
-            {/* Protected Routes - Require authentication */}
+            {/* Password Reset Route */}
+            <Route
+              path="/reset-password"
+              element={
+                <motion.div
+                  initial={{ opacity: 0, scale: 0.9 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.9 }}
+                  transition={{ duration: 0.3 }}
+                >
+                  <ResetPass />
+                </motion.div>
+              }
+            />
+
+            <Route
+              path="/ResetPass"
+              element={<Navigate to="/reset-password" replace />}
+            />
+
+            {/* Protected Routes */}
             <Route
               path="/teacherinfo"
               element={
@@ -135,47 +164,50 @@ function App() {
                 </ProtectedRoute>
               }
             />
-             <Route
-              path="/ResetPass"
-              element={
-                <ProtectedRoute>
-                  <ResetPass />
-                </ProtectedRoute>
-              }
-            />
 
             {/* Admin Routes */}
             <Route
-              path="/admin"
+              path="/admin/*"
               element={
                 <ProtectedRoute>
                   <AdminProtected>
-                    <AdminHome />
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      exit={{ opacity: 0, y: -20 }}
+                      transition={{ duration: 0.3 }}
+                    >
+                      <AdminHome />
+                    </motion.div>
                   </AdminProtected>
                 </ProtectedRoute>
               }
             />
 
-           
-
+            <Route
+              path="/admin/edit/:id"
+              element={
+                <AdminProtected>
+                  <UpdationUser />
+                </AdminProtected>
+              }
+            />
             {/* Root route - redirect based on authentication */}
             <Route
               path="/"
               element={
-                localStorage.getItem("accessToken") ? (
-                  <Navigate to="/teacherinfo" replace />
-                ) : (
-                  <Navigate to="/login" replace />
-                )
+                isAuthenticated()
+                  ? (isAdmin() ? <Navigate to="/admin" replace /> : <Navigate to="/teacherinfo" replace />)
+                  : <Navigate to="/login" replace />
               }
             />
 
-            {/* Catch all - redirect to appropriate page */}
+            {/* Catch all route */}
             <Route
               path="*"
               element={
-                localStorage.getItem("accessToken") ? (
-                  <Navigate to="/teacherinfo" replace />
+                isAuthenticated() ? (
+                  <Navigate to={getRedirectPath()} replace />
                 ) : (
                   <Navigate to="/login" replace />
                 )
@@ -184,8 +216,6 @@ function App() {
           </Routes>
         </AnimatePresence>
       </ClickSpark>
-                        {/* <Navigate to="/login" replace /> */}
-
     </>
   );
 }

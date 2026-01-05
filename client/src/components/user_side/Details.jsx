@@ -1,7 +1,35 @@
 import React from "react";
 import { motion } from "framer-motion";
 
-const Details = ({ user }) => {
+const Details = ({ user, todayAttendance }) => {
+  const firstIn = todayAttendance?.sessions?.[0]?.checkIn || null;
+  const lastOut = (todayAttendance?.sessions || [])
+    .filter((s) => s.checkOut)
+    .pop()?.checkOut || null;
+
+  const formatIST = (ts) =>
+    ts
+      ? new Date(ts).toLocaleString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      })
+      : "--";
+
+  const totalMins =
+    typeof todayAttendance?.totalWorkingTime === "number"
+      ? todayAttendance.totalWorkingTime
+      : (todayAttendance?.sessions || []).reduce((acc, s) => {
+        if (typeof s.duration === "number") return acc + s.duration;
+        if (s.checkIn && s.checkOut)
+          return acc + Math.floor((new Date(s.checkOut) - new Date(s.checkIn)) / 60000);
+        if (s.checkIn && !s.checkOut)
+          return acc + Math.floor((Date.now() - new Date(s.checkIn)) / 60000);
+        return acc;
+      }, 0);
+
+  const totalStr = `${Math.floor(totalMins / 60)}h ${totalMins % 60}m`;
   return (
     <div className="w-full max-w-md sm:max-w-lg lg:max-w-xl mx-auto p-4 sm:p-6 lg:p-8">
       <motion.div

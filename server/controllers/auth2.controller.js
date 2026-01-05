@@ -8,6 +8,7 @@ const qrGenerator = require("../utils/qrGenerator");
 const QRCode = require("../models/Qrcode.models");
 const { sendMail } = require("../utils/mailer");
 const geocodingService = require("../utils/geocoding"); // NEW: Multi-provider geocoding
+const istUtils = require("../utils/istDateTimeUtils"); // Use unified IST utils
 
 // IST helper function
 const getISTDate = (date = new Date()) => {
@@ -84,9 +85,9 @@ const verifyToken = async (req, res) => {
       },
       organization: user.organizationId
         ? {
-            id: user.organizationId._id,
-            name: user.organizationId.name,
-          }
+          id: user.organizationId._id,
+          name: user.organizationId.name,
+        }
         : null,
     });
   } catch (error) {
@@ -99,7 +100,6 @@ const verifyToken = async (req, res) => {
   }
 };
 
-// Token refresh endpoint
 const refreshToken = async (req, res) => {
   try {
     const { refreshToken } = req.cookies;
@@ -131,9 +131,7 @@ const refreshToken = async (req, res) => {
       });
     }
 
-    const { accessToken, refreshToken: newRefreshToken } = generateTokens(
-      user._id
-    );
+    const { accessToken, refreshToken: newRefreshToken } = generateTokens(user._id);
 
     res.cookie("refreshToken", newRefreshToken, {
       httpOnly: true,
@@ -152,10 +150,7 @@ const refreshToken = async (req, res) => {
         role: user.role,
       },
       organization: user.organizationId
-        ? {
-            id: user.organizationId._id,
-            name: user.organizationId.name,
-          }
+        ? { id: user.organizationId._id, name: user.organizationId.name }
         : null,
       accessToken,
     });
@@ -169,7 +164,7 @@ const refreshToken = async (req, res) => {
   }
 };
 
-// FIXED: Enhanced organization registration with multi-provider geocoding
+
 const register_orginization = async (req, res) => {
   try {
     const { email, password, name, organizationName, address } = req.body;
@@ -185,34 +180,29 @@ const register_orginization = async (req, res) => {
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        message: "User already exists",
+        message: "User already exists"
       });
     }
 
-    // FIXED: Use enhanced multi-provider geocoding service
     console.log(`🌍 Starting geocoding for address: "${address}"`);
     const geoResult = await geocodingService.geocodeAddress(address);
-
-    console.log(`📍 Geocoding result:`, {
+    console.log("📍 Geocoding result:", {
       provider: geoResult.provider,
       coordinates: `${geoResult.latitude}, ${geoResult.longitude}`,
       accuracy: geoResult.accuracy,
       confidence: geoResult.confidence,
     });
 
-    // Create user
     const user = new User({
       email,
       password,
       name,
       role: "organization",
     });
+
     await user.save();
 
-    // Parse address components
     const addressComponents = address.split(",").map((part) => part.trim());
-
-    // Create organization with enhanced geocoded location
     const organization = new Organization({
       name: organizationName,
       address: {
@@ -225,27 +215,25 @@ const register_orginization = async (req, res) => {
       location: {
         latitude: geoResult.latitude,
         longitude: geoResult.longitude,
-        radius: 100, // default 100 meters
+        radius: 500,
         address: geoResult.formatted_address,
         isVerified: true,
-        lastUpdated: getISTDate(),
-        // Enhanced location metadata
+        lastUpdated: istUtils.getISTDate(),
         geocoding: {
           provider: geoResult.provider,
           accuracy: geoResult.accuracy,
           confidence: geoResult.confidence,
-          geocodedAt: getISTDate(),
+          geocodedAt: istUtils.getISTDate(),
         },
       },
       adminId: user._id,
     });
+
     await organization.save();
 
-    // Link user to organization
     user.organizationId = organization._id;
     await user.save();
 
-    // Generate QR codes with organization location
     const checkInQR = await qrGenerator.generateQRCode(
       organization._id,
       organization.location,
@@ -286,7 +274,6 @@ const register_orginization = async (req, res) => {
       active: true,
     });
 
-    // Save QR codes in org
     organization.checkInQRCodeId = checkInQRDoc._id;
     organization.checkOutQRCodeId = checkOutQRDoc._id;
     await organization.save();
@@ -339,20 +326,31 @@ const register_orginization = async (req, res) => {
   }
 };
 
-// Enhanced user registration
-// Enhanced user registration with password reset email
 const register_user = async (req, res) => {
   try {
-    const { email, name, organizationCode, institute, department, password } =
-      req.body;
+    const {
+      email,
+      name,
+      organizationCode,
+      institute,
+      department,
+      password,
+      phone, // NEW
+      workingHoursStart, // NEW
+      workingHoursEnd, // NEW
+      weeklySchedule, // NEW - Object with days
+      customHolidays, // NEW - Array of dates
+    } = req.body;
 
+    // Validation: Required fields
     if (!email || !organizationCode || !name || !institute || !department) {
       return res.status(400).json({
         success: false,
-        message: "All fields are required",
+        message: "All fields are required (email, name, organizationCode, institute, department)",
       });
     }
 
+    // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
@@ -361,6 +359,7 @@ const register_user = async (req, res) => {
       });
     }
 
+    // Find organization
     const organization = await Organization.findOne({ name: organizationCode });
     if (!organization) {
       return res.status(400).json({
@@ -369,63 +368,101 @@ const register_user = async (req, res) => {
       });
     }
 
-    // Create user with temporary password
+    // **NEW: Parse working hours with defaults**
+    const workingHours = {
+      start: workingHoursStart || "09:00",
+      end: workingHoursEnd || "18:00",
+    };
+
+    // **NEW: Parse weekly schedule (defaults: Mon-Fri working, Sat-Sun off)**
+    const defaultWeeklySchedule = {
+      monday: true,
+      tuesday: true,
+      wednesday: true,
+      thursday: true,
+      friday: true,
+      saturday: false,
+      sunday: false,
+    };
+
+    const finalWeeklySchedule = weeklySchedule
+      ? { ...defaultWeeklySchedule, ...weeklySchedule }
+      : defaultWeeklySchedule;
+
+    // **NEW: Parse custom holidays (array of date strings)**
+    const parsedHolidays = customHolidays
+      ? customHolidays
+          .map((dateStr) => {
+            const date = new Date(dateStr);
+            return isNaN(date.getTime()) ? null : date;
+          })
+          .filter((date) => date !== null)
+      : [];
+
+    // Create user with all fields
     const user = new User({
       email,
-      password: password || "pass123", // Default temp password
+      password: password,
       name,
       role: "user",
       institute,
       department,
+      phone: phone || undefined, // NEW
       organizationId: organization._id,
-      deviceInfo: {
-        isRegistered: false,
-      },
+      workingHours, // NEW
+      weeklySchedule: finalWeeklySchedule, // NEW
+      customHolidays: parsedHolidays, // NEW
+      deviceInfo: { isRegistered: false },
     });
+
     await user.save();
 
-    // Send password reset email if no password provided
-    if (!password) {
-      try {
-        const resetToken = jwt.sign(
-          { userId: user._id },
-          process.env.JWT_RESET_SECRET,
-          { expiresIn: "24h" } // 24 hours for initial setup
-        );
+    // Send welcome email with password reset link
+    try {
+      const resetToken = jwt.sign(
+        { userId: user._id, email: user.email },
+        process.env.JWT_RESET_SECRET || process.env.JWT_SECRET,
+        { expiresIn: "24h" }
+      );
 
-        const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}&newUser=true`;
+      const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}&newUser=true`;
 
-        await sendMail(
-          user.email,
-          "Welcome to Attendance System - Set Your Password",
-          `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h2 style="color: #1D61E7;">Welcome to the Attendance System!</h2>
-            <p>Hello ${name},</p>
-            <p>Your account has been created successfully. Please set your password using the link below:</p>
-            <div style="text-align: center; margin: 30px 0;">
-              <a href="${resetLink}" 
-                 style="background-color: #1D61E7; color: white; padding: 12px 24px; 
-                        text-decoration: none; border-radius: 6px; display: inline-block;">
-                Set Your Password
-              </a>
-            </div>
-            <p><strong>This link will expire in 24 hours.</strong></p>
-            <p>If you didn't request this, please ignore this email.</p>
-            <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-            <p style="color: #666; font-size: 12px;">
-              Organization: ${organization.name}<br>
-              Email: ${email}
-            </p>
-          </div>`
-        );
+      const emailSubject = "Welcome to Attendance System - Set Your Password";
+      const emailBody = `
+Hello ${name},
 
-        console.log(`✅ Password reset email sent to ${email}`);
-      } catch (emailError) {
-        console.error("❌ Failed to send welcome email:", emailError);
-        // Continue with registration even if email fails
-      }
+Your account has been created successfully for ${organization.name}.
+
+Please set your password using the link below:
+${resetLink}
+
+This link will expire in 24 hours for security reasons.
+
+Account Details:
+- Email: ${email}
+- Organization: ${organization.name}
+- Institute: ${institute}
+- Department: ${department}
+- Phone: ${phone || "Not provided"}
+- Working Hours: ${workingHours.start} - ${workingHours.end}
+- Weekly Offs: ${Object.entries(finalWeeklySchedule)
+  .filter(([day, working]) => !working)
+  .map(([day]) => day.charAt(0).toUpperCase() + day.slice(1))
+  .join(", ") || "None"}
+
+If you didn't request this account creation, please contact your administrator.
+
+Best regards,
+Attendance System Team
+`;
+
+      await sendMail(email, emailSubject, emailBody);
+    } catch (mailErr) {
+      console.error("Password setup email error:", mailErr);
+      // Continue without failing registration
     }
 
+    // Generate tokens
     const { accessToken, refreshToken } = generateTokens(user._id);
 
     res.cookie("refreshToken", refreshToken, {
@@ -437,38 +474,34 @@ const register_user = async (req, res) => {
 
     res.status(201).json({
       success: true,
-      message: password
-        ? "User registered successfully. Please register your device on first login."
-        : "User registered successfully. Password setup email sent.",
+      message: "User registered successfully",
       user: {
         id: user._id,
         email: user.email,
         name: user.name,
         role: user.role,
-        deviceRegistered: false,
-        requiresPasswordSetup: !password,
-      },
-      organization: {
-        id: organization._id,
-        name: organization.name,
+        organizationId: user.organizationId,
+        phone: user.phone,
+        workingHours: user.workingHours,
+        weeklySchedule: user.weeklySchedule,
+        customHolidays: user.customHolidays,
       },
       accessToken,
     });
-  } catch (err) {
-    console.error("User registration error:", err);
+  } catch (error) {
+    console.error("User registration error:", error);
     res.status(500).json({
       success: false,
-      message: "Server error during registration",
-      error: process.env.NODE_ENV === "development" ? err.message : undefined,
+      message: "Server error during user registration",
     });
   }
 };
 
-// Enhanced login with device registration check - FIXED VERSION
+
+// Enhanced login with device registration check
 const login = async (req, res) => {
   try {
-    const { email, password, deviceId, deviceType, deviceFingerprint } =
-      req.body;
+    const { email, password, deviceId, deviceType, deviceFingerprint } = req.body;
 
     if (!email || !password) {
       return res.status(400).json({
@@ -511,7 +544,7 @@ const login = async (req, res) => {
           deviceType: deviceType || "unknown",
           deviceFingerprint: deviceFingerprint || "",
           isRegistered: true,
-          registeredAt: getISTDate(),
+          registeredAt: istUtils.getISTDate(),
           lastKnownLocation: null,
         };
         console.log(`✅ Device registered for user ${user.email}: ${deviceId}`);
@@ -520,8 +553,7 @@ const login = async (req, res) => {
         if (user.deviceInfo.deviceId !== deviceId) {
           return res.status(403).json({
             success: false,
-            message:
-              "Device not authorized. Please request device change from admin.",
+            message: "Device not authorized. Please request device change from admin.",
             code: "DEVICE_NOT_AUTHORIZED",
             registeredDevice: user.deviceInfo.deviceId,
             currentDevice: deviceId,
@@ -532,7 +564,7 @@ const login = async (req, res) => {
     }
 
     // Update last login
-    user.lastLogin = getISTDate();
+    user.lastLogin = istUtils.getISTDate();
     await user.save();
 
     const { accessToken, refreshToken } = generateTokens(user._id);
@@ -556,10 +588,10 @@ const login = async (req, res) => {
       },
       organization: user.organizationId
         ? {
-            id: user.organizationId._id,
-            name: user.organizationId.name,
-            location: user.organizationId.location,
-          }
+          id: user.organizationId._id,
+          name: user.organizationId.name,
+          location: user.organizationId.location,
+        }
         : null,
       accessToken,
     });
@@ -571,62 +603,214 @@ const login = async (req, res) => {
     });
   }
 };
-// Device change request
 const requestDeviceChange = async (req, res) => {
   try {
-    const { newDeviceId, newDeviceType, newDeviceFingerprint, reason } =
-      req.body;
+    const { email, newDeviceId, newDeviceType, newDeviceFingerprint, reason } = req.body;
 
     if (!newDeviceId) {
       return res.status(400).json({
         success: false,
-        message: "New device ID is required",
+        message: "New device ID is required"
       });
     }
 
-    const user = await User.findById(req.user._id);
+    let user;
+
+    // Handle both authenticated and unauthenticated requests
+    if (req.user) {
+      // Authenticated request (user is logged in)
+      user = await User.findById(req.user._id).populate('organizationId');
+    } else if (email) {
+      // Unauthenticated request (login failure scenario)
+      user = await User.findOne({ email }).populate('organizationId');
+
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          message: "User not found with this email"
+        });
+      }
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: "User email is required for unauthenticated requests"
+      });
+    }
+
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User not found",
+        message: "User not found"
       });
     }
 
     // Check if already has pending request
-    if (
-      user.deviceChangeRequest &&
-      user.deviceChangeRequest.status === "pending"
-    ) {
+    if (user.deviceChangeRequest && user.deviceChangeRequest.status === "pending") {
       return res.status(400).json({
         success: false,
         message: "You already have a pending device change request",
+        existingRequest: {
+          newDeviceId: user.deviceChangeRequest.newDeviceId,
+          requestedAt: user.deviceChangeRequest.requestedAt,
+          requestedAtIST: istUtils.formatISTTimestamp(user.deviceChangeRequest.requestedAt),
+          status: user.deviceChangeRequest.status
+        }
       });
     }
 
+    // Create device change request
     user.deviceChangeRequest = {
       newDeviceId,
       newDeviceType: newDeviceType || "unknown",
       newDeviceFingerprint: newDeviceFingerprint || "",
-      requestedAt: getISTDate(),
+      requestedAt: istUtils.getISTDate(),
       status: "pending",
+      reason: reason
     };
 
     await user.save();
 
+    // Create notification for admin
+    const Notification = require('../models/Notification.models'); // Add this import at the top
+
+    await Notification.create({
+      type: "devicechangerequest",
+      organizationId: user.organizationId._id,
+      userId: user._id,
+      title: "New Device Change Request",
+      message: `${user.name} (${user.email}) has requested to change device from ${user.deviceInfo?.deviceId || 'Unregistered Device'} to ${newDeviceId}`,
+      data: {
+        currentDevice: user.deviceInfo?.deviceId || null,
+        currentDeviceType: user.deviceInfo?.deviceType || null,
+        newDevice: newDeviceId,
+        newDeviceType: newDeviceType,
+        userEmail: user.email,
+        userName: user.name,
+        reason: reason || "",
+        requestId: user.deviceChangeRequest._id
+      },
+      priority: "high"
+    });
+
+    console.log(`Device change request created for user: ${user.email}, New device: ${newDeviceId}`);
+
     res.json({
       success: true,
-      message: "Device change request submitted successfully",
+      message: "Device change request submitted successfully. Admin will review your request.",
       request: {
         newDeviceId,
+        newDeviceType: newDeviceType || "unknown",
         requestedAt: user.deviceChangeRequest.requestedAt,
-        status: "pending",
-      },
+        requestedAtIST: istUtils.formatISTTimestamp(user.deviceChangeRequest.requestedAt),
+        status: "pending"
+      }
     });
+
   } catch (error) {
     console.error("Device change request error:", error);
     res.status(500).json({
       success: false,
       message: "Failed to submit device change request",
+      error: process.env.NODE_ENV === "development" ? error.message : undefined
+    });
+  }
+};
+
+const getUserNotifications = async (req, res) => {
+  try {
+    const { limit = 20, onlyUnread = false } = req.query;
+    const userId = req.user._id;
+
+    const query = { userId: userId };
+    if (onlyUnread === 'true') {
+      query.isRead = false;
+    }
+
+    const notifications = await Notification.find(query)
+      .sort({ createdAt: -1 })
+      .limit(parseInt(limit))
+      .lean();
+
+    const formattedNotifications = notifications.map(notification => ({
+      _id: notification._id,
+      type: notification.type,
+      title: notification.title,
+      message: notification.message,
+      data: notification.data,
+      isRead: notification.isRead,
+      priority: notification.priority,
+      createdAt: notification.createdAt,
+      createdAtIST: istUtils.formatISTTimestamp(notification.createdAt),
+      readAt: notification.readAt,
+      readAtIST: notification.readAt ? istUtils.formatISTTimestamp(notification.readAt) : null
+    }));
+
+    const unreadCount = await Notification.countDocuments({ userId: userId, isRead: false });
+
+    res.json({
+      success: true,
+      data: formattedNotifications,
+      count: formattedNotifications.length,
+      unreadCount: unreadCount
+    });
+  } catch (error) {
+    console.error("Get user notifications error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch notifications"
+    });
+  }
+};
+// Get user's device change request status
+const getUserDeviceRequestStatus = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('deviceInfo deviceChangeRequest').lean();
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found"
+      });
+    }
+
+    const response = {
+      currentDevice: {
+        deviceId: user.deviceInfo?.deviceId || null,
+        deviceType: user.deviceInfo?.deviceType || null,
+        isRegistered: user.deviceInfo?.isRegistered || false,
+        registeredAt: user.deviceInfo?.registeredAt || null,
+        registeredAtIST: user.deviceInfo?.registeredAt ? istUtils.formatISTTimestamp(user.deviceInfo.registeredAt) : null
+      },
+      pendingRequest: null
+    };
+
+    if (user.deviceChangeRequest) {
+      response.pendingRequest = {
+        newDeviceId: user.deviceChangeRequest.newDeviceId,
+        newDeviceType: user.deviceChangeRequest.newDeviceType,
+        requestedAt: user.deviceChangeRequest.requestedAt,
+        requestedAtIST: istUtils.formatISTTimestamp(user.deviceChangeRequest.requestedAt),
+        status: user.deviceChangeRequest.status
+      };
+
+      // If approved or rejected, include admin response
+      if (user.deviceChangeRequest.adminResponse) {
+        response.pendingRequest.adminResponse = {
+          respondedAt: user.deviceChangeRequest.adminResponse.respondedAt,
+          respondedAtIST: istUtils.formatISTTimestamp(user.deviceChangeRequest.adminResponse.respondedAt),
+          reason: user.deviceChangeRequest.adminResponse.reason
+        };
+      }
+    }
+
+    res.json({
+      success: true,
+      data: response
+    });
+  } catch (error) {
+    console.error("Get device request status error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to get device request status"
     });
   }
 };
@@ -634,8 +818,8 @@ const requestDeviceChange = async (req, res) => {
 const updateProfile = async (req, res) => {
   try {
     const { name, workingHours, password } = req.body;
-    const updateData = {};
 
+    const updateData = {};
     if (name) updateData.name = name;
     if (workingHours) updateData.workingHours = workingHours;
     if (password) updateData.password = password;
@@ -706,6 +890,7 @@ const logout = (req, res) => {
     secure: process.env.NODE_ENV === "production",
     sameSite: "strict",
   });
+
   res.status(200).json({
     success: true,
     message: "Logged out successfully",
@@ -740,9 +925,12 @@ module.exports = {
   register_user,
   login,
   logout,
+  getUserDeviceRequestStatus,
   updateProfile,
   viewProfile,
   refreshToken,
   verifyToken,
   requestDeviceChange,
+  getUserNotifications,
+
 };

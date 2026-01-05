@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "../../context/AuthContext";
+import { useAuth } from "../../context/authStore";
 import { toast } from "react-toastify";
 
 export const EmployeeData = ({ allusers, onUsersUpdate }) => {
@@ -9,6 +9,8 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
   const [users, setUsers] = useState(allusers || []);
   const [openDropdownUserId, setOpenDropdownUserId] = useState(null);
   const [actionLoading, setActionLoading] = useState(null);
+  const getUserId = (user) => (user?._id || user?.id || '').toString();
+
 
   useEffect(() => {
     setUsers(allusers || []);
@@ -17,7 +19,6 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
   // Reset user device (allow them to register new device)
   const handleResetDevice = async (userId, userEmail) => {
     setActionLoading(`reset-${userId}`);
-
     try {
       const response = await makeAuthenticatedRequest(
         `${BASE_URL}/admin/reset-user-device`,
@@ -26,30 +27,30 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
           body: JSON.stringify({ userId }),
         }
       );
+      console.log(response, "Reset Device Response");
+
 
       if (response.success) {
         toast.success(
           `Device reset for ${userEmail}. They can now register a new device.`
         );
-
         // Update local state
-        setUsers((prevUsers) =>
-          prevUsers.map((user) =>
+        setUsers(prevUsers =>
+          prevUsers.map(user =>
             user._id === userId
               ? {
-                  ...user,
-                  deviceInfo: {
-                    isRegistered: false,
-                    deviceId: null,
-                    deviceType: null,
-                    deviceFingerprint: null,
-                    registeredAt: null,
-                  },
-                }
+                ...user,
+                deviceInfo: {
+                  isRegistered: false,
+                  deviceId: null,
+                  deviceType: null,
+                  deviceFingerprint: null,
+                  registeredAt: null,
+                },
+              }
               : user
           )
         );
-
         if (onUsersUpdate) {
           onUsersUpdate();
         }
@@ -63,10 +64,19 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
     }
   };
 
+  const handleEditUser = (userId) => {
+    console.log('Navigating to edit with userId:', userId);
+    if (!userId || userId === '' || userId === 'undefined') {
+      toast.error('Invalid user ID');
+      console.error('Invalid userId:', userId);
+      return;
+    }
+    navigate(`/admin/edit/${userId}`);
+  };
+
   // Send password reset email to user
   const handleSendResetEmail = async (userId, userEmail) => {
     setActionLoading(`reset-password-${userId}`);
-
     try {
       const response = await makeAuthenticatedRequest(
         `${BASE_URL}/password/request-reset`,
@@ -98,14 +108,10 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
     }
 
     setActionLoading(`delete-${userId}`);
-
     try {
       await deleteUser(userId);
-      setUsers((prev) =>
-        prev.filter((user) => (user._id || user.id) !== userId)
-      );
+      setUsers(prev => prev.filter(user => (user._id || user.id) !== userId));
       toast.success(`User ${userEmail} deleted successfully`);
-
       if (onUsersUpdate) {
         onUsersUpdate();
       }
@@ -119,19 +125,13 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
   };
 
   const toggleDropdown = (userId) => {
-    setOpenDropdownUserId((prev) => (prev === userId ? null : userId));
-  };
-
-  const handleUserClick = (userId) => {
-    navigate(`/admin/user/${userId}`);
+    setOpenDropdownUserId(prev => (prev === userId ? null : userId));
   };
 
   const formatWorkingHours = (workingHours) => {
     if (!workingHours) return "N/A";
     if (typeof workingHours === "object") {
-      return `${workingHours.start || "09:00"} - ${
-        workingHours.end || "17:00"
-      }`;
+      return `${workingHours.start || "09:00"} - ${workingHours.end || "17:00"}`;
     }
     return workingHours;
   };
@@ -159,7 +159,7 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
     <div className="bg-white rounded-b-lg lg:rounded-t-none shadow-sm overflow-hidden">
       <div className="divide-y divide-gray-200">
         {users.map((user, index) => {
-          const userId = user._id || user.id || `user-${index}`;
+          const userId = getUserId(user);
           const userName = user.name || user.fullName || "Unknown User";
           const userEmail = user.email || "No email provided";
           const userDepartment = user.department || "N/A";
@@ -170,6 +170,7 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
             <div
               key={userId}
               className="cursor-pointer hover:bg-gray-50 transition-colors duration-200 relative"
+              onClick={() => handleEditUser(userId)} // ✅ FIXED: Use handleEditUser
             >
               {/* Desktop Layout */}
               <div className="hidden lg:grid lg:grid-cols-12 lg:gap-4 lg:p-4 lg:items-center">
@@ -179,18 +180,10 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
                       {userName.charAt(0).toUpperCase()}
                     </div>
                     <div className="ml-3">
-                      <p className="text-sm font-medium text-gray-900">
-                        {userName}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        ID: {userId.slice(-6)}
-                      </p>
-                      <p className="text-xs text-gray-500 truncate max-w-[200px]">
-                        {userEmail}
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        Device: {deviceStatus}
-                      </p>
+                      <p className="text-sm font-medium text-gray-900">{userName}</p>
+                      <p className="text-xs text-gray-500">ID: {userId.slice(-6)}</p>
+                      <p className="text-xs text-gray-500 truncate max-w-[200px]">{userEmail}</p>
+                      <p className="text-xs text-gray-400">Device: {deviceStatus}</p>
                     </div>
                   </div>
                 </div>
@@ -217,7 +210,7 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
                         toggleDropdown(userId);
                       }}
                       className="px-3 py-1 text-gray-700 hover:text-black focus:outline-none"
-                      disabled={actionLoading}
+                      disabled={actionLoading && actionLoading.includes(userId)}
                     >
                       {actionLoading && actionLoading.includes(userId) ? (
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
@@ -225,7 +218,6 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
                         "⋮"
                       )}
                     </button>
-
                     {openDropdownUserId === userId && (
                       <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
                         <div className="py-1">
@@ -274,18 +266,11 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
                       {userName.charAt(0).toUpperCase()}
                     </div>
                     <div className="ml-3 flex-1 min-w-0">
-                      <p className="text-base font-medium text-gray-900 truncate">
-                        {userName}
-                      </p>
-                      <p className="text-sm text-gray-500 truncate">
-                        {userEmail}
-                      </p>
-                      <p className="text-xs text-gray-400">
-                        Device: {deviceStatus}
-                      </p>
+                      <p className="text-base font-medium text-gray-900 truncate">{userName}</p>
+                      <p className="text-sm text-gray-500 truncate">{userEmail}</p>
+                      <p className="text-xs text-gray-400">Device: {deviceStatus}</p>
                     </div>
                   </div>
-
                   <div className="relative">
                     <button
                       onClick={(e) => {
@@ -293,7 +278,7 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
                         toggleDropdown(userId);
                       }}
                       className="p-2 text-gray-400 hover:text-gray-600"
-                      disabled={actionLoading}
+                      disabled={actionLoading && actionLoading.includes(userId)}
                     >
                       {actionLoading && actionLoading.includes(userId) ? (
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
@@ -301,7 +286,6 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
                         "⋮"
                       )}
                     </button>
-
                     {openDropdownUserId === userId && (
                       <div className="absolute right-0 mt-2 w-48 rounded-md shadow-lg bg-white ring-1 ring-black ring-opacity-5 z-50">
                         <div className="py-1">
@@ -340,7 +324,6 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
                     )}
                   </div>
                 </div>
-
                 <div className="grid grid-cols-2 gap-3 pl-15">
                   <div className="bg-gray-50 p-3 rounded-lg">
                     <p className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">

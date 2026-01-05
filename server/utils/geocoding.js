@@ -19,13 +19,113 @@ const PROVIDERS = {
 const geocodingCache = new Map();
 const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days for addresses
 
-// Multi-provider geocoding with fallback
-async function geocodeAddress(address, options = {}) {
-  try {
-    if (!address || typeof address !== 'string' || address.trim().length < 3) {
-      throw new ApiError(400, 'Invalid address provided', {
-        code: 'INVALID_ADDRESS',
-        minLength: 3,
+  // 🌍 LocationIQ (Free 5k/day)
+  async geocodeWithLocationIQ(address) {
+    try {
+      const response = await axios.get(
+        "https://us1.locationiq.com/v1/search.php",
+        {
+          params: {
+            key: process.env.LOCATIONIQ_KEY, // put your free key in .env
+            q: address,
+            format: "json",
+            limit: 1,
+            countrycodes: "in",
+          },
+          timeout: 8000,
+        }
+      );
+      if (response.data && response.data[0]) {
+        const r = response.data[0];
+        return {
+          latitude: parseFloat(r.lat),
+          longitude: parseFloat(r.lon),
+          formatted_address: r.display_name,
+          provider: "locationiq",
+          confidence: parseFloat(r.importance || 0.8),
+          accuracy: this.determineAccuracy(r.type, r.class),
+        };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  // 🌍 Geoapify (Free 3k/day)
+  async geocodeWithGeoapify(address) {
+    try {
+      const response = await axios.get(
+        "https://api.geoapify.com/v1/geocode/search",
+        {
+          params: {
+            apiKey: process.env.GEOAPIFY_KEY,
+            text: address,
+            limit: 1,
+            filter: "countrycode:in",
+          },
+          timeout: 8000,
+        }
+      );
+      if (response.data.features?.length > 0) {
+        const r = response.data.features[0];
+        return {
+          latitude: r.geometry.coordinates[1],
+          longitude: r.geometry.coordinates[0],
+          formatted_address: r.properties.formatted,
+          provider: "geoapify",
+          confidence: r.properties.rank.confidence || 0.7,
+          accuracy:
+            r.properties.rank.match_type === "exact" ? "exact" : "street",
+        };
+      }
+      return null;
+    } catch (err) {
+       console.error("Geoapify error:", err.message);
+      return null;
+    }
+  }
+
+  // 🌍 Nominatim (OpenStreetMap)
+  async geocodeWithNominatim(address) {
+    try {
+      const response = await axios.get(
+        "https://nominatim.openstreetmap.org/search",
+        {
+          params: {
+            q: address,
+            format: "json",
+            limit: 1,
+            addressdetails: 1,
+            countrycodes: "in",
+          },
+          headers: { "User-Agent": "EnhancedGeocoder/1.0" },
+          timeout: 8000,
+        }
+      );
+      if (response.data.length > 0) {
+        const r = response.data[0];
+        return {
+          latitude: parseFloat(r.lat),
+          longitude: parseFloat(r.lon),
+          formatted_address: r.display_name,
+          provider: "nominatim",
+          confidence: parseFloat(r.importance || 0.6),
+          accuracy: this.determineAccuracy(r.type, r.class),
+        };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  // 🌍 Photon (OSM-based, no key)
+  async geocodeWithPhoton(address) {
+    try {
+      const response = await axios.get("https://photon.komoot.io/api/", {
+        params: { q: address, limit: 1 },
+        timeout: 8000,
       });
     }
 
