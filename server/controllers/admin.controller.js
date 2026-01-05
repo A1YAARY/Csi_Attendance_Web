@@ -1,11 +1,7 @@
 const User = require("../models/user.models");
-
 const Attendance = require("../models/Attendance.models");
-
 const QRCode = require("../models/Qrcode.models");
-
 const Organization = require("../models/organization.models");
-const { handleAsync, ApiError } = require("../utils/errorHandler");
 const DailyTimeSheet = require("../models/DailyTimeSheet.models");
 const holidayService = require("../utils/holidayService");
 const DateTimeUtils = require("../utils/dateTimeUtils");
@@ -25,30 +21,11 @@ const resetUserDevice = async (req, res) => {
       }
     }
 
-    orgId = org._id;
-  }
+    const targetUser = await User.findById(userId);
+    if (!targetUser) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
 
-  if (!orgId) {
-    throw new ApiError(400, "No organization scope");
-  }
-
-  // Use lean() to avoid cache/clone issues and format for frontend
-  const users = await User.find({ organizationId: orgId })
-    .select("-password -refreshToken")
-    .lean()
-    .sort({ createdAt: -1 })
-    .hint({ organizationId: 1, createdAt: -1 });
-  const formatted = users.map((u) => ({
-    _id: u._id,
-    id: u._id,
-    name: u.name,
-    email: u.email,
-    role: u.role || "user",
-    department: u.department || "cmpn",
-    phone: u.phone || "",
-    institute: u.institute || "",
-    workingHours: u.workingHours || { start: "09:00", end: "17:00" },
-    deviceInfo: u.deviceInfo || {
     let adminOrgId = req.user.organizationId;
     if (req.user.role === "organization" && !adminOrgId) {
       const org = await Organization.findOne({ adminId: req.user._id }).select("_id");
@@ -57,13 +34,13 @@ const resetUserDevice = async (req, res) => {
       }
       adminOrgId = org._id;
     }
-  
-// Get device change requests
 
-const getDeviceChangeRequests = handleAsync(async (req, res) => {
-  const orgId = req.user.organizationId;
-  if (!orgId) {
-    throw new ApiError(400, "User not associated with any organization");
+    targetUser.deviceInfo = {
+      isRegistered: false,
+      deviceId: null,
+      deviceType: null,
+      deviceFingerprint: null,
+      registeredAt: null,
       lastKnownLocation: null,
     };
 
@@ -221,42 +198,7 @@ const getDeviceChangeRequests = async (req, res) => {
       message: "Failed to fetch device change requests",
     });
   }
-
-  // Get all users with pending device change requests
-  const usersWithRequests = await User.find({
-    organizationId: orgId,
-    "deviceChangeRequest.status": "pending",
-  })
-    .select("name email deviceInfo deviceChangeRequest")
-    .lean();
-  const requests = usersWithRequests.map((user) => ({
-    userId: user._id,
-    userName: user.name,
-    userEmail: user.email,
-    currentDevice: user.deviceInfo?.deviceId,
-    newDeviceId: user.deviceChangeRequest?.newDeviceId,
-    newDeviceType: user.deviceChangeRequest?.newDeviceType,
-    requestedAt: user.deviceChangeRequest?.requestedAt,
-    requestedAtIST: user.deviceChangeRequest?.requestedAt
-      ? user.deviceChangeRequest.requestedAt.toLocaleString("en-IN", {
-          timeZone: "Asia/Kolkata",
-          year: "numeric",
-          month: "2-digit",
-          day: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        })
-      : null,
-  }));
-
-  res.json({
-    success: true,
-    message: "Device change requests fetched successfully",
-    data: requests,
-    count: requests.length,
-  });
-});
+};
 
 
 // Handle device change request (approve/reject) - CORRECTED VERSION
@@ -355,59 +297,9 @@ const handleDeviceChangeRequest = async (req, res) => {
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
+};
 
-  const user = await User.findById(userId);
-  if (!user) {
-    throw new ApiError(404, "User not found");
-  }
 
-  // Check if user belongs to same organization
-  if (user.organizationId.toString() !== req.user.organizationId.toString()) {
-    throw new ApiError(403, "Unauthorized to handle this request");
-  }
-
-  if (
-    !user.deviceChangeRequest ||
-    user.deviceChangeRequest.status !== "pending"
-  ) {
-    throw new ApiError(
-      400,
-      "No pending device change request found for this user"
-    );
-  }
-
-  if (action === "approve") {
-    // Update device info with new device
-    user.deviceInfo = {
-      deviceId: user.deviceChangeRequest.newDeviceId,
-      deviceType: user.deviceChangeRequest.newDeviceType,
-      deviceFingerprint: user.deviceChangeRequest.newDeviceFingerprint,
-      isRegistered: true,
-      registeredAt: getISTDate(),
-    };
-  }
-
-  // Update request status
-  user.deviceChangeRequest.status =
-    action === "approve" ? "approved" : "rejected";
-  user.deviceChangeRequest.adminResponse = {
-    adminId: req.user._id,
-    respondedAt: getISTDate(),
-    reason: reason || "",
-  };
-  await user.save();
-
-  res.json({
-    success: true,
-    message: `Device change request ${action}d successfully`,
-    data: {
-      userId: user._id,
-      action,
-      newDeviceId: action === "approve" ? user.deviceInfo.deviceId : null,
-      respondedAt: user.deviceChangeRequest.adminResponse.respondedAt,
-    },
-  });
-});
 
 // Get admin notifications
 const getNotifications = async (req, res) => {
@@ -719,6 +611,16 @@ const records = async (req, res) => {
 };
 
 // Get organization QR codes
+const getOrganizationQRCodes = async (req, res) => {
+  try {
+    const orgId = req.user.organizationId;
+    if (!orgId) {
+      return res.status(400).json({
+        success: false,
+        message: "User not associated with any organization",
+        error: "MISSING_ORGANIZATION",
+      });
+    }
 
     const org = await Organization.findById(orgId)
       .populate({ path: "checkInQRCodeId", options: { lean: true } })
@@ -781,65 +683,7 @@ const records = async (req, res) => {
       error: process.env.NODE_ENV === "development" ? error.message : "Internal server error",
     });
   }
-
-  // Get organization with populated QR codes using lean
-  const org = await Organization.findById(orgId)
-    .populate({ path: "checkInQRCodeId", options: { lean: true } })
-    .populate({ path: "checkOutQRCodeId", options: { lean: true } })
-    .lean();
-  if (!org) {
-    throw new ApiError(404, "Organization not found", {
-      error: "ORG_NOT_FOUND",
-    });
-  }
-
-  // Format response with complete QR code data
-  const response = {
-    organizationName: org.name,
-    organizationId: org._id,
-    location: org.location,
-    qrCodes: {
-      checkIn: org.checkInQRCodeId
-        ? {
-            id: org.checkInQRCodeId._id,
-            code: org.checkInQRCodeId.code,
-            type: org.checkInQRCodeId.qrType,
-            qrImage: org.checkInQRCodeId.qrImageData,
-            active: org.checkInQRCodeId.active,
-            usageCount: org.checkInQRCodeId.usageCount,
-            createdAt: org.checkInQRCodeId.createdAt,
-            createdAtIST: org.checkInQRCodeId.createdAtIST,
-          }
-        : null,
-      checkOut: org.checkOutQRCodeId
-        ? {
-            id: org.checkOutQRCodeId._id,
-            code: org.checkOutQRCodeId.code,
-            type: org.checkOutQRCodeId.qrType,
-            qrImage: org.checkOutQRCodeId.qrImageData,
-            active: org.checkOutQRCodeId.active,
-            usageCount: org.checkOutQRCodeId.usageCount,
-            createdAt: org.checkOutQRCodeId.createdAt,
-            createdAtIST: org.checkOutQRCodeId.createdAtIST,
-          }
-        : null,
-    },
-    settings: {
-      qrCodeValidityMinutes: org.settings?.qrCodeValidityMinutes || 30,
-      locationToleranceMeters: org.settings?.locationToleranceMeters || 100,
-      requireDeviceRegistration:
-        org.settings?.requireDeviceRegistration || true,
-      strictLocationVerification:
-        org.settings?.strictLocationVerification || true,
-    },
-    lastUpdated: new Date().toISOString(),
-  };
-
-  res.json({
-    success: true,
-    data: response,
-  });
-});
+};
 
 // Get QR code by type
 const getQRCodeByType = async (req, res) => {
@@ -854,52 +698,59 @@ const getQRCodeByType = async (req, res) => {
       });
     }
 
-const getQRCodeByType = handleAsync(async (req, res) => {
-  const { type } = req.params;
-  const orgId = req.user.organizationId;
-  if (!orgId) {
-    throw new ApiError(400, "User not associated with any organization");
-  }
+    if (!["check-in", "check-out"].includes(type)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid QR type. Must be 'check-in' or 'check-out'",
+      });
+    }
 
-  if (!["check-in", "check-out"].includes(type)) {
-    throw new ApiError(
-      400,
-      "Invalid QR type. Must be 'check-in' or 'check-out'"
-    );
-  }
+    const org = await Organization.findById(orgId)
+      .populate({
+        path: type === "check-in" ? "checkInQRCodeId" : "checkOutQRCodeId",
+        options: { lean: true },
+      })
+      .lean();
 
-  const org = await Organization.findById(orgId)
-    .populate({
-      path: type === "check-in" ? "checkInQRCodeId" : "checkOutQRCodeId",
-      options: { lean: true },
-    })
-    .lean();
-  if (!org) {
-    throw new ApiError(404, "Organization not found");
-  }
+    if (!org) {
+      return res.status(404).json({
+        success: false,
+        message: "Organization not found",
+      });
+    }
 
-  const qrCode =
-    type === "check-in" ? org.checkInQRCodeId : org.checkOutQRCodeId;
-  if (!qrCode) {
-    throw new ApiError(404, `${type} QR code not found for organization`);
-  }
+    const qrCode = type === "check-in" ? org.checkInQRCodeId : org.checkOutQRCodeId;
 
-  res.json({
-    success: true,
-    data: {
-      id: qrCode._id,
-      code: qrCode.code,
-      type: qrCode.qrType,
-      qrImage: qrCode.qrImageData,
-      active: qrCode.active,
-      usageCount: qrCode.usageCount,
-      organizationName: org.name,
-      organizationLocation: org.location,
-      createdAt: qrCode.createdAt,
-      createdAtIST: qrCode.createdAtIST,
-    },
-  });
-});
+    if (!qrCode) {
+      return res.status(404).json({
+        success: false,
+        message: `${type} QR code not found for organization`,
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        id: qrCode._id,
+        code: qrCode.code,
+        type: qrCode.qrType,
+        qrImage: qrCode.qrImageData,
+        active: qrCode.active,
+        usageCount: qrCode.usageCount,
+        organizationName: org.name,
+        organizationLocation: org.location,
+        createdAt: qrCode.createdAt,
+        createdAtIST: qrCode.createdAtIST,
+      },
+    });
+  } catch (error) {
+    console.error(`Error fetching ${req.params.type} QR code:`, error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch QR code",
+    });
+  }
+};
 
 // Get enhanced today's attendance with comprehensive data
 const getTodaysAttendance = async (req, res) => {
@@ -991,66 +842,7 @@ const getTodaysAttendance = async (req, res) => {
       message: "Failed to fetch today's attendance",
     });
   }
-
-  const now = new Date();
-  const istOffset = 5.5 * 60 * 60 * 1000;
-  const istNow = new Date(now.getTime() + istOffset);
-  const startOfDayIST = new Date(
-    Date.UTC(
-      istNow.getUTCFullYear(),
-      istNow.getUTCMonth(),
-      istNow.getUTCDate(),
-      0,
-      0,
-      0,
-      0
-    )
-  );
-  const endOfDayIST = new Date(
-    Date.UTC(
-      istNow.getUTCFullYear(),
-      istNow.getUTCMonth(),
-      istNow.getUTCDate(),
-      23,
-      59,
-      59,
-      999
-    )
-  );
-
-  // Fetch records with lean
-  const records = await Attendance.find({
-    organizationId: orgId,
-    createdAt: { $gte: startOfDayIST, $lte: endOfDayIST },
-  })
-    .populate("userId", "name email")
-    .lean();
-
-  // Add IST time to response
-  const formatted = records.map((record) => {
-    const obj = { ...record };
-    obj.timeIST = new Date(record.createdAt.getTime() + istOffset);
-    obj.timeISTFormatted = obj.timeIST.toLocaleString("en-IN", {
-      timeZone: "Asia/Kolkata",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-    });
-    return obj;
-  });
-
-  res.json({
-    success: true,
-    records: formatted,
-    count: formatted.length,
-    date: startOfDayIST.toLocaleDateString("en-IN", {
-      timeZone: "Asia/Kolkata",
-    }),
-  });
-});
+};
 
 // Update user by admin
 const updateUserByAdmin = async (req, res) => {
@@ -1136,55 +928,7 @@ const updateUserByAdmin = async (req, res) => {
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
-
-  // Find the user to update
-  const userToUpdate = await User.findById(userId);
-  if (!userToUpdate) {
-    throw new ApiError(404, "User not found");
-  }
-
-  // Check if user belongs to same organization
-  if (String(userToUpdate.organizationId) !== String(req.user.organizationId)) {
-    throw new ApiError(
-      403,
-      "Forbidden to update user outside your organization"
-    );
-  }
-
-  // Build update data
-  const updateData = {};
-  if (name) updateData.name = name;
-  if (email) updateData.email = email;
-  if (department) updateData.department = department;
-  if (role) updateData.role = role;
-  if (phone) updateData.phone = phone;
-  if (institute) updateData.institute = institute;
-  if (workingHours) updateData.workingHours = workingHours;
-  if (password) {
-    // Hash password if provided
-    const bcrypt = require("bcryptjs");
-    updateData.password = await bcrypt.hash(password, 10);
-  }
-
-  console.log("Updating user:", userId, "with data:", updateData);
-
-  // Update user
-  const updatedUser = await User.findByIdAndUpdate(userId, updateData, {
-    new: true,
-    runValidators: true,
-  }).select("-password");
-  if (!updatedUser) {
-    throw new ApiError(404, "User not found");
-  }
-
-  console.log("User updated successfully:", updatedUser);
-
-  res.status(200).json({
-    success: true,
-    message: "User updated successfully",
-    data: updatedUser.toObject(), // Convert to plain object
-  });
-});
+};
 
 
 // New endpoint in admin.controller.js
@@ -1271,6 +1015,9 @@ const autoMarkWeeklyOffs = async (req, res) => {
 
 
 // Delete user
+const deleteUser = async (req, res) => {
+  try {
+    const userId = req.params.id;
 
     if (req.user.role !== "organization") {
       return res.status(403).json({
@@ -1335,37 +1082,7 @@ const autoMarkWeeklyOffs = async (req, res) => {
       error: process.env.NODE_ENV === "development" ? error.message : undefined,
     });
   }
-
-  // Find the user to delete
-  const user = await User.findById(userId);
-  if (!user) {
-    throw new ApiError(404, "User not found");
-  }
-
-  // Check if user belongs to same organization
-  if (String(user.organizationId) !== String(req.user.organizationId)) {
-    throw new ApiError(
-      403,
-      "Forbidden to delete user outside your organization"
-    );
-  }
-
-  // Prevent admin from deleting themselves
-  if (String(user._id) === String(req.user._id)) {
-    throw new ApiError(400, "You cannot delete your own account");
-  }
-
-  console.log("Deleting user:", userId, "by admin:", req.user._id);
-
-  // Delete the user
-  await User.findByIdAndDelete(userId);
-  console.log("User deleted successfully:", userId);
-
-  res.status(200).json({
-    success: true,
-    message: "User deleted successfully",
-  });
-});
+};
 
 // Get single user with enhanced data
 const singleUser = async (req, res) => {
@@ -1421,12 +1138,7 @@ const singleUser = async (req, res) => {
       message: "Failed to fetch user",
     });
   }
-
-  res.json({
-    success: true,
-    data: user,
-  });
-});
+};
 
 // Get comprehensive dashboard data
 const getDashboardData = async (req, res) => {

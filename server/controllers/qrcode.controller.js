@@ -1,7 +1,6 @@
 const QRCode = require("../models/Qrcode.models");
 const Organization = require("../models/organization.models");
 const { generateQRCode } = require("../utils/qrGenerator");
-const { handleAsync, ApiError } = require("../utils/errorHandler");
 
 // IST helper function
 const getISTDate = (date = new Date()) => {
@@ -217,6 +216,7 @@ exports.generateNewQRCode = async (req, res) => {
       error: error.message 
     });
   }
+};
 
 // Updated getActiveQRCode to show permanent status
 exports.getActiveQRCode = async (req, res) => {
@@ -300,82 +300,4 @@ exports.getOrganizationQRCodes = async (req, res) => {
       error: error.message 
     });
   }
-
-  // Deactivate any existing active QR for this type
-  await QRCode.updateMany(
-    { organizationId: org._id, qrType, active: true },
-    { $set: { active: false } }
-  );
-
-  // Generate QR with IST timestamp
-  const istTimestamp = Math.floor(getISTDate().getTime() / 1000);
-  const { code, qrCodeImage } = await generateQRCode(
-    org._id,
-    org.location,
-    org.settings?.qrCodeValidityMinutes ?? 30,
-    qrType
-  );
-
-  const qrDoc = await QRCode.create({
-    organizationId: org._id,
-    code,
-    qrType,
-    location: {
-      latitude: Number(org.location?.latitude ?? 0),
-      longitude: Number(org.location?.longitude ?? 0),
-      radius: Number(org.location?.radius ?? 100),
-    },
-    timestamp: istTimestamp,
-    active: true,
-    usageCount: 0,
-    qrImageData: qrCodeImage,
-  });
-
-  // Update org pointer for convenience
-  if (qrType === "check-in") org.checkInQRCodeId = qrDoc._id;
-  else org.checkOutQRCodeId = qrDoc._id;
-  await org.save();
-
-  return res.json({
-    message: `New ${qrType} QR code generated successfully`,
-    qr: {
-      code: qrDoc.code,
-      qrType: qrDoc.qrType,
-      qrImageData: qrDoc.qrImageData,
-      timestamp: qrDoc.timestamp,
-      timestampIST: formatISTDate(new Date(qrDoc.timestamp * 1000)),
-      validUntil: formatISTDate(new Date((qrDoc.timestamp + (org.settings?.qrCodeValidityMinutes ?? 30) * 60) * 1000)),
-    },
-  });
-});
-
-exports.getActiveQRCode = handleAsync(async (req, res) => {
-  const { qrType } = req.query;
-  const orgId = (
-    req.user.organizationId?._id ?? req.user.organizationId
-  )?.toString();
-
-  const qr = await QRCode.findOne({
-    organizationId: orgId,
-    qrType: qrType || "check-in",
-    active: true,
-  });
-
-  if (!qr) {
-    throw new ApiError(404, "No active QR code found");
-  }
-
-  // Get organization for validity calculation
-  const org = await Organization.findById(orgId);
-  const validityMinutes = org?.settings?.qrCodeValidityMinutes ?? 30;
-
-  res.json({
-    code: qr.code,
-    qrType: qr.qrType,
-    qrImageData: qr.qrImageData,
-    timestamp: qr.timestamp,
-    timestampIST: formatISTDate(new Date(qr.timestamp * 1000)),
-    validUntil: formatISTDate(new Date((qr.timestamp + validityMinutes * 60) * 1000)),
-    isValid: Math.floor(getISTDate().getTime() / 1000) - qr.timestamp <= validityMinutes * 60,
-  });
-});
+};

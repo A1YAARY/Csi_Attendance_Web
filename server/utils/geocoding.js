@@ -1,23 +1,20 @@
-const axios = require('axios');
-const { ApiError } = require('../utils/errorHandler'); // New import
+const axios = require("axios");
 
-// Configuration for multiple geocoding providers
-const PROVIDERS = {
-  google: {
-    key: process.env.GOOGLE_MAPS_API_KEY,
-    baseUrl: 'https://maps.googleapis.com/maps/api/geocode/json',
-    priority: 1,
-  },
-  openstreet: {
-    baseUrl: 'https://nominatim.openstreetmap.org/search',
-    priority: 2,
-  },
-  // Add more providers as needed
-};
+class EnhancedGeocodingService {
+  constructor() {
+    this.providers = [];
+    this.setupProviders();
+  }
 
-// Cache for geocoding results (avoid rate limits)
-const geocodingCache = new Map();
-const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days for addresses
+  setupProviders() {
+    this.providers = [
+      this.geocodeWithLocationIQ.bind(this),
+      this.geocodeWithGeoapify.bind(this),
+      this.geocodeWithNominatim.bind(this),
+      this.geocodeWithPhoton.bind(this),
+    ];
+    console.log(`🌍 Using ${this.providers.length} providers dynamically`);
+  }
 
   // 🌍 LocationIQ (Free 5k/day)
   async geocodeWithLocationIQ(address) {
@@ -127,175 +124,94 @@ const CACHE_DURATION = 7 * 24 * 60 * 60 * 1000; // 7 days for addresses
         params: { q: address, limit: 1 },
         timeout: 8000,
       });
+      if (response.data.features?.length > 0) {
+        const r = response.data.features[0];
+        return {
+          latitude: r.geometry.coordinates[1],
+          longitude: r.geometry.coordinates[0],
+          formatted_address: r.properties.name || address,
+          provider: "photon",
+          confidence: 0.5,
+          accuracy: "street",
+        };
+      }
+      return null;
+    } catch {
+      return null;
     }
+  }
 
-    const cleanAddress = address.trim();
-    const cacheKey = `geocode_${cleanAddress.toLowerCase()}`;
+  // Main geocode method
+  async geocodeAddress(address) {
+    console.log(`🎯 Geocoding: "${address}"`);
+    const results = [];
 
-    // Check cache first
-    const cached = geocodingCache.get(cacheKey);
-    if (cached && (Date.now() - cached.timestamp) < CACHE_DURATION) {
-      return {
-        ...cached.result,
-        fromCache: true,
-      };
-    }
+    for (const provider of this.providers) {
+      const result = await provider(address);
+      if (result) {
+        results.push(result);
 
-    // Try providers in priority order
-    for (const [provider, config] of Object.entries(PROVIDERS)) {
-      try {
-        const result = await callGeocodingProvider(provider, config, cleanAddress, options);
-        if (result && result.latitude && result.longitude) {
-          // Cache successful result
-          const cacheData = { result, timestamp: Date.now() };
-          geocodingCache.set(cacheKey, cacheData);
-          return {
-            ...result,
-            fromCache: false,
-            provider: provider,
-          };
+        // If very confident → return immediately
+        if (result.confidence >= 0.85 && result.accuracy === "exact") {
+          console.log(`✅ High confidence result from ${result.provider}`);
+          return result;
         }
-      } catch (providerError) {
-        console.warn(`Provider ${provider} failed:`, providerError.message);
-        // Continue to next provider
       }
+      await new Promise((res) => setTimeout(res, 500)); // avoid rate limit
     }
 
-    // All providers failed
-    throw new ApiError(404, 'Unable to geocode address. No valid coordinates found.', {
-      code: 'GEOCODING_FAILED',
-      address: cleanAddress,
-      triedProviders: Object.keys(PROVIDERS),
-    });
-  } catch (error) {
-    if (error instanceof ApiError) {
-      throw error;
+    if (results.length === 0) {
+      throw new Error("No results found from providers");
     }
-    throw new ApiError(500, 'Geocoding service error', {
-      code: 'GEOCODING_SERVICE_ERROR',
-      address: address,
-    });
+
+    // Cross-check → if two providers agree closely, boost confidence
+    const best = this.selectMostAccurateResult(results);
+    return best;
+  }
+
+  // Smart selection
+  selectMostAccurateResult(results) {
+    if (results.length === 1) return results[0];
+
+    results.forEach(
+      (r) =>
+        (r.finalScore =
+          (r.confidence || 0.5) + (r.accuracy === "exact" ? 0.3 : 0.1))
+    );
+
+    results.sort((a, b) => b.finalScore - a.finalScore);
+
+    // Cross-verification check (within ~200m)
+    if (results.length > 1) {
+      const top = results[0];
+      const second = results[1];
+      const distance = this.haversineDistance(top, second);
+      if (distance < 0.2) top.confidence = Math.min(1, top.confidence + 0.1);
+    }
+
+    return results[0];
+  }
+
+  // Distance between two results in km
+  haversineDistance(a, b) {
+    const toRad = (x) => (x * Math.PI) / 180;
+    const R = 6371; // km
+    const dLat = toRad(b.latitude - a.latitude);
+    const dLon = toRad(b.longitude - a.longitude);
+    const lat1 = toRad(a.latitude);
+    const lat2 = toRad(b.latitude);
+
+    const h =
+      Math.sin(dLat / 2) ** 2 +
+      Math.sin(dLon / 2) ** 2 * Math.cos(lat1) * Math.cos(lat2);
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+
+  determineAccuracy(type, class_) {
+    const exact = ["house", "building", "college", "university", "school"];
+    if (exact.includes(type) || exact.includes(class_)) return "exact";
+    return "street";
   }
 }
 
-// Call specific provider
-async function callGeocodingProvider(provider, config, address, options) {
-  switch (provider) {
-    case 'google':
-      if (!config.key) {
-        throw new Error('Google API key missing');
-      }
-      const googleParams = {
-        address: address,
-        key: config.key,
-        components: options.country ? `country:${options.country}` : undefined,
-      };
-      const googleResponse = await axios.get(config.baseUrl, {
-        params: googleParams,
-        timeout: 10000,
-      });
-
-      if (googleResponse.data.status === 'OK' && googleResponse.data.results.length > 0) {
-        const result = googleResponse.data.results[0];
-        return {
-          latitude: parseFloat(result.geometry.location.lat),
-          longitude: parseFloat(result.geometry.location.lng),
-          formattedAddress: result.formatted_address,
-          accuracy: result.geometry.location_type, // e.g., 'ROOFTOP', 'APPROXIMATE'
-          confidence: 0.9, // High for Google
-          provider: 'google',
-          placeId: result.place_id,
-          components: result.address_components,
-        };
-      }
-      throw new Error('No results from Google');
-
-    case 'openstreet':
-      const osmParams = {
-        q: address,
-        format: 'json',
-        limit: 1,
-        addressdetails: 1,
-      };
-      if (options.country) {
-        osmParams.countrycodes = options.country.toLowerCase();
-      }
-      const osmResponse = await axios.get(config.baseUrl, {
-        params: osmParams,
-        headers: { 'User-Agent': 'CSI-Attendance-App/1.0' },
-        timeout: 10000,
-      });
-
-      if (osmResponse.data.length > 0) {
-        const result = osmResponse.data[0];
-        return {
-          latitude: parseFloat(result.lat),
-          longitude: parseFloat(result.lon),
-          formattedAddress: result.display_name,
-          accuracy: result.type, // e.g., 'house', 'street'
-          confidence: 0.7, // Medium for OSM
-          provider: 'openstreet',
-          placeId: result.place_id,
-          components: result.address,
-        };
-      }
-      throw new Error('No results from OpenStreetMap');
-
-    default:
-      throw new Error(`Unknown provider: ${provider}`);
-  }
-}
-
-// Reverse geocoding: Get address from coordinates
-async function reverseGeocode(latitude, longitude, options = {}) {
-  try {
-    if (!latitude || !longitude) {
-      throw new ApiError(400, 'Latitude and longitude are required', {
-        code: 'INVALID_COORDS',
-      });
-    }
-
-    // Similar multi-provider logic...
-    // Implementation similar to geocodeAddress but with lat/lng params
-    // For brevity, using Google as example
-
-    const googleParams = {
-      latlng: `${latitude},${longitude}`,
-      key: PROVIDERS.google.key,
-      result_type: options.type || 'street_address',
-    };
-
-    const response = await axios.get(PROVIDERS.google.baseUrl, {
-      params: googleParams,
-      timeout: 10000,
-    });
-
-    if (response.data.status === 'OK' && response.data.results.length > 0) {
-      const result = response.data.results[0];
-      return {
-        formattedAddress: result.formatted_address,
-        addressComponents: result.address_components,
-        provider: 'google',
-        confidence: 0.95,
-      };
-    }
-
-    throw new ApiError(404, 'Unable to reverse geocode coordinates', {
-      code: 'REVERSE_GEOCODING_FAILED',
-      lat: latitude,
-      lng: longitude,
-    });
-  } catch (error) {
-    if (error instanceof ApiError) {
-      throw error;
-    }
-    throw new ApiError(500, 'Reverse geocoding service error', {
-      code: 'REVERSE_GEOCODING_ERROR',
-    });
-  }
-}
-
-module.exports = {
-  geocodeAddress,
-  reverseGeocode,
-};
+module.exports = new EnhancedGeocodingService();

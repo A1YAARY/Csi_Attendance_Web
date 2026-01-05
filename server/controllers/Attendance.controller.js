@@ -203,100 +203,7 @@ const scanQRCode = async (req, res) => {
     console.error('scanQRCode error:', err);
     return res.status(500).json({ success: false, message: 'Failed to process attendance' });
   }
-
-  // Location spoofing detection
-  const spoofingCheck = detectLocationSpoofing(
-    body.location,
-    req.headers["user-agent"],
-    body.deviceInfo
-  );
-
-  // If strict verification is enabled and spoofing is detected
-  if (org.settings?.strictLocationVerification && spoofingCheck.isSuspicious) {
-    throw new ApiError(
-      403,
-      "Potential location spoofing detected. Please try again with legitimate location.",
-      {
-        code: "LOCATION_SPOOFING_DETECTED",
-        indicators: spoofingCheck.indicators,
-      }
-    );
-  }
-
-  const verified = qrCodeValid && locationMatch && !spoofingCheck.isSuspicious;
-
-  // Create attendance record with IST and enhanced verification
-  const attendance = await Attendance.create({
-    userId: req.user._id,
-    organizationId: userOrgId,
-    qrCodeId: qr._id,
-    type,
-    istTimestamp: getISTDate(),
-    location: {
-      latitude: userLocation.latitude,
-      longitude: userLocation.longitude,
-      accuracy: userLocation.accuracy,
-    },
-    deviceInfo: {
-      deviceId: body.deviceInfo?.deviceId || req.headers["x-device-id"],
-      platform: body.deviceInfo?.platform,
-      userAgent: req.headers["user-agent"],
-      ipAddress: req.ip,
-      fingerprint: body.deviceInfo?.fingerprint,
-    },
-    verified,
-    verificationDetails: {
-      locationMatch,
-      qrCodeValid,
-      deviceTrusted: true,
-      spoofingDetected: spoofingCheck.isSuspicious,
-      distance: distance,
-      spoofingIndicators: spoofingCheck.indicators,
-    },
-  });
-
-  // Update QR usage count
-  await QRCode.updateOne({ _id: qr._id }, { $inc: { usageCount: 1 } });
-
-  // Update user's last known location
-  if (user.role === "user") {
-    user.deviceInfo.lastKnownLocation = {
-      latitude: userLocation.latitude,
-      longitude: userLocation.longitude,
-      accuracy: userLocation.accuracy,
-      timestamp: getISTDate(),
-    };
-    await user.save();
-  }
-
-  const timeSheet = await updateDailyTimeSheet(
-    req.user._id,
-    userOrgId,
-    attendance
-  );
-
-  return res.json({
-    success: true,
-    message:
-      type === "check-in"
-        ? "Checked in successfully"
-        : "Checked out successfully",
-    data: {
-      attendanceId: attendance._id,
-      verified,
-      timestamp: formatISTDate(attendance.istTimestamp),
-      location: {
-        distance: distance,
-        withinRange: locationMatch,
-      },
-      dailySummary: {
-        totalMinutes: timeSheet.totalWorkingTime || 0,
-        status: timeSheet.status,
-        sessions: (timeSheet.sessions || []).length,
-      },
-    },
-  });
-});
+};
 
 // Past attendance for current user
 const getUserPastAttendance = async (req, res) => {
@@ -949,18 +856,7 @@ const checkWorkingDay = async (req, res) => {
       message: 'Failed to check working day',
     });
   }
-
-  const checkDate = new Date(date);
-  const istDate = getISTDate(checkDate);
-  const workingDay = await holidayService.isWorkingDay(istDate);
-
-  res.json({
-    success: true,
-    date: formatISTDate(istDate),
-    originalDate: date,
-    workingDay,
-  });
-});
+};
 
 module.exports = {
   scanQRCode,

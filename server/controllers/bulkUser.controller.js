@@ -1,20 +1,13 @@
 // controllers/bulkUser.controller.js
-
 const xlsx = require("xlsx");
 const bcrypt = require("bcryptjs");
 const User = require("../models/user.models");
-
 const Organization = require("../models/organization.models");
-
 const { sendMail } = require("../utils/mailer");
-
 const jwt = require("jsonwebtoken");
-
 const axios = require("axios");
-const { handleAsync, ApiError } = require("../utils/errorHandler");
 
 // Helper: resolve organization by a provided code (name) or fallback to admin org
-
 const resolveOrganization = async (fallbackOrgId, codeMaybe) => {
   if (codeMaybe && typeof codeMaybe === "string" && codeMaybe.trim()) {
     const org = await Organization.findOne({ name: codeMaybe.trim() });
@@ -118,19 +111,11 @@ const parseCustomHolidays = (holidaysString) => {
 
 const bulkRegisterUsers = async (req, res) => {
   try {
-    const response = await axios.get(req.file.path, {
-      responseType: "arraybuffer",
-      timeout: 30000,
-      maxContentLength: 10 * 1024 * 1024,
-    });
-    const buffer = Buffer.from(response.data);
-    const workbook = xlsx.read(buffer, { type: "array" });
-    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-    jsonData = xlsx.utils.sheet_to_json(worksheet);
-  } catch (fileError) {
-    console.error("File processing error:", fileError);
-    throw new ApiError(400, "Failed to process Excel file. Please check file format and size.");
-  }
+    if (!req.file) {
+      return res
+        .status(400)
+        .json({ success: false, message: "No Excel file uploaded" });
+    }
 
     // Organization context from JWT user and optional form field
     const adminOrgId = req.user?.organizationId;
@@ -143,6 +128,8 @@ const bulkRegisterUsers = async (req, res) => {
         .json({ success: false, message: orgContext.error });
     }
 
+    // Load Excel from the uploaded path (cloud URL or buffer)
+    let jsonData;
     try {
       const response = await axios.get(req.file.path, {
         responseType: "arraybuffer",
@@ -326,12 +313,11 @@ const bulkRegisterUsers = async (req, res) => {
         console.error(`❌ Error processing row ${rowNumber}:`, error);
         results.errors.push({
           row: rowNumber,
-          email: email || "N/A",
-          error:
-            "Missing required fields (email, name, institute, department, password)",
+          email: row.email || "N/A",
+          error: error.message,
         });
-        continue;
       }
+    }
 
     return res.json({
       success: true,
@@ -352,19 +338,7 @@ const bulkRegisterUsers = async (req, res) => {
       error: process.env.NODE_ENV === "development" ? error.message : "Internal server error",
     });
   }
-
-  return res.json({
-    success: true,
-    message: `Bulk registration completed. ${results.success.length} users created, ${results.errors.length} errors, ${results.duplicates.length} duplicates.`,
-    summary: {
-      total: results.total,
-      successful: results.success.length,
-      errors: results.errors.length,
-      duplicates: results.duplicates.length,
-    },
-    results,
-  });
-});
+};
 
 /**
  * Download Excel template with all attendance fields
