@@ -11,6 +11,7 @@ import {
   UserCheck,
 } from "lucide-react";
 import { useAuthStore } from "../../context/authStore";
+import { RefreshCw } from 'lucide-react'; // Add this import
 const Dashbord2 = ({ dashboard }) => {
   // Safe date parser (handles ISO, timestamp, string)
   const parseDateSafe = (value) => {
@@ -47,6 +48,7 @@ const Dashbord2 = ({ dashboard }) => {
   };
 
   const [stats, setstats] = useState(dashboard.stats || {});
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastactivaty, setLastactivaty] = useState(
     dashboard.latestActivities || []
   );
@@ -63,6 +65,25 @@ const Dashbord2 = ({ dashboard }) => {
 
     return () => clearInterval(timer);
   }, []);
+
+  // Your data fetching function
+const fetchActivities = async () => {
+  try {
+    setIsRefreshing(true);
+    const response = await fetch('your-api-endpoint');
+    const data = await response.json();
+    setLastactivaty(data);
+  } catch (error) {
+    console.error('Error fetching activities:', error);
+  } finally {
+    setIsRefreshing(false);
+  }
+};
+
+// Manual refresh handler
+const handleRefresh = () => {
+  fetchActivities();
+};
   // Format current time for display
   const formatCurrentTime = (date) => {
     return date.toLocaleTimeString("en-US", {
@@ -433,12 +454,28 @@ const Dashbord2 = ({ dashboard }) => {
                 Latest Activities
               </h2>
             </div>
-            <div className="flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-full">
+            {/* <div className="flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-full">
               <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
               <span className="text-sm text-gray-600 font-medium">
                 Real-time
               </span>
-            </div>
+            </div> */}
+            <div className="flex items-center gap-3">
+  <button 
+    onClick={handleRefresh}
+    disabled={isRefreshing}
+    className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 text-sm font-medium rounded-full transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+  >
+    <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+    <span className="text-xs">{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+  </button>
+  
+  <div className="flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-full">
+    <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
+    <span className="text-sm text-gray-600 font-medium">Real-time</span>
+  </div>
+</div>
+
           </div>
 
           {/* Activities List */}
@@ -449,7 +486,7 @@ const Dashbord2 = ({ dashboard }) => {
                   {lastactivaty.map((activity, index) => (
                     <div
                       key={index}
-                      className="bg-white rounded-xl p-4 border-l-4 border-blue-400 hover:border-purple-500 transition-all duration-300 hover:shadow-lg transform hover:scale-[1.01] border border-gray-100"
+                      className="bg-white rounded-xl p-4 border-l-4 hover:border-purple-500 transition-all duration-300 hover:shadow-lg transform hover:scale-[1.01] border border-gray-100"
                     >
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-4">
