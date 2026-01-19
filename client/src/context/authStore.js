@@ -165,7 +165,7 @@ export const useAuthStore = create((set, get) => {
         organization: null,
         loading: true,
         isRefreshing: false,
-        activeAdminView: "home",
+        activeAdminView: localStorage.getItem("lastAdminView") || "home",
         BASE_URL,
 
         // ---------- auth lifecycle ----------
@@ -201,6 +201,7 @@ export const useAuthStore = create((set, get) => {
                 localStorage.removeItem("checkInTime");
                 localStorage.removeItem("checkOutTime");
                 localStorage.removeItem("organizationcode");
+                localStorage.removeItem("lastAdminView");
                 set({ user: null, organization: null });
                 apiCache.clear();
                 logAuthContext("Logout", "Logout completed successfully", "success");
@@ -359,6 +360,7 @@ export const useAuthStore = create((set, get) => {
         // ---------- UI state ----------
         setAdminView: (view) => {
             logAuthContext("Set Admin View", { view });
+            localStorage.setItem("lastAdminView", view);
             set({ activeAdminView: view });
         },
         setOrganization: (org) => set({ organization: org }),
