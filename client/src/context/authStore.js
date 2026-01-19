@@ -165,7 +165,7 @@ export const useAuthStore = create((set, get) => {
         organization: null,
         loading: true,
         isRefreshing: false,
-        activeAdminView: "home",
+        activeAdminView: localStorage.getItem("lastAdminView") || "home",
         BASE_URL,
 
         // ---------- auth lifecycle ----------
@@ -201,6 +201,7 @@ export const useAuthStore = create((set, get) => {
                 localStorage.removeItem("checkInTime");
                 localStorage.removeItem("checkOutTime");
                 localStorage.removeItem("organizationcode");
+                localStorage.removeItem("lastAdminView");
                 set({ user: null, organization: null });
                 apiCache.clear();
                 logAuthContext("Logout", "Logout completed successfully", "success");
@@ -359,6 +360,7 @@ export const useAuthStore = create((set, get) => {
         // ---------- UI state ----------
         setAdminView: (view) => {
             logAuthContext("Set Admin View", { view });
+            localStorage.setItem("lastAdminView", view);
             set({ activeAdminView: view });
         },
         setOrganization: (org) => set({ organization: org }),
@@ -483,8 +485,8 @@ export const useAuthStore = create((set, get) => {
             cachedFetch(`${BASE_URL}/attend/check`),
 
         // ---------- ADMIN (admin) ----------
-        getAdminRecords: async () =>
-            cachedFetch(`${BASE_URL}/admin/records`),
+        getAdminRecords: async (date) =>
+            cachedFetch(`${BASE_URL}/admin/records${date ? `?date=${date}` : ""}`),
 
         getAllUsers: async () =>
             cachedFetch(`${BASE_URL}/admin/allusers`),
@@ -592,11 +594,11 @@ export const useAuthStore = create((set, get) => {
             cachedFetch(`${BASE_URL}/api/ai-analytics/health`),
 
         // ---------- DOWNLOADS (getdata) ----------
-        downloadDailyReport: async () => {
-            logAuthContext("Download Daily Report", "Downloading daily Excel report");
+        downloadDailyReport: async (date) => {
+            logAuthContext("Download Daily Report", `Downloading daily Excel report for ${date || "today"}`);
             const token = getToken();
-            const today = new Date().toISOString().split("T")[0];
-            const response = await fetch(`${BASE_URL}/getdata/daily?date=${today}`, {
+            const targetDate = date || new Date().toISOString().split("T")[0];
+            const response = await fetch(`${BASE_URL}/getdata/daily?date=${targetDate}`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             if (response.ok) {
@@ -604,7 +606,7 @@ export const useAuthStore = create((set, get) => {
                 const url = window.URL.createObjectURL(blob);
                 const link = document.createElement("a");
                 link.href = url;
-                link.setAttribute("download", `daily_report_${today}.xlsx`);
+                link.setAttribute("download", `daily_report_${targetDate}.xlsx`);
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);

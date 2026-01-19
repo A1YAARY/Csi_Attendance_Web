@@ -30,6 +30,10 @@ const AdminHome = () => {
   const [dataLoading, setDataLoading] = useState(true);
   const [dashboard, setDashboard] = useState(null);
   const [error, setError] = useState(null);
+  // Date filter state lifted from AttendanceRecordLayout
+  const [selectedDate, setSelectedDate] = useState(() => {
+    return new Date().toISOString().split("T")[0];
+  });
 
   const fetchdashbord = useCallback(async () => {
     try {
@@ -47,7 +51,8 @@ const AdminHome = () => {
   // Memoized data fetching functions
   const fetchAdminRecords = useCallback(async () => {
     try {
-      const data = await getAdminRecords();
+      // Pass selectedDate to getAdminRecords
+      const data = await getAdminRecords(selectedDate);
       console.log("📊 AdminHome: Raw records response:", data);
 
       // Handle different response structures
@@ -72,7 +77,7 @@ const AdminHome = () => {
       setRecords([]);
       throw err;
     }
-  }, [getAdminRecords]);
+  }, [getAdminRecords, selectedDate]);
 
   const fetchTodaysAttendance = useCallback(async () => {
     try {
@@ -119,6 +124,13 @@ const AdminHome = () => {
       setDataLoading(false);
     }
   }, [authLoading, fetchAdminRecords, fetchTodaysAttendance]);
+
+  // Refetch when date changes
+  useEffect(() => {
+    if (!authLoading && activeAdminView === 'records') {
+      fetchAdminRecords();
+    }
+  }, [selectedDate, activeAdminView, authLoading, fetchAdminRecords]);
 
   // Fetch data when component mounts and auth is ready
   useEffect(() => {
@@ -199,7 +211,13 @@ const AdminHome = () => {
       case "employees":
         return <EmployeeLayout2 emploies={emploies} />;
       case "records":
-        return <AttendanceRecordLayout records={records} />;
+        return (
+          <AttendanceRecordLayout
+            records={records}
+            dateFilter={selectedDate}
+            setDateFilter={setSelectedDate}
+          />
+        );
       case "reports":
         return <Reports />;
       case "qr":
