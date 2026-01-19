@@ -592,11 +592,11 @@ export const useAuthStore = create((set, get) => {
             cachedFetch(`${BASE_URL}/api/ai-analytics/health`),
 
         // ---------- DOWNLOADS (getdata) ----------
-        downloadDailyReport: async () => {
-            logAuthContext("Download Daily Report", "Downloading daily Excel report");
+        downloadDailyReport: async (date) => {
+            logAuthContext("Download Daily Report", `Downloading daily Excel report for ${date || "today"}`);
             const token = getToken();
-            const today = new Date().toISOString().split("T")[0];
-            const response = await fetch(`${BASE_URL}/getdata/daily?date=${today}`, {
+            const targetDate = date || new Date().toISOString().split("T")[0];
+            const response = await fetch(`${BASE_URL}/getdata/daily?date=${targetDate}`, {
                 headers: { Authorization: `Bearer ${token}` },
             });
             if (response.ok) {
@@ -604,7 +604,7 @@ export const useAuthStore = create((set, get) => {
                 const url = window.URL.createObjectURL(blob);
                 const link = document.createElement("a");
                 link.href = url;
-                link.setAttribute("download", `daily_report_${today}.xlsx`);
+                link.setAttribute("download", `daily_report_${targetDate}.xlsx`);
                 document.body.appendChild(link);
                 link.click();
                 document.body.removeChild(link);

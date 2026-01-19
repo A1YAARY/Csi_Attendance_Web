@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { useAuth } from "../../context/authStore";
 import {
   Calendar,
   Download,
@@ -23,6 +24,8 @@ const AttendanceRecordsLayout = ({ records, dateFilter, setDateFilter }) => {
   const toggleDropdown = () => {
     setOpen(!open);
   };
+
+  const { downloadDailyReport, downloadWeeklyReport } = useAuth();
 
   // Fetch attendance records function
   // const fetchAttendanceRecords = async (isManualRefresh = false) => {
@@ -528,18 +531,26 @@ const AttendanceRecordsLayout = ({ records, dateFilter, setDateFilter }) => {
                   <ul className="py-1">
                     <li
                       className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
-                      onClick={() => {
-                        alert("Download Daily Report");
-                        setOpen(false);
+                      onClick={async () => {
+                        try {
+                          await downloadDailyReport(dateFilter);
+                          setOpen(false);
+                        } catch (error) {
+                          alert("Failed to download daily report");
+                        }
                       }}
                     >
                       Daily
                     </li>
                     <li
                       className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
-                      onClick={() => {
-                        alert("Download Weekly Report");
-                        setOpen(false);
+                      onClick={async () => {
+                        try {
+                          await downloadWeeklyReport();
+                          setOpen(false);
+                        } catch (error) {
+                          alert("Failed to download weekly report");
+                        }
                       }}
                     >
                       Weekly
