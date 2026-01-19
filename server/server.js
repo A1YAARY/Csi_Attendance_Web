@@ -5,7 +5,6 @@ const compression = require("compression");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const cookieParser = require("cookie-parser");
-
 const { connectDB, closeDB } = require("./config/Database");
 const customCors = require("./config/cors");
 const ScheduleAttendanceCheck = require("./utils/timeRefresher");
