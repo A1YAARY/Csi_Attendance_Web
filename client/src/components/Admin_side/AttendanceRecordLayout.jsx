@@ -152,9 +152,25 @@ const AttendanceRecordsLayout = ({ records, dateFilter, setDateFilter }) => {
     }
 
     if (statusFilter !== "all") {
-      filtered = filtered.filter(
-        (record) => record.status?.toLowerCase() === statusFilter.toLowerCase()
-      );
+      filtered = filtered.filter((record) => {
+        const status = record.status?.toLowerCase();
+        switch (statusFilter) {
+          case "present":
+            return ["present", "half-day", "full-day"].includes(status);
+          case "absent":
+            return status === "absent";
+          case "late":
+            return record.isLate === true;
+          case "partial":
+            return status === "half-day";
+          case "complete":
+            return status === "full-day";
+          case "incomplete":
+            return status === "present"; // Present but not half-day or full-day yet
+          default:
+            return status === statusFilter;
+        }
+      });
     }
 
     setFilteredRecords(filtered);
@@ -494,7 +510,7 @@ const AttendanceRecordsLayout = ({ records, dateFilter, setDateFilter }) => {
                   <option value="present">Present</option>
                   <option value="absent">Absent</option>
                   <option value="late">Late</option>
-                  <option value="partial">Partial</option>
+                  <option value="partial">half day</option>
                 </select>
               </div>
             </div>
