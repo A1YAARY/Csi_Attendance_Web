@@ -82,7 +82,7 @@ const Dashbord2 = ({ dashboard, onRefresh }) => {
         setIsRefreshing(false);
       }
     }
-  };
+  };     
 
 
   // Format current time for display
