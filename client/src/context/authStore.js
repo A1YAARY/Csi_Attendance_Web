@@ -483,8 +483,8 @@ export const useAuthStore = create((set, get) => {
             cachedFetch(`${BASE_URL}/attend/check`),
 
         // ---------- ADMIN (admin) ----------
-        getAdminRecords: async () =>
-            cachedFetch(`${BASE_URL}/admin/records`),
+        getAdminRecords: async (date) =>
+            cachedFetch(`${BASE_URL}/admin/records${date ? `?date=${date}` : ""}`),
 
         getAllUsers: async () =>
             cachedFetch(`${BASE_URL}/admin/allusers`),
