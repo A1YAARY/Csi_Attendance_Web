@@ -206,6 +206,7 @@ const AdminHome = () => {
         return (
           <Dashbord2
             dashboard={dashboard}
+            onRefresh={fetchTodaysAttendance}
           />
         );
       case "employees":
@@ -216,6 +217,7 @@ const AdminHome = () => {
             records={records}
             dateFilter={selectedDate}
             setDateFilter={setSelectedDate}
+            onRefresh={fetchAdminRecords}
           />
         );
       case "reports":

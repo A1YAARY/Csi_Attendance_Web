@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "../../context/authStore";
 import { RefreshCw } from 'lucide-react'; // Add this import
-const Dashbord2 = ({ dashboard }) => {
+const Dashbord2 = ({ dashboard, onRefresh }) => {
   // Safe date parser (handles ISO, timestamp, string)
   const parseDateSafe = (value) => {
     if (!value) return null;
@@ -56,6 +56,9 @@ const Dashbord2 = ({ dashboard }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   useEffect(() => {
     console.log(dashboard);
+    // Update local state when prop changes (needed for refresh updates)
+    if (dashboard.stats) setstats(dashboard.stats);
+    if (dashboard.latestActivities) setLastactivaty(dashboard.latestActivities);
   }, [dashboard]);
 
   useEffect(() => {
@@ -66,24 +69,22 @@ const Dashbord2 = ({ dashboard }) => {
     return () => clearInterval(timer);
   }, []);
 
-  // Your data fetching function
-const fetchActivities = async () => {
-  try {
-    setIsRefreshing(true);
-    const response = await fetch('your-api-endpoint');
-    const data = await response.json();
-    setLastactivaty(data);
-  } catch (error) {
-    console.error('Error fetching activities:', error);
-  } finally {
-    setIsRefreshing(false);
-  }
-};
+  // Manual refresh handler
+  const handleRefresh = async () => {
+    if (onRefresh) {
+      try {
+        setIsRefreshing(true);
+        await onRefresh();
+   
+      } catch (error) {
+        console.error("Refresh failed", error);
+      } finally {
+        setIsRefreshing(false);
+      }
+    }
+  };
 
-// Manual refresh handler
-const handleRefresh = () => {
-  fetchActivities();
-};
+
   // Format current time for display
   const formatCurrentTime = (date) => {
     return date.toLocaleTimeString("en-US", {
@@ -215,8 +216,8 @@ const handleRefresh = () => {
                       <p className="text-xs sm:text-sm text-green-600 font-medium">
                         {stats.onTime > 0
                           ? `${Math.round(
-                              (stats.onTime / stats.totalEmployees) * 100
-                            )}%`
+                            (stats.onTime / stats.totalEmployees) * 100
+                          )}%`
                           : "0%"}{" "}
                         on time today
                       </p>
@@ -258,9 +259,8 @@ const handleRefresh = () => {
                         alt=""
                       />
                       <p
-                        className={`text-xs sm:text-sm font-medium ${
-                          stats.absent > 0 ? "text-red-600" : "text-green-600"
-                        }`}
+                        className={`text-xs sm:text-sm font-medium ${stats.absent > 0 ? "text-red-600" : "text-green-600"
+                          }`}
                       >
                         {stats.absent > 0
                           ? `${stats.absent} absent today`
@@ -309,11 +309,10 @@ const handleRefresh = () => {
                         alt=""
                       />
                       <p
-                        className={`text-xs sm:text-sm font-medium ${
-                          stats.lateArrival === 0
+                        className={`text-xs sm:text-sm font-medium ${stats.lateArrival === 0
                             ? "text-green-600"
                             : "text-red-600"
-                        }`}
+                          }`}
                       >
                         {stats.lateArrival === 0
                           ? "No late arrivals"
@@ -352,11 +351,10 @@ const handleRefresh = () => {
                         alt=""
                       />
                       <p
-                        className={`text-xs sm:text-sm font-medium ${
-                          stats.earlyDepartures === 0
+                        className={`text-xs sm:text-sm font-medium ${stats.earlyDepartures === 0
                             ? "text-green-600"
                             : "text-red-600"
-                        }`}
+                          }`}
                       >
                         {stats.earlyDepartures === 0
                           ? "No early departures"
@@ -461,20 +459,21 @@ const handleRefresh = () => {
               </span>
             </div> */}
             <div className="flex items-center gap-3">
-  <button 
-    onClick={handleRefresh}
-    disabled={isRefreshing}
-    className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 text-sm font-medium rounded-full transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-  >
-    <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-    <span className="text-xs">{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
-  </button>
-  
-  <div className="flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-full">
-    <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
-    <span className="text-sm text-gray-600 font-medium">Real-time</span>
-  </div>
-</div>
+              <button
+                onClick={handleRefresh}
+                
+                disabled={isRefreshing}
+                className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 text-sm font-medium rounded-full transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+                <span className="text-xs">{isRefreshing ? 'Refreshing...' : 'Refresh'}</span>
+              </button>
+
+              <div className="flex items-center gap-2 bg-gray-100 px-3 py-1 rounded-full">
+                <div className="h-2 w-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-sm text-gray-600 font-medium">Real-time</span>
+              </div>
+            </div>
 
           </div>
 
@@ -492,11 +491,10 @@ const handleRefresh = () => {
                         <div className="flex items-center gap-4">
                           {/* Activity Icon */}
                           <div
-                            className={`p-2 rounded-full ${
-                              activity.type === "check-in"
+                            className={`p-2 rounded-full ${activity.type === "check-in"
                                 ? "bg-green-100"
                                 : "bg-red-100"
-                            }`}
+                              }`}
                           >
                             {activity.type === "check-in" ? (
                               <UserCheck className="h-5 w-5 text-green-600" />
@@ -519,18 +517,16 @@ const handleRefresh = () => {
                         {/* Activity Details */}
                         <div className="text-right">
                           <div
-                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${
-                              activity.type === "check-in"
+                            className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${activity.type === "check-in"
                                 ? "bg-green-100 text-green-700"
                                 : "bg-red-100 text-red-700"
-                            }`}
+                              }`}
                           >
                             <div
-                              className={`h-2 w-2 rounded-full ${
-                                activity.type === "check-in"
+                              className={`h-2 w-2 rounded-full ${activity.type === "check-in"
                                   ? "bg-green-500"
                                   : "bg-red-500"
-                              }`}
+                                }`}
                             ></div>
                             {activity.type === "check-in"
                               ? "Check In"
@@ -555,7 +551,7 @@ const handleRefresh = () => {
                                     hour12: true,
                                   }
                                 )} */}
-                                {formatisTimestamp(activity.isTimestamp || activity.time)}
+                            {formatisTimestamp(activity.isTimestamp || activity.time)}
 
                           </div>
                         </div>
@@ -565,11 +561,10 @@ const handleRefresh = () => {
                       <div className="flex justify-between items-center mt-3 pt-3 border-t border-gray-200">
                         <div className="flex items-center gap-2">
                           <div
-                            className={`h-2 w-2 rounded-full ${
-                              activity.verified
+                            className={`h-2 w-2 rounded-full ${activity.verified
                                 ? "bg-green-500"
                                 : "bg-yellow-500"
-                            }`}
+                              }`}
                           ></div>
                           <span className="text-xs text-gray-500 font-medium">
                             {activity.verified ? "Verified" : "Pending"}
@@ -584,7 +579,7 @@ const handleRefresh = () => {
                             : new Date(activity.time).toLocaleDateString(
                                 "en-IN"
                               )} */}
-                              {formatDateIST(activity.isTimestamp || activity.time)}
+                          {formatDateIST(activity.isTimestamp || activity.time)}
 
                         </span>
                       </div>

@@ -11,7 +11,7 @@ import {
   RefreshCw
 } from "lucide-react";
 
-const AttendanceRecordsLayout = ({ records, dateFilter, setDateFilter }) => {
+const AttendanceRecordsLayout = ({ records, dateFilter, setDateFilter, onRefresh }) => {
   const [filteredRecords, setFilteredRecords] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   // local dateFilter state removed, using props
@@ -74,11 +74,15 @@ const AttendanceRecordsLayout = ({ records, dateFilter, setDateFilter }) => {
       );
     }
 
-    // Apply date filter
+    // Apply date filter - Client side check (optional since server filters too)
     if (dateFilter) {
       filtered = filtered.filter(record => {
-        const recordDate = new Date(record.date || record.createdAt).toISOString().split('T')[0];
-        return recordDate === dateFilter;
+        try {
+          const recordDate = new Date(record.date || record.createdAt).toISOString().split('T')[0];
+          return recordDate === dateFilter;
+        } catch {
+          return false;
+        }
       });
     }
 
@@ -93,8 +97,20 @@ const AttendanceRecordsLayout = ({ records, dateFilter, setDateFilter }) => {
   };
 
   // Manual refresh handler
-  const handleRefresh = () => {
-    applyFiltersToRecords(records);
+  const handleRefresh = async () => {
+    if (onRefresh) {
+      setIsRefreshing(true);
+      try {
+        await onRefresh();
+      } catch (error) {
+        console.error("Refresh failed:", error);
+      } finally {
+        setIsRefreshing(false);
+      }
+    } else {
+      // Fallback if no refresh function provided
+      applyFiltersToRecords(records);
+    }
   };
 
   // Auto-refresh setup
