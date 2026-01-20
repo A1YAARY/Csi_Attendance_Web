@@ -5,7 +5,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 
 export const Admin_Navbar = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, setAdminView } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -48,6 +48,18 @@ export const Admin_Navbar = () => {
   const handleNavChange = (path) => {
     navigate(path);
     setIsMobileMenuOpen(false);
+
+    // Extract view from path or map it
+    let view = 'home';
+    if (path.includes('employees')) view = 'employees';
+    else if (path.includes('records')) view = 'records';
+    else if (path.includes('reports')) view = 'reports';
+    else if (path.includes('qrcodes')) view = 'qrcodes';
+    else if (path.includes('ai')) view = 'ai';
+    else if (path.includes('voice')) view = 'voice';
+    else if (path.includes('notifications')) view = 'notifications';
+
+    setAdminView(view);
   };
 
   // Handle logout functionality

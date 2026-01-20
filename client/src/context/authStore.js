@@ -359,6 +359,12 @@ export const useAuthStore = create((set, get) => {
 
 
         setOrganization: (org) => set({ organization: org }),
+        
+        setAdminView: (view) => {
+            logAuthContext("Set Admin View", view);
+            localStorage.setItem("lastAdminView", view);
+            set({ activeAdminView: view });
+        },
 
         // ---------- utility ----------
         isAuthenticated: () => {

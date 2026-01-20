@@ -130,9 +130,7 @@ const AttendanceRecordsLayout = ({ records, dateFilter, setDateFilter, onRefresh
   // }, []);
 
   // Update filters when search/filter values change
-  useEffect(() => {
-    applyFiltersToRecords(records);
-  }, [searchTerm, dateFilter, statusFilter]);
+
 
   useEffect(() => {
     const handleClickOutside = (event) => {
