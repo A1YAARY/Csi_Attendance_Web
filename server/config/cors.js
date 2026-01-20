@@ -10,6 +10,7 @@ const corsOptions = {
       "https://csi-attendance-web-1-40fy.onrender.com",
       "https://csi-attendance-web-1-cemr.onrender.com",
       "http://localhost:5173",
+      "http://localhost:4173",
       "http://localhost:3000",
       "http://localhost:3001",
       process.env.FRONTEND_URL,
