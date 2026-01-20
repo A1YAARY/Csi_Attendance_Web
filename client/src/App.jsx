@@ -1,4 +1,6 @@
 import "./App.css";
+import 'react-toastify/dist/ReactToastify.css';
+import { ToastContainer } from 'react-toastify';
 import TeacherInfo from "./components/user_side/TeacherInfo";
 import { motion, AnimatePresence } from "framer-motion";
 import AnimationPage from "./components/user_side/AnimationPage";
@@ -34,6 +36,7 @@ function App() {
 
   return (
     <>
+      <ToastContainer position="top-right" autoClose={3000} />
       <ClickSpark
         sparkColor="#000000"
         sparkSize={10}
