@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { Admin_Navbar } from "./Admin_Navbar";
+import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import EmployeeLayout from "./EmployeeLayout";
 import AttendanceRecordLayout from "./AttendanceRecordLayout";
 import { useAuth } from "../../context/authStore"; // ✅ FIXED IMPORT
@@ -13,9 +14,9 @@ import EmployeeLayout2 from "./EmployeeLayout2";
 import DeviceChangeRequests from "./DeviceChangeRequests";
 
 const AdminHome = () => {
+  const location = useLocation();
   const {
-    activeAdminView,
-    setAdminView,
+
     getAdminRecords,
     getTodaysAttendance,
     user,
@@ -127,10 +128,10 @@ const AdminHome = () => {
 
   // Refetch when date changes
   useEffect(() => {
-    if (!authLoading && activeAdminView === 'records') {
+    if (!authLoading && location.pathname.includes('records')) {
       fetchAdminRecords();
     }
-  }, [selectedDate, activeAdminView, authLoading, fetchAdminRecords]);
+  }, [selectedDate, location.pathname, authLoading, fetchAdminRecords]);
 
   // Fetch data when component mounts and auth is ready
   useEffect(() => {
@@ -197,48 +198,52 @@ const AdminHome = () => {
   }
 
   // Render based on active view
+  // Render based on active view
   const renderContent = () => {
-    console.log("🎯 Rendering content for view:", activeAdminView);
-
-    switch (activeAdminView) {
-      case "home":
-      default:
-        return (
-          <Dashbord2
-            dashboard={dashboard}
-            onRefresh={fetchTodaysAttendance}
-          />
-        );
-      case "employees":
-        return <EmployeeLayout2 emploies={emploies} />;
-      case "records":
-        return (
-          <AttendanceRecordLayout
-            records={records}
-            dateFilter={selectedDate}
-            setDateFilter={setSelectedDate}
-            onRefresh={fetchAdminRecords}
-          />
-        );
-      case "reports":
-        return <Reports />;
-      case "qr":
-      case "qrcodes":
-        return <QRcodeView />;
-      case "ai":
-      case "ai-test":
-        return <AITestPage />;
-      case "notifications":
-        return <DeviceChangeRequests />
-      case "voice":
-        return (
-          <VoiceDashboard
-            organizationId={user?.organizationId?._id || user?.organizationId}
-            userId={user?._id}
-          />
-
-        );
-    }
+    return (
+      <Routes>
+        <Route path="/" element={<Navigate to="dashboard" replace />} />
+        <Route
+          path="dashboard"
+          element={
+            <Dashbord2
+              dashboard={dashboard}
+              onRefresh={fetchTodaysAttendance}
+            />
+          }
+        />
+        <Route
+          path="employees"
+          element={<EmployeeLayout2 emploies={emploies} />}
+        />
+        <Route
+          path="records"
+          element={
+            <AttendanceRecordLayout
+              records={records}
+              dateFilter={selectedDate}
+              setDateFilter={setSelectedDate}
+              onRefresh={fetchAdminRecords}
+            />
+          }
+        />
+        <Route path="reports" element={<Reports />} />
+        <Route path="qrcodes" element={<QRcodeView />} />
+        <Route path="ai" element={<AITestPage />} />
+        <Route path="notifications" element={<DeviceChangeRequests />} />
+        <Route
+          path="voice"
+          element={
+            <VoiceDashboard
+              organizationId={user?.organizationId?._id || user?.organizationId}
+              userId={user?._id}
+            />
+          }
+        />
+        {/* Redirect legacy or unknown routes */}
+        <Route path="*" element={<Navigate to="dashboard" replace />} />
+      </Routes>
+    );
   };
 
   return (

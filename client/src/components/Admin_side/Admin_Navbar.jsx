@@ -1,17 +1,18 @@
 import React, { useEffect, useState } from "react";
 import { useAuth } from "../../context/authStore";
 import { Search, Menu, X, Bell } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import axios from "axios";
 
 export const Admin_Navbar = () => {
-  const { activeAdminView, setAdminView, user, logout } = useAuth();
+  const { user, logout } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [searchFocused, setSearchFocused] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
 
-  const BASE_URL =import.meta.env.VITE_BACKEND_BASE_URL || "http://localhost:5173";
+  const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL || "http://localhost:5173";
 
   // Fetch notification count
   const fetchNotificationCount = async () => {
@@ -41,53 +42,11 @@ export const Admin_Navbar = () => {
     }
   }, [user]);
 
-  // Effect to sync radio buttons with activeAdminView on load and update
-  useEffect(() => {
-    const navIds = [
-      "nav-home",
-      "nav-employees",
-      "nav-records",
-      "nav-reports",
-      "nav-qr",
-      "nav-ai",
-      "nav-voice",
-    ];
-    navIds.forEach((id) => {
-      const radio = document.getElementById(id);
-      if (radio) {
-        if (
-          id === "nav-home" &&
-          (activeAdminView === "home" || !activeAdminView)
-        ) {
-          radio.checked = true;
-        } else if (id === "nav-employees" && activeAdminView === "employees") {
-          radio.checked = true;
-        } else if (id === "nav-records" && activeAdminView === "records") {
-          radio.checked = true;
-        } else if (id === "nav-reports" && activeAdminView === "reports") {
-          radio.checked = true;
-        } else if (
-          id === "nav-qr" &&
-          (activeAdminView === "qr" || activeAdminView === "qrcodes")
-        ) {
-          radio.checked = true;
-        } else if (
-          id === "nav-ai" &&
-          (activeAdminView === "ai" || activeAdminView === "ai-test")
-        ) {
-          radio.checked = true;
-        } else if (id === "nav-voice" && activeAdminView === "voice") {
-          radio.checked = true;
-        } else {
-          radio.checked = false;
-        }
-      }
-    });
-  }, [activeAdminView]);
+
 
   // Handler when a nav item is clicked
-  const handleNavChange = (view) => {
-    setAdminView(view);
+  const handleNavChange = (path) => {
+    navigate(path);
     setIsMobileMenuOpen(false);
   };
 
@@ -104,39 +63,39 @@ export const Admin_Navbar = () => {
 
   // Handle settings navigation
   const handleSettings = () => {
-    setAdminView("settings");
+    navigate("/admin/settings"); // Ensure this route exists or redirect
   };
 
   // Handle notifications click
   const handleNotifications = () => {
-    setAdminView("notifications");
+    navigate("/admin/notifications");
     setIsMobileMenuOpen(false);
   };
 
   const navItems = [
-    { id: "nav-home", view: "home", icon: "/Home.svg", label: "Home" },
+    { id: "nav-home", path: "/admin/dashboard", icon: "/Home.svg", label: "Home" },
     {
       id: "nav-employees",
-      view: "employees",
+      path: "/admin/employees",
       icon: "/Employees.svg",
       label: "Employees",
     },
     {
       id: "nav-records",
-      view: "records",
+      path: "/admin/records",
       icon: "/Record.svg",
       label: "Records",
     },
     {
       id: "nav-reports",
-      view: "reports",
+      path: "/admin/reports",
       icon: "/register-svgrepo-com.svg",
       label: "Registration",
     },
-    { id: "nav-qr", view: "qr", icon: "/QR.svg", label: "QR" },
+    { id: "nav-qr", path: "/admin/qrcodes", icon: "/QR.svg", label: "QR" },
     {
       id: "nav-ai",
-      view: "ai",
+      path: "/admin/ai",
       icon: (
         <svg
           className="w-4 h-4 sm:w-5 sm:h-5"
@@ -150,7 +109,7 @@ export const Admin_Navbar = () => {
     },
     {
       id: "nav-voice",
-      view: "voice",
+      path: "/admin/voice",
       icon: (
         <svg
           className="w-4 h-4 sm:w-5 sm:h-5"
@@ -165,15 +124,12 @@ export const Admin_Navbar = () => {
     },
   ];
 
-  const isActiveView = (view) => {
-    if (view === "home") return activeAdminView === "home" || !activeAdminView;
-    if (view === "qr")
-      return activeAdminView === "qr" || activeAdminView === "qrcodes";
-    if (view === "ai")
-      return activeAdminView === "ai" || activeAdminView === "ai-test";
-    if (view === "voice")
-      return activeAdminView === "voice";
-    return activeAdminView === view;
+  const isActiveView = (path) => {
+    // Check if current location includes the path
+    // For specific matches like 'dashboard', strict check might be better if we have nested routes
+    // But since paths are unique enough (/admin/dashboard vs /admin/records), startsWith or includes is fine.
+    // However, simplest is:
+    return location.pathname.startsWith(path);
   };
 
   return (
@@ -196,9 +152,9 @@ export const Admin_Navbar = () => {
             <div className="relative">
               <button
                 onClick={handleNotifications}
-                className={`btn btn-ghost btn-sm sm:btn-md p-1 sm:p-2 relative ${activeAdminView === "notifications"
-                    ? "bg-blue-50 text-blue-600"
-                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                className={`btn btn-ghost btn-sm sm:btn-md p-1 sm:p-2 relative ${isActiveView("notifications")
+                  ? "bg-blue-50 text-blue-600"
+                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
                   }`}
               >
                 <Bell className="w-5 h-5 sm:w-6 sm:h-6" />
@@ -291,8 +247,8 @@ export const Admin_Navbar = () => {
                   name="nav-menu"
                   id={item.id}
                   className="hidden peer"
-                  onChange={() => handleNavChange(item.view)}
-                  checked={isActiveView(item.view)}
+                  onChange={() => handleNavChange(item.path)}
+                  checked={isActiveView(item.path)}
                 />
                 <label
                   htmlFor={item.id}
@@ -322,10 +278,10 @@ export const Admin_Navbar = () => {
             {navItems.map((item) => (
               <li key={`tablet-${item.id}`}>
                 <button
-                  onClick={() => handleNavChange(item.view)}
-                  className={`rounded-lg px-2 md:px-3 lg:px-4 py-2 md:py-3 gap-1 md:gap-2 text-xs md:text-sm lg:text-base font-medium flex items-center transition-all duration-200 hover:scale-105 whitespace-nowrap ${isActiveView(item.view)
-                      ? "bg-primary text-black shadow-sm"
-                      : "hover:bg-gray-100"
+                  onClick={() => handleNavChange(item.path)}
+                  className={`rounded-lg px-2 md:px-3 lg:px-4 py-2 md:py-3 gap-1 md:gap-2 text-xs md:text-sm lg:text-base font-medium flex items-center transition-all duration-200 hover:scale-105 whitespace-nowrap ${isActiveView(item.path)
+                    ? "bg-primary text-black shadow-sm"
+                    : "hover:bg-gray-100"
                     }`}
                 >
                   {typeof item.icon === "string" ? (
@@ -358,7 +314,7 @@ export const Admin_Navbar = () => {
             </span>
             <div className="flex items-center gap-2">
               <span className="text-xs text-gray-500">
-                {navItems.find((item) => isActiveView(item.view))?.label ||
+                {navItems.find((item) => isActiveView(item.path))?.label ||
                   "Home"}
               </span>
             </div>
@@ -375,10 +331,10 @@ export const Admin_Navbar = () => {
               {navItems.map((item) => (
                 <li key={`mobile-${item.id}`}>
                   <button
-                    onClick={() => handleNavChange(item.view)}
-                    className={`w-full text-left p-3 sm:p-4 rounded-lg flex items-center gap-3 transition-all duration-200 text-sm sm:text-base font-medium ${isActiveView(item.view)
-                        ? "bg-primary text-black shadow-sm transform scale-[1.02]"
-                        : "hover:bg-white hover:shadow-sm active:scale-95"
+                    onClick={() => handleNavChange(item.path)}
+                    className={`w-full text-left p-3 sm:p-4 rounded-lg flex items-center gap-3 transition-all duration-200 text-sm sm:text-base font-medium ${isActiveView(item.path)
+                      ? "bg-primary text-black shadow-sm transform scale-[1.02]"
+                      : "hover:bg-white hover:shadow-sm active:scale-95"
                       }`}
                   >
                     {typeof item.icon === "string" ? (
@@ -399,9 +355,9 @@ export const Admin_Navbar = () => {
               <li>
                 <button
                   onClick={handleNotifications}
-                  className={`w-full text-left p-3 sm:p-4 rounded-lg flex items-center gap-3 transition-all duration-200 text-sm sm:text-base font-medium ${activeAdminView === "notifications"
-                      ? "bg-primary text-black shadow-sm transform scale-[1.02]"
-                      : "hover:bg-white hover:shadow-sm active:scale-95"
+                  className={`w-full text-left p-3 sm:p-4 rounded-lg flex items-center gap-3 transition-all duration-200 text-sm sm:text-base font-medium ${isActiveView("notifications")
+                    ? "bg-primary text-black shadow-sm transform scale-[1.02]"
+                    : "hover:bg-white hover:shadow-sm active:scale-95"
                     }`}
                 >
                   <div className="relative">
