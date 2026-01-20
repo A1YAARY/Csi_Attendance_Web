@@ -14,6 +14,7 @@ const corsOptions = {
       "http://localhost:3000",
       "http://localhost:3001",
       process.env.FRONTEND_URL,
+      process.env.NEW_FRONTEND_URL,
     ].filter(Boolean);
 
     // Allow requests with no origin (mobile apps, Postman)
