@@ -165,7 +165,7 @@ export const useAuthStore = create((set, get) => {
         organization: null,
         loading: true,
         isRefreshing: false,
-
+        activeAdminView: localStorage.getItem("lastAdminView") || "home",
         BASE_URL,
 
         // ---------- auth lifecycle ----------
