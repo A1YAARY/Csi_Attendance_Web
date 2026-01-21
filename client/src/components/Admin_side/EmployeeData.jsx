@@ -52,7 +52,7 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
           )
         );
         if (onUsersUpdate) {
-          onUsersUpdate();
+          onUsersUpdate(true);
         }
       }
     } catch (error) {
@@ -113,7 +113,7 @@ export const EmployeeData = ({ allusers, onUsersUpdate }) => {
       setUsers(prev => prev.filter(user => (user._id || user.id) !== userId));
       toast.success(`User ${userEmail} deleted successfully`);
       if (onUsersUpdate) {
-        onUsersUpdate();
+        onUsersUpdate(true);
       }
     } catch (error) {
       console.error("Error deleting user:", error);

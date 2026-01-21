@@ -121,8 +121,17 @@ const Reports = () => {
         customHolidays: singleUser.customHolidays, // NEW
       });
 
-      if (response.success || response.message === "User registered successfully") {
-        toast.success("User registered successfully!");
+      if (response && (response.success || response.message === "User registered successfully")) {
+        toast.success("User registered successfully!", {
+          position: "top-right",
+          autoClose: 3000,
+          hideProgressBar: false,
+          closeOnClick: true,
+          pauseOnHover: true,
+          draggable: true,
+          progress: undefined,
+        });
+
         // Reset form
         setSingleUser({
           name: "",
@@ -145,7 +154,12 @@ const Reports = () => {
           customHolidays: [],
         });
       } else {
-        toast.error(response.message || "Registration failed");
+        const errorMsg = response?.message || "Registration failed. Please check the details.";
+        toast.error(errorMsg, {
+          position: "top-right",
+          autoClose: 5000,
+        });
+        console.error("Registration failed response:", response);
       }
     } catch (error) {
       console.error("Registration error:", error);
@@ -803,8 +817,8 @@ const Reports = () => {
           <button
             onClick={() => setActiveTab("single")}
             className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 ${activeTab === "single"
-                ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-indigo-200"
-                : "bg-white text-gray-600 hover:bg-gray-50 shadow-md border border-gray-200"
+              ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-indigo-200"
+              : "bg-white text-gray-600 hover:bg-gray-50 shadow-md border border-gray-200"
               }`}
           >
             Single User
@@ -812,8 +826,8 @@ const Reports = () => {
           <button
             onClick={() => setActiveTab("bulk")}
             className={`px-6 py-3 rounded-xl font-semibold transition-all duration-300 transform hover:scale-105 ${activeTab === "bulk"
-                ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-indigo-200"
-                : "bg-white text-gray-600 hover:bg-gray-50 shadow-md border border-gray-200"
+              ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-lg shadow-indigo-200"
+              : "bg-white text-gray-600 hover:bg-gray-50 shadow-md border border-gray-200"
               }`}
           >
             Bulk Upload
@@ -985,8 +999,8 @@ const Reports = () => {
                     <label
                       key={day}
                       className={`flex items-center justify-center space-x-2 cursor-pointer p-3 rounded-xl border-2 transition-all ${singleUser.weeklySchedule[day]
-                          ? "border-indigo-500 bg-indigo-50"
-                          : "border-gray-200 bg-gray-50 hover:bg-gray-100"
+                        ? "border-indigo-500 bg-indigo-50"
+                        : "border-gray-200 bg-gray-50 hover:bg-gray-100"
                         }`}
                     >
                       <input
@@ -1137,8 +1151,8 @@ const Reports = () => {
                 onDragOver={handleDrag}
                 onDrop={handleDrop}
                 className={`border-2 border-dashed rounded-2xl p-12 text-center transition-all ${dragActive
-                    ? "border-indigo-500 bg-indigo-50 shadow-lg"
-                    : "border-gray-300 hover:border-indigo-400 bg-gray-50"
+                  ? "border-indigo-500 bg-indigo-50 shadow-lg"
+                  : "border-gray-300 hover:border-indigo-400 bg-gray-50"
                   }`}
               >
                 <div className="text-6xl mb-4">📄</div>

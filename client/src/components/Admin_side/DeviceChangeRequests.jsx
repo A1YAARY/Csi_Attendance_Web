@@ -25,7 +25,7 @@ const DeviceChangeRequests = () => {
   const [actionType, setActionType] = useState('');
   const [adminReason, setAdminReason] = useState('');
 
-  const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL|| "http://localhost:5000";
+  const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL || "http://localhost:9000";
 
   // Fetch device change requests
   const fetchRequests = async () => {
@@ -334,8 +334,8 @@ const DeviceChangeRequests = () => {
                 onClick={() => handleRequest(actionType)}
                 disabled={processingRequest}
                 className={`px-4 py-2 rounded-lg text-white disabled:opacity-50 transition-colors ${actionType === 'approve'
-                    ? 'bg-green-600 hover:bg-green-700'
-                    : 'bg-red-600 hover:bg-red-700'
+                  ? 'bg-green-600 hover:bg-green-700'
+                  : 'bg-red-600 hover:bg-red-700'
                   }`}
               >
                 {processingRequest ? (

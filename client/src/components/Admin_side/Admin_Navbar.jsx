@@ -81,6 +81,7 @@ export const Admin_Navbar = () => {
   // Handle notifications click
   const handleNotifications = () => {
     navigate("/admin/notifications");
+    setAdminView('notifications');
     setIsMobileMenuOpen(false);
   };
 

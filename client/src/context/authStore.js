@@ -145,14 +145,18 @@ export const useAuthStore = create((set, get) => {
         }
     };
 
-    const cachedFetch = async (url, options = {}) => {
+    const cachedFetch = async (url, options = {}, forceRefresh = false) => {
         const cacheKey = `${url}_${JSON.stringify(options)}`;
-        const cached = apiCache.get(cacheKey);
-        if (cached && Date.now() - cached.timestamp < CACHE_TIME) {
-            logAuthContext("Cache Hit", { url, cachedAt: new Date(cached.timestamp) });
-            return cached.data;
+        
+        if (!forceRefresh) {
+            const cached = apiCache.get(cacheKey);
+            if (cached && Date.now() - cached.timestamp < CACHE_TIME) {
+                logAuthContext("Cache Hit", { url, cachedAt: new Date(cached.timestamp) });
+                return cached.data;
+            }
         }
-        logAuthContext("Cache Miss", { url });
+        
+        logAuthContext(forceRefresh ? "Cache Bypass (Force Refresh)" : "Cache Miss", { url });
         const data = await makeAuthenticatedRequest(url, options);
         apiCache.set(cacheKey, { data, timestamp: Date.now() });
         return data;
@@ -489,8 +493,8 @@ export const useAuthStore = create((set, get) => {
         getAdminRecords: async (date) =>
             cachedFetch(`${BASE_URL}/admin/records${date ? `?date=${date}` : ""}`),
 
-        getAllUsers: async () =>
-            cachedFetch(`${BASE_URL}/admin/allusers`),
+        getAllUsers: async (forceRefresh = false) =>
+            cachedFetch(`${BASE_URL}/admin/allusers`, {}, forceRefresh),
 
         getAdminDashboard: async () =>
             cachedFetch(`${BASE_URL}/admin/dashboard`),

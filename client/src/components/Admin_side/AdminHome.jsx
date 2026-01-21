@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { useLocation } from "react-router-dom";
 import { Admin_Navbar } from "./Admin_Navbar";
 import EmployeeLayout from "./EmployeeLayout";
 import AttendanceRecordLayout from "./AttendanceRecordLayout";
@@ -22,6 +23,30 @@ const AdminHome = () => {
     getAdminDashboard,
     loading: authLoading
   } = useAuth();
+
+  const location = useLocation();
+
+  // Sync state with URL on mount and route change
+  useEffect(() => {
+    const path = location.pathname;
+    if (path.includes('/admin/notifications')) {
+      setAdminView('notifications');
+    } else if (path.includes('/admin/employees')) {
+      setAdminView('employees');
+    } else if (path.includes('/admin/records')) {
+      setAdminView('records');
+    } else if (path.includes('/admin/reports')) {
+      setAdminView('reports');
+    } else if (path.includes('/admin/qrcodes')) {
+      setAdminView('qrcodes');
+    } else if (path.includes('/admin/ai')) {
+      setAdminView('ai');
+    } else if (path.includes('/admin/voice')) {
+      setAdminView('voice');
+    } else if (path === '/admin/dashboard' || path === '/admin') {
+      setAdminView('home');
+    }
+  }, [location.pathname, setAdminView]);
 
   // State management
   const [records, setRecords] = useState([]);
@@ -196,49 +221,43 @@ const AdminHome = () => {
     );
   }
 
-  // Render based on active view
+  // Render based on active view and URL logic
   const renderContent = () => {
-    console.log("🎯 Rendering content for view:", activeAdminView);
+    const path = location.pathname;
+    console.log("🎯 Rendering content for path:", path);
 
-    switch (activeAdminView) {
-      case "home":
-      default:
-        return (
-          <Dashbord2
-            dashboard={dashboard}
-            onRefresh={fetchTodaysAttendance}
-          />
-        );
-      case "employees":
-        return <EmployeeLayout2 emploies={emploies} />;
-      case "records":
-        return (
-          <AttendanceRecordLayout
-            records={records}
-            dateFilter={selectedDate}
-            setDateFilter={setSelectedDate}
-            onRefresh={fetchAdminRecords}
-          />
-        );
-      case "reports":
-        return <Reports />;
-      case "qr":
-      case "qrcodes":
-        return <QRcodeView />;
-      case "ai":
-      case "ai-test":
-        return <AITestPage />;
-      case "notifications":
-        return <DeviceChangeRequests />
-      case "voice":
-        return (
-          <VoiceDashboard
-            organizationId={user?.organizationId?._id || user?.organizationId}
-            userId={user?._id}
-          />
-
-        );
+    // URL-based routing (Single Source of Truth)
+    if (path.includes('/admin/notifications')) return <DeviceChangeRequests />;
+    if (path.includes('/admin/employees')) return <EmployeeLayout2 emploies={emploies} />;
+    if (path.includes('/admin/records')) {
+      return (
+        <AttendanceRecordLayout
+          records={records}
+          dateFilter={selectedDate}
+          setDateFilter={setSelectedDate}
+          onRefresh={fetchAdminRecords}
+        />
+      );
     }
+    if (path.includes('/admin/reports')) return <Reports />;
+    if (path.includes('/admin/qrcodes')) return <QRcodeView />;
+    if (path.includes('/admin/ai')) return <AITestPage />;
+    if (path.includes('/admin/voice')) {
+      return (
+        <VoiceDashboard
+          organizationId={user?.organizationId?._id || user?.organizationId}
+          userId={user?._id}
+        />
+      );
+    }
+
+    // Default to Dashboard
+    return (
+      <Dashbord2
+        dashboard={dashboard}
+        onRefresh={fetchTodaysAttendance}
+      />
+    );
   };
 
   return (
@@ -247,6 +266,12 @@ const AdminHome = () => {
       <main className="pt-16">
         {renderContent()}
       </main>
+
+      {/* DEBUG: Remove before production */}
+      <div className="fixed bottom-4 right-4 bg-black text-white p-4 rounded-lg z-[9999] opacity-75 text-xs">
+        <p>Path: {location.pathname}</p>
+        <p>View: {activeAdminView}</p>
+      </div>
     </div>
   );
 };
