@@ -8,18 +8,30 @@ const getISTDate = (date = new Date()) => {
 };
 
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || "smtp.gmail.com",
-  port: process.env.SMTP_PORT || 587,
-  secure: false,
+  service: "gmail",
   auth: {
-    user: process.env.SMTP_USER || process.env.EMAIL_USER,
-    pass: process.env.SMTP_PASS || process.env.EMAIL_PASS,
+    user: process.env.EMAIL_USER || process.env.SMTP_USER,
+    pass: process.env.EMAIL_PASS || process.env.SMTP_PASS,
   },
 });
 
+const verifyConnection = async () => {
+  try {
+    await transporter.verify();
+    console.log("✅ SMTP connection established");
+    return true;
+  } catch (error) {
+    console.error("❌ SMTP connection failed:", error);
+    return false;
+  }
+};
+
+// Auto-verify on load
+verifyConnection();
+
 const sendMail = async (to, subject, text, html) => {
   try {
-    const user = process.env.SMTP_USER || process.env.EMAIL_USER;
+    const user = process.env.EMAIL_USER || process.env.SMTP_USER;
     const info = await transporter.sendMail({
       from: `"Attendance System" <${user}>`,
       to,
@@ -77,4 +89,5 @@ Attendance System`;
 module.exports = {
   sendMail,
   sendDeviceChangeNotification,
+  verifyConnection,
 };
