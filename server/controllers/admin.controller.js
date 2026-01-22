@@ -7,6 +7,8 @@ const holidayService = require("../utils/holidayService");
 const DateTimeUtils = require("../utils/dateTimeUtils");
 const istUtils = require("../utils/istDateTimeUtils"); // Using ONLY your IST utils
 const Notification = require("../models/Notification.models");
+const { logToFile } = require("../utils/fileLogger"); // Import logger
+const CacheModel = require("../models/cache.models"); // Import cache
 // Reset user device (allow user to register new device)
 const resetUserDevice = async (req, res) => {
   try {
@@ -1046,13 +1048,18 @@ const deleteUser = async (req, res) => {
 
     const user = await User.findById(userId);
     if (!user) {
+      logToFile(`Delete User Failed: User ${userId} not found`);
       return res.status(404).json({
         success: false,
         message: "User not found",
       });
     }
 
+    logToFile(`Delete User Request: ${userId} by Admin ${req.user._id} (Org: ${adminOrgId})`);
+    logToFile(`Target User Org: ${user.organizationId}`);
+
     if (String(user.organizationId) !== String(adminOrgId)) {
+      logToFile(`Delete User Failed: Org mismatch`);
       return res.status(403).json({
         success: false,
         message: "Forbidden to delete user outside your organization",
@@ -1066,9 +1073,17 @@ const deleteUser = async (req, res) => {
       });
     }
 
-    await Attendance.deleteMany({ userId: userId });
-    await DailyTimeSheet.deleteMany({ userId: userId });
-    await User.findByIdAndDelete(userId);
+    const delAtt = await Attendance.deleteMany({ userId: userId });
+    const delDts = await DailyTimeSheet.deleteMany({ userId: userId });
+    const delUser = await User.findByIdAndDelete(userId);
+
+    // CLEAR CACHE
+    CacheModel.del("/admin/allusers");
+    CacheModel.del("/admin/dashboard");
+    CacheModel.del(`/admin/singleUser/${userId}`);
+    logToFile(`Cache invalidated for /admin/allusers, /admin/dashboard, /admin/singleUser/${userId}`);
+
+    logToFile(`User Deleted: ${userId}. Attendance removed: ${delAtt.deletedCount}, TimeSheets removed: ${delDts.deletedCount}`);
 
     res.status(200).json({
       success: true,

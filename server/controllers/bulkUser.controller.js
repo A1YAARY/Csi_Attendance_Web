@@ -6,6 +6,7 @@ const Organization = require("../models/organization.models");
 const { sendMail } = require("../utils/mailer");
 const jwt = require("jsonwebtoken");
 const axios = require("axios");
+const CacheModel = require("../models/cache.models"); // Import cache
 
 // Helper: resolve organization by a provided code (name) or fallback to admin org
 const resolveOrganization = async (fallbackOrgId, codeMaybe) => {
@@ -252,13 +253,10 @@ const bulkRegisterUsers = async (req, res) => {
         const weeklySchedule = parseWeeklySchedule(row);
         const customHolidaysList = parseCustomHolidays(customHolidays);
 
-        // **Hash password before saving**
-        const hashedPassword = await bcrypt.hash(password, 10);
-
         // **CREATE USER with all attendance fields**
         const user = new User({
           email: normalizedEmail,
-          password: hashedPassword, // Store hashed password
+          password: password, // Store plain password (model handles hashing)
           name: String(name).trim(),
           role: "user",
           institute: String(institute).trim(),
@@ -283,7 +281,8 @@ const bulkRegisterUsers = async (req, res) => {
           process.env.JWT_RESET_SECRET,
           { expiresIn: "24h" }
         );
-        const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
+        const frontendUrl = (process.env.FRONTEND_URL || process.env.NEW_FRONTEND_URL)?.replace(/\/$/, "");
+        const resetLink = `${frontendUrl}/reset-password?token=${resetToken}`;
 
         try {
           await sendMail(
@@ -318,6 +317,10 @@ const bulkRegisterUsers = async (req, res) => {
         });
       }
     }
+
+    // Clear Admin Cache
+    CacheModel.del("/admin/allusers");
+    CacheModel.del("/admin/dashboard");
 
     return res.json({
       success: true,

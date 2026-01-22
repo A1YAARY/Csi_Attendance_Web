@@ -61,7 +61,7 @@ const EmployeeLayout2 = () => {
 
   // Manual refresh handler
   const handleRefresh = () => {
-    fetchAllUsers(true); // Pass true to indicate manual refresh
+    window.location.reload();
   };
 
   // Auto-refresh setup with useEffect

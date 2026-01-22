@@ -7,6 +7,8 @@ const getISTDate = (date = new Date()) => {
   return new Date(utc + istOffset);
 };
 
+const { logToFile } = require('./fileLogger');
+
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -40,9 +42,10 @@ const sendMail = async (to, subject, text, html) => {
       html,
     });
 
-    console.log("Message sent:", info.messageId);
+    logToFile(`Message sent: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
   } catch (error) {
+    logToFile(`Email sending failed: ${error.message} \nStack: ${error.stack}`);
     console.error("Email sending failed:", error);
     return { success: false, error: error.message };
   }
@@ -85,6 +88,15 @@ Attendance System`;
 
   return await sendMail(userEmail, subject, text, html);
 };
+
+
+transporter.verify((err, success) => {
+  if (err) {
+    console.error("SMTP ERROR:", err);
+  } else {
+    console.log("SMTP READY");
+  }
+});
 
 module.exports = {
   sendMail,

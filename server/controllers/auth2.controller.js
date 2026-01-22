@@ -7,6 +7,7 @@ const QRCode = require("../models/Qrcode.models");
 const { sendMail } = require("../utils/mailer");
 const geocodingService = require("../utils/geocoding"); // NEW: Multi-provider geocoding
 const istUtils = require("../utils/istDateTimeUtils"); // Use unified IST utils
+const CacheModel = require("../models/cache.models"); // Import cache
 
 // IST helper function
 const getISTDate = (date = new Date()) => {
@@ -423,7 +424,9 @@ const register_user = async (req, res) => {
         { expiresIn: "24h" }
       );
 
-      const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}&newUser=true`;
+      
+      const frontendUrl = (process.env.FRONTEND_URL || process.env.NEW_FRONTEND_URL)?.replace(/\/$/, "");
+      const resetLink = `${frontendUrl}/reset-password?token=${resetToken}&newUser=true`;
 
       const emailSubject = "Welcome to Attendance System - Set Your Password";
       const emailBody = `

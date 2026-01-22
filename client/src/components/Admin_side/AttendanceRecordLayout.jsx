@@ -97,20 +97,8 @@ const AttendanceRecordsLayout = ({ records, dateFilter, setDateFilter, onRefresh
   };
 
   // Manual refresh handler
-  const handleRefresh = async () => {
-    if (onRefresh) {
-      setIsRefreshing(true);
-      try {
-        await onRefresh();
-      } catch (error) {
-        console.error("Refresh failed:", error);
-      } finally {
-        setIsRefreshing(false);
-      }
-    } else {
-      // Fallback if no refresh function provided
-      applyFiltersToRecords(records);
-    }
+  const handleRefresh = () => {
+    window.location.reload();
   };
 
   // Auto-refresh setup
