@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { toast, ToastContainer } from 'react-toastify';
+import React, { useState, useEffect } from "react";
+import axios from "axios";
+import { toast, ToastContainer } from "react-toastify";
 import {
   Smartphone,
   Monitor,
@@ -12,9 +12,9 @@ import {
   Mail,
   Calendar,
   RefreshCw,
-  AlertCircle
-} from 'lucide-react';
-import 'react-toastify/dist/ReactToastify.css';
+  AlertCircle,
+} from "lucide-react";
+import "react-toastify/dist/ReactToastify.css";
 
 const DeviceChangeRequests = () => {
   const [requests, setRequests] = useState([]);
@@ -22,21 +22,24 @@ const DeviceChangeRequests = () => {
   const [processingRequest, setProcessingRequest] = useState(null);
   const [selectedRequest, setSelectedRequest] = useState(null);
   const [showModal, setShowModal] = useState(false);
-  const [actionType, setActionType] = useState('');
-  const [adminReason, setAdminReason] = useState('');
+  const [actionType, setActionType] = useState("");
+  const [adminReason, setAdminReason] = useState("");
 
-  const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL || "http://localhost:9000";
+  const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL || "/api";
 
   // Fetch device change requests
   const fetchRequests = async () => {
     try {
       setLoading(true);
       const token = localStorage.getItem("accessToken");
-      const response = await axios.get(`${BASE_URL}/admin/device-change-requests`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
+      const response = await axios.get(
+        `${BASE_URL}/admin/device-change-requests`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         },
-      });
+      );
 
       if (response.data.success) {
         setRequests(response.data.requests || []);
@@ -62,7 +65,7 @@ const DeviceChangeRequests = () => {
       const requestData = {
         userId: selectedRequest._id,
         action: action,
-        reason: adminReason.trim() || `Request ${action}d by admin`
+        reason: adminReason.trim() || `Request ${action}d by admin`,
       };
 
       const response = await axios.post(
@@ -73,7 +76,7 @@ const DeviceChangeRequests = () => {
             Authorization: `Bearer ${token}`,
             "Content-Type": "application/json",
           },
-        }
+        },
       );
 
       if (response.data.success) {
@@ -85,7 +88,9 @@ const DeviceChangeRequests = () => {
       }
     } catch (error) {
       console.error(`Error ${action}ing request:`, error);
-      toast.error(error.response?.data?.message || `Error ${action}ing request`);
+      toast.error(
+        error.response?.data?.message || `Error ${action}ing request`,
+      );
     } finally {
       setProcessingRequest(null);
     }
@@ -95,7 +100,7 @@ const DeviceChangeRequests = () => {
   const openModal = (request, action) => {
     setSelectedRequest(request);
     setActionType(action);
-    setAdminReason('');
+    setAdminReason("");
     setShowModal(true);
   };
 
@@ -103,19 +108,19 @@ const DeviceChangeRequests = () => {
   const closeModal = () => {
     setShowModal(false);
     setSelectedRequest(null);
-    setActionType('');
-    setAdminReason('');
+    setActionType("");
+    setAdminReason("");
   };
 
   // Get device icon based on type
   const getDeviceIcon = (deviceType) => {
     switch (deviceType?.toLowerCase()) {
-      case 'android':
-      case 'ios':
+      case "android":
+      case "ios":
         return <Smartphone className="w-5 h-5" />;
-      case 'web':
+      case "web":
         return <Monitor className="w-5 h-5" />;
-      case 'tablet':
+      case "tablet":
         return <Tablet className="w-5 h-5" />;
       default:
         return <Monitor className="w-5 h-5" />;
@@ -125,13 +130,13 @@ const DeviceChangeRequests = () => {
   // Format date to IST
   const formatDate = (dateString) => {
     const date = new Date(dateString);
-    return date.toLocaleString('en-IN', {
-      timeZone: 'Asia/Kolkata',
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+    return date.toLocaleString("en-IN", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
@@ -144,7 +149,9 @@ const DeviceChangeRequests = () => {
       <div className="flex items-center justify-center min-h-screen">
         <div className="flex items-center space-x-2">
           <RefreshCw className="w-6 h-6 animate-spin text-blue-500" />
-          <span className="text-gray-600">Loading device change requests...</span>
+          <span className="text-gray-600">
+            Loading device change requests...
+          </span>
         </div>
       </div>
     );
@@ -157,7 +164,9 @@ const DeviceChangeRequests = () => {
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">Device Change Requests</h1>
+              <h1 className="text-2xl font-bold text-gray-900">
+                Device Change Requests
+              </h1>
               <p className="text-gray-600 mt-1">
                 Manage pending device change requests from users
               </p>
@@ -168,7 +177,9 @@ const DeviceChangeRequests = () => {
                 disabled={loading}
                 className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
-                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                <RefreshCw
+                  className={`w-4 h-4 ${loading ? "animate-spin" : ""}`}
+                />
                 <span>Refresh</span>
               </button>
             </div>
@@ -179,9 +190,13 @@ const DeviceChangeRequests = () => {
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
               <div className="flex items-center">
                 <Clock className="w-5 h-5 text-yellow-600 mr-2" />
-                <span className="text-yellow-800 font-medium">Pending Requests</span>
+                <span className="text-yellow-800 font-medium">
+                  Pending Requests
+                </span>
               </div>
-              <p className="text-2xl font-bold text-yellow-900 mt-1">{requests.length}</p>
+              <p className="text-2xl font-bold text-yellow-900 mt-1">
+                {requests.length}
+              </p>
             </div>
           </div>
         </div>
@@ -190,8 +205,12 @@ const DeviceChangeRequests = () => {
         {requests.length === 0 ? (
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 text-center">
             <AlertCircle className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No Pending Requests</h3>
-            <p className="text-gray-600">There are no device change requests at the moment.</p>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              No Pending Requests
+            </h3>
+            <p className="text-gray-600">
+              There are no device change requests at the moment.
+            </p>
           </div>
         ) : (
           <div className="space-y-4">
@@ -208,7 +227,9 @@ const DeviceChangeRequests = () => {
                         <User className="w-5 h-5 text-blue-600" />
                       </div>
                       <div>
-                        <h3 className="font-medium text-gray-900">{request.name}</h3>
+                        <h3 className="font-medium text-gray-900">
+                          {request.name}
+                        </h3>
                         <div className="flex items-center text-sm text-gray-600">
                           <Mail className="w-4 h-4 mr-1" />
                           {request.email}
@@ -218,7 +239,8 @@ const DeviceChangeRequests = () => {
 
                     <div className="flex items-center text-sm text-gray-600">
                       <Calendar className="w-4 h-4 mr-2" />
-                      Requested: {formatDate(request.deviceChangeRequest.requestedAt)}
+                      Requested:{" "}
+                      {formatDate(request.deviceChangeRequest.requestedAt)}
                     </div>
                   </div>
 
@@ -226,10 +248,12 @@ const DeviceChangeRequests = () => {
                   <div className="space-y-4">
                     {/* Current Device */}
                     <div>
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">Current Device</h4>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">
+                        Current Device
+                      </h4>
                       <div className="flex items-center space-x-2 text-sm text-gray-600 bg-gray-50 p-2 rounded">
                         {getDeviceIcon(request.deviceInfo?.type)}
-                        <span>{request.deviceInfo?.type || 'Unknown'}</span>
+                        <span>{request.deviceInfo?.type || "Unknown"}</span>
                         <span className="text-xs text-gray-500">
                           ({request.deviceInfo?.deviceId?.slice(0, 12)}...)
                         </span>
@@ -238,12 +262,21 @@ const DeviceChangeRequests = () => {
 
                     {/* New Device */}
                     <div>
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">Requested Device</h4>
+                      <h4 className="text-sm font-medium text-gray-700 mb-2">
+                        Requested Device
+                      </h4>
                       <div className="flex items-center space-x-2 text-sm text-green-600 bg-green-50 p-2 rounded">
-                        {getDeviceIcon(request.deviceChangeRequest.newDeviceType)}
+                        {getDeviceIcon(
+                          request.deviceChangeRequest.newDeviceType,
+                        )}
                         <span>{request.deviceChangeRequest.newDeviceType}</span>
                         <span className="text-xs text-green-500">
-                          ({request.deviceChangeRequest.newDeviceId?.slice(0, 12)}...)
+                          (
+                          {request.deviceChangeRequest.newDeviceId?.slice(
+                            0,
+                            12,
+                          )}
+                          ...)
                         </span>
                       </div>
                     </div>
@@ -251,7 +284,9 @@ const DeviceChangeRequests = () => {
                     {/* Reason */}
                     {request.deviceChangeRequest.reason && (
                       <div>
-                        <h4 className="text-sm font-medium text-gray-700 mb-1">Reason</h4>
+                        <h4 className="text-sm font-medium text-gray-700 mb-1">
+                          Reason
+                        </h4>
                         <p className="text-sm text-gray-600 italic">
                           "{request.deviceChangeRequest.reason}"
                         </p>
@@ -263,7 +298,7 @@ const DeviceChangeRequests = () => {
                   <div className="flex flex-col justify-center space-y-3 lg:items-end">
                     <div className="flex space-x-3">
                       <button
-                        onClick={() => openModal(request, 'approve')}
+                        onClick={() => openModal(request, "approve")}
                         disabled={processingRequest === request._id}
                         className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 transition-colors"
                       >
@@ -272,7 +307,7 @@ const DeviceChangeRequests = () => {
                       </button>
 
                       <button
-                        onClick={() => openModal(request, 'reject')}
+                        onClick={() => openModal(request, "reject")}
                         disabled={processingRequest === request._id}
                         className="flex items-center space-x-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
                       >
@@ -300,12 +335,13 @@ const DeviceChangeRequests = () => {
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <h3 className="text-lg font-medium text-gray-900 mb-4">
-              {actionType === 'approve' ? 'Approve' : 'Reject'} Device Change Request
+              {actionType === "approve" ? "Approve" : "Reject"} Device Change
+              Request
             </h3>
 
             <p className="text-gray-600 mb-4">
-              Are you sure you want to {actionType} the device change request for{' '}
-              <strong>{selectedRequest?.name}</strong>?
+              Are you sure you want to {actionType} the device change request
+              for <strong>{selectedRequest?.name}</strong>?
             </p>
 
             <div className="mb-4">
@@ -333,10 +369,11 @@ const DeviceChangeRequests = () => {
               <button
                 onClick={() => handleRequest(actionType)}
                 disabled={processingRequest}
-                className={`px-4 py-2 rounded-lg text-white disabled:opacity-50 transition-colors ${actionType === 'approve'
-                  ? 'bg-green-600 hover:bg-green-700'
-                  : 'bg-red-600 hover:bg-red-700'
-                  }`}
+                className={`px-4 py-2 rounded-lg text-white disabled:opacity-50 transition-colors ${
+                  actionType === "approve"
+                    ? "bg-green-600 hover:bg-green-700"
+                    : "bg-red-600 hover:bg-red-700"
+                }`}
               >
                 {processingRequest ? (
                   <div className="flex items-center space-x-2">
@@ -344,7 +381,7 @@ const DeviceChangeRequests = () => {
                     <span>Processing...</span>
                   </div>
                 ) : (
-                  `${actionType === 'approve' ? 'Approve' : 'Reject'} Request`
+                  `${actionType === "approve" ? "Approve" : "Reject"} Request`
                 )}
               </button>
             </div>

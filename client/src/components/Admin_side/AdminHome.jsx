@@ -21,7 +21,7 @@ const AdminHome = () => {
     getTodaysAttendance,
     user,
     getAdminDashboard,
-    loading: authLoading
+    loading: authLoading,
   } = useAuth();
 
   const location = useLocation();
@@ -29,22 +29,22 @@ const AdminHome = () => {
   // Sync state with URL on mount and route change
   useEffect(() => {
     const path = location.pathname;
-    if (path.includes('/admin/notifications')) {
-      setAdminView('notifications');
-    } else if (path.includes('/admin/employees')) {
-      setAdminView('employees');
-    } else if (path.includes('/admin/records')) {
-      setAdminView('records');
-    } else if (path.includes('/admin/reports')) {
-      setAdminView('reports');
-    } else if (path.includes('/admin/qrcodes')) {
-      setAdminView('qrcodes');
-    } else if (path.includes('/admin/ai')) {
-      setAdminView('ai');
-    } else if (path.includes('/admin/voice')) {
-      setAdminView('voice');
-    } else if (path === '/admin/dashboard' || path === '/admin') {
-      setAdminView('home');
+    if (path.includes("/admin/notifications")) {
+      setAdminView("notifications");
+    } else if (path.includes("/admin/employees")) {
+      setAdminView("employees");
+    } else if (path.includes("/admin/records")) {
+      setAdminView("records");
+    } else if (path.includes("/admin/reports")) {
+      setAdminView("reports");
+    } else if (path.includes("/admin/qrcodes")) {
+      setAdminView("qrcodes");
+    } else if (path.includes("/admin/ai")) {
+      setAdminView("ai");
+    } else if (path.includes("/admin/voice")) {
+      setAdminView("voice");
+    } else if (path === "/admin/dashboard" || path === "/admin") {
+      setAdminView("home");
     }
   }, [location.pathname, setAdminView]);
 
@@ -66,12 +66,11 @@ const AdminHome = () => {
       setDashboard(data || {});
       return data;
     } catch (err) {
-      console.error("❌ Error fetching admin dashboard:", err)
-      setError("Failed to fetch admin dashboard")
-      throw err
+      console.error("❌ Error fetching admin dashboard:", err);
+      setError("Failed to fetch admin dashboard");
+      throw err;
     }
   }, [getAdminDashboard]);
-
 
   // Memoized data fetching functions
   const fetchAdminRecords = useCallback(async () => {
@@ -88,7 +87,11 @@ const AdminHome = () => {
         processedRecords = data.data;
       } else if (data && data.records && Array.isArray(data.records)) {
         processedRecords = data.records;
-      } else if (data && data.attendanceRecords && Array.isArray(data.attendanceRecords)) {
+      } else if (
+        data &&
+        data.attendanceRecords &&
+        Array.isArray(data.attendanceRecords)
+      ) {
         processedRecords = data.attendanceRecords;
       } else if (data && data.result && Array.isArray(data.result)) {
         processedRecords = data.result;
@@ -112,9 +115,17 @@ const AdminHome = () => {
       let processedTodaysData = [];
       if (Array.isArray(todaysdata)) {
         processedTodaysData = todaysdata;
-      } else if (todaysdata && todaysdata.data && Array.isArray(todaysdata.data)) {
+      } else if (
+        todaysdata &&
+        todaysdata.data &&
+        Array.isArray(todaysdata.data)
+      ) {
         processedTodaysData = todaysdata.data;
-      } else if (todaysdata && todaysdata.attendance && Array.isArray(todaysdata.attendance)) {
+      } else if (
+        todaysdata &&
+        todaysdata.attendance &&
+        Array.isArray(todaysdata.attendance)
+      ) {
         processedTodaysData = todaysdata.attendance;
       }
 
@@ -127,7 +138,6 @@ const AdminHome = () => {
       throw err;
     }
   }, [getTodaysAttendance]);
-
 
   // Optimized data fetching
   const fetchAllData = useCallback(async () => {
@@ -152,7 +162,7 @@ const AdminHome = () => {
 
   // Refetch when date changes
   useEffect(() => {
-    if (!authLoading && activeAdminView === 'records') {
+    if (!authLoading && activeAdminView === "records") {
       fetchAdminRecords();
     }
   }, [selectedDate, activeAdminView, authLoading, fetchAdminRecords]);
@@ -173,7 +183,9 @@ const AdminHome = () => {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
           <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-500 mx-auto"></div>
-          <h2 className="text-xl font-semibold mt-4">Checking permissions...</h2>
+          <h2 className="text-xl font-semibold mt-4">
+            Checking permissions...
+          </h2>
         </div>
       </div>
     );
@@ -223,13 +235,12 @@ const AdminHome = () => {
 
   // Render based on active view and URL logic
   const renderContent = () => {
-    const path = location.pathname;
-    console.log("🎯 Rendering content for path:", path);
-
-    // URL-based routing (Single Source of Truth)
-    if (path.includes('/admin/notifications')) return <DeviceChangeRequests />;
-    if (path.includes('/admin/employees')) return <EmployeeLayout2 emploies={emploies} />;
-    if (path.includes('/admin/records')) {
+    const normalizedPath = path.toLowerCase();
+    if (normalizedPath.includes("/admin/notifications"))
+      return <DeviceChangeRequests />;
+    if (normalizedPath.includes("/admin/employees"))
+      return <EmployeeLayout2 emploies={emploies} />;
+    if (normalizedPath.includes("/admin/records")) {
       return (
         <AttendanceRecordLayout
           records={records}
@@ -239,10 +250,10 @@ const AdminHome = () => {
         />
       );
     }
-    if (path.includes('/admin/reports')) return <Reports />;
-    if (path.includes('/admin/qrcodes')) return <QRcodeView />;
-    if (path.includes('/admin/ai')) return <AITestPage />;
-    if (path.includes('/admin/voice')) {
+    if (path.includes("/admin/reports")) return <Reports />;
+    if (path.includes("/admin/qrcodes")) return <QRcodeView />;
+    if (path.includes("/admin/ai")) return <AITestPage />;
+    if (path.includes("/admin/voice")) {
       return (
         <VoiceDashboard
           organizationId={user?.organizationId?._id || user?.organizationId}
@@ -253,19 +264,14 @@ const AdminHome = () => {
 
     // Default to Dashboard
     return (
-      <Dashbord2
-        dashboard={dashboard}
-        onRefresh={fetchTodaysAttendance}
-      />
+      <Dashbord2 dashboard={dashboard} onRefresh={fetchTodaysAttendance} />
     );
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Admin_Navbar />
-      <main className="pt-16">
-        {renderContent()}
-      </main>
+      <main className="pt-16">{renderContent()}</main>
 
       {/* DEBUG: Remove before production */}
       <div className="fixed bottom-4 right-4 bg-black text-white p-4 rounded-lg z-[9999] opacity-75 text-xs">

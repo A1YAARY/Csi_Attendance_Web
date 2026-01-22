@@ -12,17 +12,20 @@ export const Admin_Navbar = () => {
   const [searchFocused, setSearchFocused] = useState(false);
   const [notificationCount, setNotificationCount] = useState(0);
 
-  const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL || "http://localhost:5173";
+  const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL || "/api";
 
   // Fetch notification count
   const fetchNotificationCount = async () => {
     try {
       const token = localStorage.getItem("accessToken");
-      const response = await axios.get(`${BASE_URL}/admin/device-change-requests`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
+      const response = await axios.get(
+        `${BASE_URL}/admin/device-change-requests`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
         },
-      });
+      );
 
       if (response.data.success) {
         setNotificationCount(response?.data?.requests?.length);
@@ -42,22 +45,20 @@ export const Admin_Navbar = () => {
     }
   }, [user]);
 
-
-
   // Handler when a nav item is clicked
   const handleNavChange = (path) => {
     navigate(path);
     setIsMobileMenuOpen(false);
 
     // Extract view from path or map it
-    let view = 'home';
-    if (path.includes('employees')) view = 'employees';
-    else if (path.includes('records')) view = 'records';
-    else if (path.includes('reports')) view = 'reports';
-    else if (path.includes('qrcodes')) view = 'qrcodes';
-    else if (path.includes('ai')) view = 'ai';
-    else if (path.includes('voice')) view = 'voice';
-    else if (path.includes('notifications')) view = 'notifications';
+    let view = "home";
+    if (path.includes("employees")) view = "employees";
+    else if (path.includes("records")) view = "records";
+    else if (path.includes("reports")) view = "reports";
+    else if (path.includes("qrcodes")) view = "qrcodes";
+    else if (path.includes("ai")) view = "ai";
+    else if (path.includes("voice")) view = "voice";
+    else if (path.includes("notifications")) view = "notifications";
 
     setAdminView(view);
   };
@@ -81,12 +82,17 @@ export const Admin_Navbar = () => {
   // Handle notifications click
   const handleNotifications = () => {
     navigate("/admin/notifications");
-    setAdminView('notifications');
+    setAdminView("notifications");
     setIsMobileMenuOpen(false);
   };
 
   const navItems = [
-    { id: "nav-home", path: "/admin/dashboard", icon: "/Home.svg", label: "Home" },
+    {
+      id: "nav-home",
+      path: "/admin/dashboard",
+      icon: "/Home.svg",
+      label: "Home",
+    },
     {
       id: "nav-employees",
       path: "/admin/employees",
@@ -130,7 +136,12 @@ export const Admin_Navbar = () => {
           stroke="currentColor"
           viewBox="0 0 24 24"
         >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z"
+          />
         </svg>
       ),
       label: "Voice Assistant",
@@ -165,15 +176,16 @@ export const Admin_Navbar = () => {
             <div className="relative">
               <button
                 onClick={handleNotifications}
-                className={`btn btn-ghost btn-sm sm:btn-md p-1 sm:p-2 relative ${isActiveView("notifications")
-                  ? "bg-blue-50 text-blue-600"
-                  : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-                  }`}
+                className={`btn btn-ghost btn-sm sm:btn-md p-1 sm:p-2 relative ${
+                  isActiveView("notifications")
+                    ? "bg-blue-50 text-blue-600"
+                    : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                }`}
               >
                 <Bell className="w-5 h-5 sm:w-6 sm:h-6" />
                 {notificationCount > 0 && (
                   <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 sm:h-5 sm:w-5 flex items-center justify-center font-medium text-[10px] sm:text-xs">
-                    {notificationCount > 99 ? '99+' : notificationCount}
+                    {notificationCount > 99 ? "99+" : notificationCount}
                   </span>
                 )}
               </button>
@@ -292,10 +304,11 @@ export const Admin_Navbar = () => {
               <li key={`tablet-${item.id}`}>
                 <button
                   onClick={() => handleNavChange(item.path)}
-                  className={`rounded-lg px-2 md:px-3 lg:px-4 py-2 md:py-3 gap-1 md:gap-2 text-xs md:text-sm lg:text-base font-medium flex items-center transition-all duration-200 hover:scale-105 whitespace-nowrap ${isActiveView(item.path)
-                    ? "bg-primary text-black shadow-sm"
-                    : "hover:bg-gray-100"
-                    }`}
+                  className={`rounded-lg px-2 md:px-3 lg:px-4 py-2 md:py-3 gap-1 md:gap-2 text-xs md:text-sm lg:text-base font-medium flex items-center transition-all duration-200 hover:scale-105 whitespace-nowrap ${
+                    isActiveView(item.path)
+                      ? "bg-primary text-black shadow-sm"
+                      : "hover:bg-gray-100"
+                  }`}
                 >
                   {typeof item.icon === "string" ? (
                     <img
@@ -318,8 +331,9 @@ export const Admin_Navbar = () => {
       <div className="md:hidden bg-white relative">
         {/* Mobile Menu Toggle Bar */}
         <div
-          className={`transition-all duration-300 ease-in-out border-b border-gray-200 ${isMobileMenuOpen ? "shadow-sm" : ""
-            }`}
+          className={`transition-all duration-300 ease-in-out border-b border-gray-200 ${
+            isMobileMenuOpen ? "shadow-sm" : ""
+          }`}
         >
           <div className="flex justify-between items-center px-4 py-3">
             <span className="text-gray-700 font-medium text-sm">
@@ -336,8 +350,9 @@ export const Admin_Navbar = () => {
 
         {/* Mobile Menu Items - Collapsible */}
         <div
-          className={`overflow-hidden transition-all duration-300 ease-in-out bg-white relative z-50 ${isMobileMenuOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
-            }`}
+          className={`overflow-hidden transition-all duration-300 ease-in-out bg-white relative z-50 ${
+            isMobileMenuOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+          }`}
         >
           <div className="px-4 pb-4 bg-gray-50">
             <ul className="space-y-1 mt-4">
@@ -345,10 +360,11 @@ export const Admin_Navbar = () => {
                 <li key={`mobile-${item.id}`}>
                   <button
                     onClick={() => handleNavChange(item.path)}
-                    className={`w-full text-left p-3 sm:p-4 rounded-lg flex items-center gap-3 transition-all duration-200 text-sm sm:text-base font-medium ${isActiveView(item.path)
-                      ? "bg-primary text-black shadow-sm transform scale-[1.02]"
-                      : "hover:bg-white hover:shadow-sm active:scale-95"
-                      }`}
+                    className={`w-full text-left p-3 sm:p-4 rounded-lg flex items-center gap-3 transition-all duration-200 text-sm sm:text-base font-medium ${
+                      isActiveView(item.path)
+                        ? "bg-primary text-black shadow-sm transform scale-[1.02]"
+                        : "hover:bg-white hover:shadow-sm active:scale-95"
+                    }`}
                   >
                     {typeof item.icon === "string" ? (
                       <img
@@ -368,16 +384,17 @@ export const Admin_Navbar = () => {
               <li>
                 <button
                   onClick={handleNotifications}
-                  className={`w-full text-left p-3 sm:p-4 rounded-lg flex items-center gap-3 transition-all duration-200 text-sm sm:text-base font-medium ${isActiveView("notifications")
-                    ? "bg-primary text-black shadow-sm transform scale-[1.02]"
-                    : "hover:bg-white hover:shadow-sm active:scale-95"
-                    }`}
+                  className={`w-full text-left p-3 sm:p-4 rounded-lg flex items-center gap-3 transition-all duration-200 text-sm sm:text-base font-medium ${
+                    isActiveView("notifications")
+                      ? "bg-primary text-black shadow-sm transform scale-[1.02]"
+                      : "hover:bg-white hover:shadow-sm active:scale-95"
+                  }`}
                 >
                   <div className="relative">
                     <Bell className="w-5 h-5" />
                     {notificationCount > 0 && (
                       <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full h-4 w-4 flex items-center justify-center font-medium text-[10px]">
-                        {notificationCount > 9 ? '9+' : notificationCount}
+                        {notificationCount > 9 ? "9+" : notificationCount}
                       </span>
                     )}
                   </div>
