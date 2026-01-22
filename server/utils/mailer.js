@@ -7,18 +7,27 @@ const getISTDate = (date = new Date()) => {
   return new Date(utc + istOffset);
 };
 
+const { logToFile } = require('./fileLogger');
+
 const transporter = nodemailer.createTransport({
   host: process.env.SMTP_HOST || "smtp.gmail.com",
-  port: process.env.SMTP_PORT || 587,
+  port: Number(process.env.SMTP_PORT) || 587,
   secure: false,
   auth: {
     user: process.env.SMTP_USER || process.env.EMAIL_USER,
     pass: process.env.SMTP_PASS || process.env.EMAIL_PASS,
   },
+  tls: {
+    rejectUnauthorized: false, // Allow self-signed certs
+  },
 });
+
+// DEBUG: Log configuration on load
+logToFile("MAILER LOADED. Config: User=" + (process.env.SMTP_USER || process.env.EMAIL_USER));
 
 const sendMail = async (to, subject, text, html) => {
   try {
+    logToFile(`Attempting to send mail to: ${to}`);
     const user = process.env.SMTP_USER || process.env.EMAIL_USER;
     const info = await transporter.sendMail({
       from: `"Attendance System" <${user}>`,
@@ -28,9 +37,10 @@ const sendMail = async (to, subject, text, html) => {
       html,
     });
 
-    console.log("Message sent:", info.messageId);
+    logToFile(`Message sent: ${info.messageId}`);
     return { success: true, messageId: info.messageId };
   } catch (error) {
+    logToFile(`Email sending failed: ${error.message} \nStack: ${error.stack}`);
     console.error("Email sending failed:", error);
     return { success: false, error: error.message };
   }
@@ -73,6 +83,15 @@ Attendance System`;
 
   return await sendMail(userEmail, subject, text, html);
 };
+
+
+transporter.verify((err, success) => {
+  if (err) {
+    console.error("SMTP ERROR:", err);
+  } else {
+    console.log("SMTP READY");
+  }
+});
 
 module.exports = {
   sendMail,

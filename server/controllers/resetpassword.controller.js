@@ -137,16 +137,12 @@ const resetPassword = async (req, res) => {
       });
     }
 
-    // FIXED: Use the same salt rounds as your User model (10 rounds)
-    const saltRounds = parseInt(process.env.BCRYPT_SALT_ROUNDS) || 10;
-    const hashedPassword = await bcrypt.hash(newPassword, saltRounds);
-
-    // Update user password
-    user.password = hashedPassword;
+    // Update user password - Model pre-save hook will handle hashing
+    user.password = newPassword;
     await user.save();
 
     console.log(`✅ Password reset successful for user: ${user.email}`);
-    console.log(`🔐 Used salt rounds: ${saltRounds}`);
+    // console.log(`🔐 Used salt rounds: ${saltRounds}`); // saltRounds managed by model
 
     res.json({
       success: true,

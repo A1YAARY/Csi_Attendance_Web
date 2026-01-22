@@ -70,19 +70,9 @@ const Dashbord2 = ({ dashboard, onRefresh }) => {
   }, []);
 
   // Manual refresh handler
-  const handleRefresh = async () => {
-    if (onRefresh) {
-      try {
-        setIsRefreshing(true);
-        await onRefresh();
-   
-      } catch (error) {
-        console.error("Refresh failed", error);
-      } finally {
-        setIsRefreshing(false);
-      }
-    }
-  };     
+  const handleRefresh = () => {
+    window.location.reload();
+  };
 
 
   // Format current time for display
@@ -310,8 +300,8 @@ const Dashbord2 = ({ dashboard, onRefresh }) => {
                       />
                       <p
                         className={`text-xs sm:text-sm font-medium ${stats.lateArrival === 0
-                            ? "text-green-600"
-                            : "text-red-600"
+                          ? "text-green-600"
+                          : "text-red-600"
                           }`}
                       >
                         {stats.lateArrival === 0
@@ -352,8 +342,8 @@ const Dashbord2 = ({ dashboard, onRefresh }) => {
                       />
                       <p
                         className={`text-xs sm:text-sm font-medium ${stats.earlyDepartures === 0
-                            ? "text-green-600"
-                            : "text-red-600"
+                          ? "text-green-600"
+                          : "text-red-600"
                           }`}
                       >
                         {stats.earlyDepartures === 0
@@ -461,7 +451,7 @@ const Dashbord2 = ({ dashboard, onRefresh }) => {
             <div className="flex items-center gap-3">
               <button
                 onClick={handleRefresh}
-                
+
                 disabled={isRefreshing}
                 className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 active:bg-gray-300 text-gray-700 text-sm font-medium rounded-full transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -492,8 +482,8 @@ const Dashbord2 = ({ dashboard, onRefresh }) => {
                           {/* Activity Icon */}
                           <div
                             className={`p-2 rounded-full ${activity.type === "check-in"
-                                ? "bg-green-100"
-                                : "bg-red-100"
+                              ? "bg-green-100"
+                              : "bg-red-100"
                               }`}
                           >
                             {activity.type === "check-in" ? (
@@ -518,14 +508,14 @@ const Dashbord2 = ({ dashboard, onRefresh }) => {
                         <div className="text-right">
                           <div
                             className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium ${activity.type === "check-in"
-                                ? "bg-green-100 text-green-700"
-                                : "bg-red-100 text-red-700"
+                              ? "bg-green-100 text-green-700"
+                              : "bg-red-100 text-red-700"
                               }`}
                           >
                             <div
                               className={`h-2 w-2 rounded-full ${activity.type === "check-in"
-                                  ? "bg-green-500"
-                                  : "bg-red-500"
+                                ? "bg-green-500"
+                                : "bg-red-500"
                                 }`}
                             ></div>
                             {activity.type === "check-in"
@@ -562,8 +552,8 @@ const Dashbord2 = ({ dashboard, onRefresh }) => {
                         <div className="flex items-center gap-2">
                           <div
                             className={`h-2 w-2 rounded-full ${activity.verified
-                                ? "bg-green-500"
-                                : "bg-yellow-500"
+                              ? "bg-green-500"
+                              : "bg-yellow-500"
                               }`}
                           ></div>
                           <span className="text-xs text-gray-500 font-medium">
