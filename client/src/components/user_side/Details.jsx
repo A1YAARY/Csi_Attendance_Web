@@ -1,51 +1,125 @@
-import React from 'react'
+import React from "react";
+import { motion } from "framer-motion";
 
-const Details = () => {
-    return (
-    <div>
-        <div className="markedD flex flex-col items-center">
-        <div className="marked flex flex-col justify-center items-center h-[254px] w-[350px] gap-[10px]">
-        <img className='h-[98px] w-[95px]' src="/src/assets/Checkmark.png" alt="" />
-        <div className="text flex flex-col justify-center items-center">
-            <span className='font-semibold text-[24px]'>Attendance Marked</span>
-            <span className='text-gray-400'>Your entry has been marked</span>
+const Details = ({ user, todayAttendance }) => {
+  const firstIn = todayAttendance?.sessions?.[0]?.checkIn || null;
+  const lastOut = (todayAttendance?.sessions || [])
+    .filter((s) => s.checkOut)
+    .pop()?.checkOut || null;
+
+  const formatIST = (ts) =>
+    ts
+      ? new Date(ts).toLocaleString("en-IN", {
+        timeZone: "Asia/Kolkata",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      })
+      : "--";
+
+  const totalMins =
+    typeof todayAttendance?.totalWorkingTime === "number"
+      ? todayAttendance.totalWorkingTime
+      : (todayAttendance?.sessions || []).reduce((acc, s) => {
+        if (typeof s.duration === "number") return acc + s.duration;
+        if (s.checkIn && s.checkOut)
+          return acc + Math.floor((new Date(s.checkOut) - new Date(s.checkIn)) / 60000);
+        if (s.checkIn && !s.checkOut)
+          return acc + Math.floor((Date.now() - new Date(s.checkIn)) / 60000);
+        return acc;
+      }, 0);
+
+  const totalStr = `${Math.floor(totalMins / 60)}h ${totalMins % 60}m`;
+  return (
+    <div className="w-full max-w-md sm:max-w-lg lg:max-w-xl mx-auto p-4 sm:p-6 lg:p-8">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.6 }}
+        className="bg-white rounded-lg sm:rounded-xl lg:rounded-2xl shadow-lg sm:shadow-xl border border-gray-100"
+      >
+        <div className="p-4 sm:p-6 lg:p-8">
+          <motion.h2
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.2 }}
+            className="text-[20px] sm:text-[24px] lg:text-[28px] xl:text-[32px] font-bold text-gray-800 mb-4 sm:mb-6 text-center"
+          >
+            User Details
+          </motion.h2>
+
+          <div className="space-y-3 sm:space-y-4 lg:space-y-5">
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.3 }}
+              className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 bg-gray-50 rounded-lg"
+            >
+              <span className="text-[14px] sm:text-[15px] lg:text-[16px] font-medium text-gray-600 mb-1 sm:mb-0">
+                Name:
+              </span>
+              <span className="text-[14px] sm:text-[16px] lg:text-[18px] font-semibold text-gray-800">
+                {user?.name || "N/A"}
+              </span>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.4 }}
+              className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 bg-gray-50 rounded-lg"
+            >
+              <span className="text-[14px] sm:text-[15px] lg:text-[16px] font-medium text-gray-600 mb-1 sm:mb-0">
+                Email:
+              </span>
+              <span className="text-[14px] sm:text-[16px] lg:text-[18px] font-semibold text-gray-800 break-all">
+                {user?.email || "N/A"}
+              </span>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.5 }}
+              className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 bg-gray-50 rounded-lg"
+            >
+              <span className="text-[14px] sm:text-[15px] lg:text-[16px] font-medium text-gray-600 mb-1 sm:mb-0">
+                Department:
+              </span>
+              <span className="text-[14px] sm:text-[16px] lg:text-[18px] font-semibold text-gray-800">
+                {user?.department || "EXTC"}
+              </span>
+            </motion.div>
+
+            <motion.div
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: 0.6 }}
+              className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 sm:p-4 bg-gray-50 rounded-lg"
+            >
+              <span className="text-[14px] sm:text-[15px] lg:text-[16px] font-medium text-gray-600 mb-1 sm:mb-0">
+                Role:
+              </span>
+              <span className="text-[14px] sm:text-[16px] lg:text-[18px] font-semibold text-blue-600">
+                Teacher
+              </span>
+            </motion.div>
+          </div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.7 }}
+            className="mt-6 sm:mt-8"
+          >
+            <button className="w-full py-3 sm:py-4 px-4 sm:px-6 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-semibold text-[14px] sm:text-[16px] lg:text-[18px] rounded-lg sm:rounded-xl transition-all duration-200 shadow-lg hover:shadow-xl">
+              Edit Profile
+            </button>
+          </motion.div>
         </div>
-        </div>
-        <div className="detail h-[450px] w-[350px] flex flex-col gap-[15px]">
-            <span className='font-semibold'>Details:</span>
-            <div className="info flex flex-col justify-center items-center h-[410px] border-slate-300 border-[1px] rounded-2xl">
-            <div className="info1 h-[64px] w-[310px] flex flex-col gap-[12px]">
-                <span className='text-sm font-semibold '>Name</span>
-                <span className='text-xs text-gray-500'>John Smith</span>
-            </div>
-            <div className="info1 h-[64px] w-[310px] flex flex-col gap-[12px]">
-                <span className='text-sm font-semibold '>Employee ID</span>
-                <span className='text-xs text-gray-500'>EMP0234</span>
-            </div>
-            <div className="info1 h-[64px] w-[310px] flex flex-col gap-[12px]">
-                <span className='text-sm font-semibold '>Department</span>
-                <span className='text-xs text-gray-500'>EXTC</span>
-            </div>
-            <div className="info1 h-[64px] w-[310px] flex flex-col gap-[12px]">
-                <span className='text-sm font-semibold '>Date</span>
-                <span className='text-xs text-gray-500'>05/07/2025</span>
-            </div>
-            <div className="info1 h-[64px] w-[310px] flex justify-between">
-                <div className="checkIn flex flex-col gap-[12px]">
-                    <span className='text-sm font-semibold '>Check-in time</span>
-                    <span className='text-xs text-gray-500'>08:45</span>
-                </div>
-                <div className="checkOut flex flex-col gap-[12px]">
-                    <span className='text-sm font-semibold '>Check-out time</span>
-                    <span className='text-xs text-gray-500'>--</span>
-                </div>
-            </div>
-            </div>
-            <button className='flex justify-center items-center mt-[20px] rounded-lg text-sm gap-3 bg-[#1D61E7] text-white w-[350px] h-[48px] shadow-xl/15'>Go to Dashboard</button>
-        </div>
-        </div>
+      </motion.div>
     </div>
-    )
-}
+  );
+};
 
-export default Details
+export default Details;

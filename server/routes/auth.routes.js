@@ -1,5 +1,7 @@
 const express = require("express");
 const router = express.Router();
+
+// 🚨 CRITICAL: Import verifyToken (was missing!)
 const {
   register_orginization,
   register_user,
@@ -7,41 +9,53 @@ const {
   logout,
   updateProfile,
   viewProfile,
+  refreshToken,
+  verifyToken,
+  requestDeviceChange,
+  getUserDeviceRequestStatus,
+  getUserNotifications,
 } = require("../controllers/auth2.controller");
-const authMiddleware = require ("../middleware/Auth.middleware");
+
+const authMiddleware = require("../middleware/Auth.middleware");
 const role = require("../middleware/role.middleware");
 
-//User SignUp or Login
-// router.post('/oauth/login', );
-
-//For directing to the home page
-// router.get('/home',userControllers.home);
-
-//For scanning QR
-// router.post('/scan_qr',);
-
-//For directing to the dashboard
-// router.get('/dashboard',authController.dashboard);
-
-//For Viewing profile
-// router.get('/view_profile',authController.viewprofile);
-
-// organizationregister
+// Organization register
 router.post("/organization-register", register_orginization);
 
-// new user register
+// New user register
 router.post("/register-user", register_user);
 
-// login
+// Token refresh
+router.post("/refresh-token", refreshToken);
+
+// 🆕 NEW: Token verification endpoint
+router.post("/verify-token", verifyToken);
+
+// Login
 router.post("/login", login);
 
-//For logging out
-router.post("/logout", logout);
+// Logout (protected route)
+router.post("/logout", authMiddleware, logout);
 
-//For updating profile
-router.put("/updateProfile",authMiddleware, role,updateProfile);
+// Update profile (protected route)
+router.put(
+  "/updateProfile",
+  authMiddleware,
+  role(["organization"]),
+  updateProfile
+);
 
-//For viewprofile profile
-router.get("/viewProfile",authMiddleware, viewProfile);
+// Device change request (for users)
+router.post("/device-change-request", requestDeviceChange);
+
+// Get device request status (for users)
+router.get("/device-request-status", authMiddleware, role(["user"]), getUserDeviceRequestStatus);
+
+// Get user notifications (for users)
+router.get("/notifications", authMiddleware, role(["user"]), getUserNotifications);
+
+
+// View profile (protected route)
+router.get("/viewProfile", authMiddleware, viewProfile);
 
 module.exports = router;
