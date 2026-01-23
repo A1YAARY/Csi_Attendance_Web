@@ -23,14 +23,14 @@ class EnhancedGeocodingService {
         "https://us1.locationiq.com/v1/search.php",
         {
           params: {
-            key: process.env.LOCATIONIQ_KEY, // put your free key in .env
+            key: process.env.LOCATIONIQ_API_KEY, // put your free key in .env
             q: address,
             format: "json",
             limit: 1,
             countrycodes: "in",
           },
           timeout: 8000,
-        }
+        },
       );
       if (response.data && response.data[0]) {
         const r = response.data[0];
@@ -56,13 +56,13 @@ class EnhancedGeocodingService {
         "https://api.geoapify.com/v1/geocode/search",
         {
           params: {
-            apiKey: process.env.GEOAPIFY_KEY,
+            apiKey: process.env.GEOAPIFY_API_KEY,
             text: address,
             limit: 1,
             filter: "countrycode:in",
           },
           timeout: 8000,
-        }
+        },
       );
       if (response.data.features?.length > 0) {
         const r = response.data.features[0];
@@ -78,7 +78,7 @@ class EnhancedGeocodingService {
       }
       return null;
     } catch (err) {
-       console.error("Geoapify error:", err.message);
+      console.error("Geoapify error:", err.message);
       return null;
     }
   }
@@ -98,7 +98,7 @@ class EnhancedGeocodingService {
           },
           headers: { "User-Agent": "EnhancedGeocoder/1.0" },
           timeout: 8000,
-        }
+        },
       );
       if (response.data.length > 0) {
         const r = response.data[0];
@@ -176,7 +176,7 @@ class EnhancedGeocodingService {
     results.forEach(
       (r) =>
         (r.finalScore =
-          (r.confidence || 0.5) + (r.accuracy === "exact" ? 0.3 : 0.1))
+          (r.confidence || 0.5) + (r.accuracy === "exact" ? 0.3 : 0.1)),
     );
 
     results.sort((a, b) => b.finalScore - a.finalScore);
