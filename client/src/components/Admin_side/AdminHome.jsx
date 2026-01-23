@@ -235,7 +235,9 @@ const AdminHome = () => {
 
   // Render based on active view and URL logic
   const renderContent = () => {
+    const path = location.pathname;
     const normalizedPath = path.toLowerCase();
+
     if (normalizedPath.includes("/admin/notifications"))
       return <DeviceChangeRequests />;
     if (normalizedPath.includes("/admin/employees"))
@@ -250,10 +252,10 @@ const AdminHome = () => {
         />
       );
     }
-    if (path.includes("/admin/reports")) return <Reports />;
-    if (path.includes("/admin/qrcodes")) return <QRcodeView />;
-    if (path.includes("/admin/ai")) return <AITestPage />;
-    if (path.includes("/admin/voice")) {
+    if (normalizedPath.includes("/admin/reports")) return <Reports />;
+    if (normalizedPath.includes("/admin/qrcodes")) return <QRcodeView />;
+    if (normalizedPath.includes("/admin/ai")) return <AITestPage />;
+    if (normalizedPath.includes("/admin/voice")) {
       return (
         <VoiceDashboard
           organizationId={user?.organizationId?._id || user?.organizationId}
