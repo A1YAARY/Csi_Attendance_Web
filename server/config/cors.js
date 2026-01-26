@@ -4,10 +4,10 @@ const cors = require("cors");
 
 const corsOptions = {
   origin: function (origin, callback) {
-    const allowedOrigins = [
-  "http://localhost:5173",
-  "https://backend-attendance.csiace.com"
-    ];
+    const allowedOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(",").map(o => o.trim())
+  : [];
+
 
     // Allow requests with no origin (mobile apps, Postman)
     if (!origin) return callback(null, true);
