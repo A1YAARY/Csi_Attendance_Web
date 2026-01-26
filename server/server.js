@@ -93,24 +93,24 @@ app.use("/getdata", downloadroutes)
 app.get("/", (req, res) => {
   res.json({
     message: "CSI Attendance Server is running!",
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    memory: process.memoryUsage(),
-    features: {
-      attendance: "✅ Active",
-      bulkImport: "✅ Active",
-      aiAnalytics: "✅ Active",
-      qrGeneration: "✅ Active",
-      adminPanel: "✅ Active",
-    },
-    endpoints: {
-      auth: "/auth2/*",
-      qrcode: "/qrcode/*",
-      attendance: "/attend/*",
-      admin: "/admin/*",
-      bulk: "/bulk/*",
-      ai: "/ai/*",
-    },
+    // timestamp: new Date().toISOString(),
+    // uptime: process.uptime(),
+    // memory: process.memoryUsage(),
+    // features: {
+    //   attendance: "✅ Active",
+    //   bulkImport: "✅ Active",
+    //   aiAnalytics: "✅ Active",
+    //   qrGeneration: "✅ Active",
+    //   adminPanel: "✅ Active",
+    // },
+    // endpoints: {
+    //   auth: "/auth2/*",
+    //   qrcode: "/qrcode/*",
+    //   attendance: "/attend/*",
+    //   admin: "/admin/*",
+    //   bulk: "/bulk/*",
+    //   ai: "/ai/*",
+    // },
   });
 });
 
