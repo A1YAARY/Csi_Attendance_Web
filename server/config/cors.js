@@ -4,19 +4,10 @@ const cors = require("cors");
 
 const corsOptions = {
   origin: function (origin, callback) {
-    const allowedOrigins = [
-      "*",
-      "https://csi-attendance-frontend.onrender.com",
-      "https://csi-attendance-web-1-40fy.onrender.com",
-      "https://csi-attendance-web-1-cemr.onrender.com",
-      "http://localhost:5173",
-      "http://localhost:4173",
-      "http://localhost:3000",
-      "https://csi-attendance-web-gamma.vercel.app",
-      "http://localhost:3001",
-      process.env.FRONTEND_URL,
-      process.env.NEW_FRONTEND_URL,
-    ].filter(Boolean);
+    const allowedOrigins = process.env.CORS_ORIGINS
+  ? process.env.CORS_ORIGINS.split(",").map(o => o.trim())
+  : [];
+
 
     // Allow requests with no origin (mobile apps, Postman)
     if (!origin) return callback(null, true);
